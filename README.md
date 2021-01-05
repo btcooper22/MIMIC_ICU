@@ -3,7 +3,7 @@ Code to define and compare existing ICU readmission risk scores within the MIMIC
 
 ## extract_patients
 
-This script uses the MIMIC-III database and filters by eligibility criteria to produce a dataset of `usable' ICU patients, which can be redefined at any time. For data security reasons, this dataset file will not be uploaded to github.
+This script uses the MIMIC-III database and filters by eligibility criteria to produce a dataset of `usable' ICU patients, which can be redefined at any time. For data security reasons, this dataset file will not be uploaded to github. Currently extracts patients who were admitted under or moved to a surgical service.
 
 ## preprocess_data
 

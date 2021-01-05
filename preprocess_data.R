@@ -16,6 +16,9 @@ source("functions/in_unit_mortality.R")
 # Load valid patients
 valid_patients <- read_csv("data/valid_patients.csv") %>% 
   select(subject_id) %>%  deframe()
+surgical_stays <- read_csv("data/valid_patients.csv") %>% 
+  select(hadm_id) %>%  deframe()
+
 
 
 # Read and filter stay data-------------------------------------------------
@@ -49,7 +52,9 @@ stays %<>%
   mutate(age = (intime - dob) / 364.25) %>% 
   mutate(age = ifelse(age > 90, 90, age)) %>% 
   mutate(in_unit_mortality = in_unit_mortality(.),
-         in_hospital_mortality = in_hospital_mortality(.)) %>% 
+         in_hospital_mortality = in_hospital_mortality(.),
+         surgical_stay = ifelse(hadm_id %in% surgical_stays,
+                                TRUE, FALSE)) %>% 
   filter(age >= 18)
 
 # Should now be saved to csv (62-65)
