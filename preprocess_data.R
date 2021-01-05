@@ -12,23 +12,8 @@ require(lubridate)
 source("functions/mimic_load.R")
 
 # Functions
-in_unit_mortality <- function(df) #add_inunit_mortality_to_icustays
-{
-  mortality <- !is.na(df$deathtime) & ((df$intime <= df$deathtime) & (df$outtime >= df$deathtime))
-  mortality = mortality | !is.na(df$deathtime) & 
-                          !is.na(df$dod) & 
-                          ((df$intime <= df$dod) & (df$outtime >= df$dod))
-  return(mortality)
-}
-
-in_hospital_mortality <- function(df) #add_inhospital_mortality_to_icustays
-{
-  mortality <- !is.na(df$deathtime) & ((df$admittime <= df$deathtime) & (df$dischtime >= df$deathtime))
-  mortality <-  mortality | !is.na(df$deathtime) & 
-    !is.na(df$dod) & 
-    ((df$intime <= df$dod) & (df$outtime >= df$dod))
-  return(mortality)
-}
+source("functions/in_hospital_mortality.R")
+source("functions/in_unit_mortality.R")
 
 # Load valid patients
 valid_patients <- read_csv("data/valid_patients.csv") %>% 
