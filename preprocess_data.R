@@ -103,18 +103,13 @@ procedure_counts <- procedures %>%
               select(2:4) %>% 
               collect())
 
-# Read and filter prescription data
-prescriptions <- mimic$prescriptions %>% 
-  collect() %>% 
-  filter(subject_id %in% valid_patients)
-
 # Prepare data for writing-----------------------
 
 # Create blank list
 mimic_preproc <- list()
 
 # Insert stay data
-mimic_preproc[[1]] <- valid_patients
+mimic_preproc[[1]] <- unique(stays$subject_id)
 mimic_preproc[[2]] <- transfers
 mimic_preproc[[3]] <- stays
 names(mimic_preproc)[1:3] <- c("patients", "transfers", 
@@ -123,14 +118,12 @@ names(mimic_preproc)[1:3] <- c("patients", "transfers",
 # Insert input data
 mimic_preproc[[4]] <- diagnoses
 mimic_preproc[[5]] <- procedures
-mimic_preproc[[6]] <- prescriptions
-names(mimic_preproc)[4:6] <- c("diagnoses", "procedures", 
-                               "prescriptions")
+names(mimic_preproc)[4:5] <- c("diagnoses", "procedures")
 
 # Insert counts
-mimic_preproc[[7]] <- list("procedure" = procedure_counts,
+mimic_preproc[[6]] <- list("procedure" = procedure_counts,
                            "diagnosis" = diagnosis_counts)
-names(mimic_preproc)[7] <- "counts"
+names(mimic_preproc)[6] <- "counts"
 
 # Write data
 write_rds(mimic_preproc, "data/mimic_preprocessed.RDS")
