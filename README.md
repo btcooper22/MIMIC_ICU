@@ -13,7 +13,7 @@ For all patients defined in *extract_patients* this module pre-processes all MIM
 
 From the data, this module define the measured outcomes needed for the three risk scores. The scores of Hammer et al. 2020[^2], Martin et al. 2019[^3] and Frost et al. 2010[^4] all use readmission within the same hospital admission, which I restrict to 'within the same hospitalisation event as the surgery', excluding prior or subsequent hospitalisations.
 
-## define_predictors
+## extract_predictors
 
 For all patients specified in earlier modules, this module extracts the predictors needed for each risk score. Patients with missing data for some scores but not others are still included - this is dealt with in the *compare_scores* module.
 
