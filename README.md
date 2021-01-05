@@ -7,11 +7,11 @@ This module uses the MIMIC-III database and filters by eligibility criteria to p
 
 ## preprocess_data
 
-For all patients defined in *extract_patients* this module pre-processes all MIMIC data concerning their demographic information and ICU stay. This process largely follows the workflow laid out by Lin et al. 2018[^1] and available in Python code at https://github.com/Jeffreylin0925/MIMIC-III_ICU_Readmission_Analysis and https://github.com/YerevaNN/mimic3-benchmarks. It outputs all demographic, stay/transfer and input (diagnosis/procedure/prescription) data for selected patients. Events data (chart, lab or output) are not processed, as they are both very large, and not needed in their entirity for subsequent analyses. This will be added in if needed.
+For all patients defined in *extract_patients* this module pre-processes all MIMIC data concerning their demographic information and ICU stay. This process largely follows the workflow laid out by Lin et al. 2018 [^1] and available in Python code at https://github.com/Jeffreylin0925/MIMIC-III_ICU_Readmission_Analysis and https://github.com/YerevaNN/mimic3-benchmarks. It outputs all demographic, stay/transfer and input (diagnosis/procedure/prescription) data for selected patients. Events data (chart, lab or output) are not processed, as they are both very large, and not needed in their entirity for subsequent analyses. This will be added in if needed.
 
 ## define_outcomes
 
-From the data, this module define the measured outcomes needed for the three risk scores. The scores of Hammer et al. 2020[^2], Martin et al. 2019[^3] and Frost et al. 2010[^4] all use readmission within the same hospital admission, which I restrict to 'within the same hospitalisation event as the surgery', excluding prior or subsequent hospitalisations.
+From the data, this module define the measured outcomes needed for the three risk scores. The scores of Hammer et al. 2020 [^2], Martin et al. 2019 [^3] and Frost et al. 2010 [^4] all use readmission within the same hospital admission, which I restrict to 'within the same hospitalisation event as the surgery', excluding prior or subsequent hospitalisations.
 
 ## extract_predictors
 
