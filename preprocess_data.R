@@ -3,8 +3,6 @@
 
 # Load packages
 require(tidyverse)
-require(rms)
-require(brms)
 require(magrittr)
 require(lubridate)
 

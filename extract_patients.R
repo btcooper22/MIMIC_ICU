@@ -1,9 +1,6 @@
 # Load packages
 require(tidyverse)
-require(rms)
-require(brms)
 require(magrittr)
-require(lubridate)
 
 # Load MIMIC dataset
 source("functions/mimic_load.R")
