@@ -62,6 +62,9 @@ proc.time() - ptm # 70 seconds @ 12 cores
 
 # Clean and write results-------------
 
+# REMOVE ORGAN DONORS
+#WHERE lower(diagnosis) NOT LIKE '%organ donor%'
+
 # How many patients died in hospital?
 table(outcomes$in_hospital_mortality)
 

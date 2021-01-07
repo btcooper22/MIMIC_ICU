@@ -1,0 +1,144 @@
+# Load packages
+require(tidyverse)
+require(magrittr)
+require(lubridate)
+require(doParallel)
+require(tools)
+
+# Load mimic dataset
+source("functions/mimic_load.R")
+
+# Load outcomes
+outcomes <- read_csv("data/outcomes.csv")
+
+# chartevents----------
+
+# Make database of hadm_ids in which split
+if(!file.exists("data/chart_database.csv"))
+{
+  # Prepare parallel options
+  psnice(value = 19)
+  registerDoParallel(ifelse(detectCores() <= 12,
+                            detectCores() - 1,
+                            12)
+  )
+  
+  header <- names(read_csv("C:/Users/benco/chart/chartevents_aa", n_max = 1))
+  files <- dir("C:/Users/benco/chart/", pattern = "_")
+  
+  chart_database <- foreach(i = 1:length(files), .combine = "rbind",
+                            .packages = "readr") %dopar%
+    {
+      # Load in chart
+      print(files[i])
+      chart_search <- read_csv(paste("C:/Users/benco/chart/", files[i], sep = ""),
+                               col_types = "ccccccccccccccc", col_names = header)
+      
+      # List admissions
+      adm_list <- unique(chart_search$HADM_ID)
+      
+      # Remove files
+      rm(chart_search)
+      gc()
+      
+      # Add to output
+      data.frame(chart_split = files[i], hadm_id = adm_list)
+    }
+  write_csv(chart_database, "data/chart_database.csv")
+  stopImplicitCluster()
+  gc()
+}
+
+# Prepare parallel options
+psnice(value = 19)
+registerDoParallel(ifelse(detectCores() <= 10,
+                          detectCores() - 1,
+                          10)
+)
+
+# Extract chart events
+print(noquote("Extracting chart events"))
+foreach(i = 1:nrow(outcomes), .packages = c("readr", "dplyr",
+                               "magrittr", "foreach")) %dopar%
+{
+  # Find subject info
+  print(i)
+  subj <- outcomes$subject_id[i]
+  adm <- outcomes$hadm_id[i]
+  
+  # Determine filename
+  filename <- paste("data/events/chartevents_", outcomes$hadm_id[i],
+                    ".csv", sep = "")
+  
+  if(!file.exists(filename))
+  {
+    # Find correct chart split
+    chart_n <- chart_database$chart_split[chart_database$hadm_id==adm]
+    
+    # Load chart split and filter
+    chart_df <- foreach(cn = 1:length(chart_n), .combine = "rbind") %do% 
+      {
+        print(cn)
+        chart_in <- read_csv(paste("C:/Users/benco/chart/", chart_n[cn], sep = ""),
+                 col_types = "ccccccccccccccc", col_names = header)
+        
+        # Subset
+        chart_subset <- chart_in %>% 
+          filter(HADM_ID == adm)
+        
+        # Clear
+        rm(chart_in)
+        gc()
+        
+        # Output
+        chart_subset
+      }
+
+    # Write to file
+    chart_df %>% 
+      write_csv(filename)
+    
+    rm(chart_df)
+    gc()
+  }
+}
+stopImplicitCluster()
+
+# labevents------------
+
+# Load all lab events
+labevents <- mimic$labevents %>% 
+  collect()
+
+# Prepare parallel options
+psnice(value = 19)
+registerDoParallel(ifelse(detectCores() <= 6,
+                          detectCores() - 1,
+                          6)
+)
+
+print(noquote("Extracting lab events"))
+foreach(i = 1:nrow(outcomes), .packages = c("dplyr","magrittr",
+                                 "readr")) %dopar%
+{
+ # Find labevents
+  labs <- labevents %>% 
+    # Select admission
+    filter(hadm_id == outcomes$hadm_id[i]) 
+  
+  # Write to file
+  filename <- paste("data/events/labevents_", outcomes$hadm_id[i],
+                    ".csv", sep = "")
+  if(!file.exists(filename))
+  {
+    labs %>% 
+      write_csv(filename)
+  }
+}
+stopImplicitCluster()
+rm(labevents)
+gc()
+
+# inputevents_mv
+
+# inputevents_cv
