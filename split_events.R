@@ -13,6 +13,10 @@ outcomes <- read_csv("data/outcomes.csv")
 
 # chartevents----------
 
+header <- names(read_csv("C:/Users/benco/chart/chartevents_aa", n_max = 1))
+files <- dir("C:/Users/benco/chart/", pattern = "_")
+
+
 # Make database of hadm_ids in which split
 if(!file.exists("data/chart_database.csv"))
 {
@@ -22,10 +26,7 @@ if(!file.exists("data/chart_database.csv"))
                             detectCores() - 1,
                             12)
   )
-  
-  header <- names(read_csv("C:/Users/benco/chart/chartevents_aa", n_max = 1))
-  files <- dir("C:/Users/benco/chart/", pattern = "_")
-  
+
   chart_database <- foreach(i = 1:length(files), .combine = "rbind",
                             .packages = "readr") %dopar%
     {
@@ -47,6 +48,9 @@ if(!file.exists("data/chart_database.csv"))
   write_csv(chart_database, "data/chart_database.csv")
   stopImplicitCluster()
   gc()
+}else
+{
+  chart_database <- read_csv("data/chart_database.csv")
 }
 
 # Prepare parallel options
@@ -187,7 +191,7 @@ registerDoParallel(ifelse(detectCores() <= 6,
                           6)
 )
 
-print(noquote("Extracting metavision input events"))
+print(noquote("Extracting carevue input events"))
 foreach(i = 1:nrow(outcomes), .packages = c("dplyr","magrittr",
                                             "readr")) %dopar%
   {
