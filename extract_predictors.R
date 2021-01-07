@@ -342,19 +342,28 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
       rr_time <- 48
     }
     
-    #################################################
-    ambulation <- charts %>% 
+    # Extract ambulation data
+    ambulation_df <- charts %>% 
       filter(ITEMID %in% ID_ambulation) %>% 
       # Calculate time difference from discharge
       mutate(before_discharge = difftime(discharge_time, CHARTTIME, unit = "hours")) %>% 
-      # Select only events 24h before discharge
-      filter(before_discharge > 0) %>% 
-      filter(before_discharge < 24) %>% 
-      summarise(ambulation = any(grepl("walk", VALUE,
-                                       ignore.case = TRUE) |
-                                   VALUENUM >2, na.rm = TRUE)) %>% 
-      deframe()
+      filter(before_discharge > 0) 
     
+    # Flag if no measurements 24h before discharge
+    if(min(ambulation_df$before_discharge) > 24 | nrow(ambulation_df) == 0)
+    {
+      ambulation <- NA
+    }else
+    {
+      # Select only events 24h before discharge
+      ambulation <- ambulation_df %>% 
+        filter(before_discharge < 24) %>% 
+        summarise(ambulation = any(grepl("walk", VALUE,
+                                         ignore.case = TRUE) |
+                                     VALUENUM >2, na.rm = TRUE)) %>% 
+        deframe()
+    }
+
     chart_missing <- FALSE
   }else
   {
@@ -423,7 +432,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
 stopImplicitCluster()
 proc.time() - ptm # 180s
 
-# Quality control------------
+# Quality control and write ------------
 
 # No duplicated patients or admissions
 length(unique(predictors$subject_id)) == nrow(predictors)
@@ -437,47 +446,34 @@ predictors %<>% filter(chart_missing == FALSE)
 sum(predictors$lab_missing)
 predictors %<>% filter(lab_missing == FALSE)
 
-# Count and exclude no lab data within 48h discharge
-sum(is.na(predictors$serum_glucose))
-sum(is.na(predictors$serum_choride))
-sum(is.na(predictors$blood_urea_nitrogen))
-predictors %<>% 
-  filter(!is.na(serum_glucose)) %>% 
-  filter(!is.na(serum_choride)) %>% 
-  filter(!is.na(blood_urea_nitrogen))
-
-# Count and exclude missing respiratory rates
-sum(is.na(predictors$respiratory_rate))
-predictors %<>% filter(!is.na(predictors$respiratory_rate))
-
 # Count cases of readmission
-table(predictors$readmission)
+table(predictors$readmission, useNA = "ifany")
 
 # Tabulate sex
-table(predictors$sex)
+table(predictors$sex, useNA = "ifany")
 
 # Tabulate surgical types
-table(predictors$general_surgery)
-table(predictors$cardiac_surgery)
+table(predictors$general_surgery, useNA = "ifany")
+table(predictors$cardiac_surgery, useNA = "ifany")
 
 # Tabulate lengths of stay
-table(predictors$los_5)
-table(predictors$los_7)
+table(predictors$los_5, useNA = "ifany")
+table(predictors$los_7, useNA = "ifany")
 
 # Tabulate admission and discharge information
-table(predictors$after_hours_discharge)
-table(predictors$elective_admission)
-table(predictors$admission_source)
+table(predictors$after_hours_discharge, useNA = "ifany")
+table(predictors$elective_admission, useNA = "ifany")
+table(predictors$admission_source, useNA = "ifany")
 
 # Tabulate hammer binary variables
-table(predictors$hyperglycemia)
-table(predictors$anaemia)
-table(predictors$ambulation)
+table(predictors$hyperglycemia, useNA = "ifany")
+table(predictors$anaemia, useNA = "ifany")
+table(predictors$ambulation, useNA = "ifany")
 
 # Tabulate remaining binaries
-table(predictors$acute_renal_failure)
-table(predictors$atrial_fibrillation)
-table(predictors$renal_insufficiency)
+table(predictors$acute_renal_failure, useNA = "ifany")
+table(predictors$atrial_fibrillation, useNA = "ifany")
+table(predictors$renal_insufficiency, useNA = "ifany")
 
 # Clean and summarise age
 predictors$age[predictors$age == ">90"] <- 90
@@ -493,7 +489,8 @@ summary(predictors %>% filter(rr_time > 48) %>%
 # Summarise continuous variables
 summary(predictors$serum_glucose)
 summary(predictors$serum_choride)
-summary(predictors$blood_urea_nitrogen) 
+summary(predictors$blood_urea_nitrogen)
+summary(predictors$respiratory_rate)
 
-
-
+# Write to file
+predictors %>% write_csv("data/predictors.csv")
