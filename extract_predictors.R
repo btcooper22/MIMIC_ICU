@@ -8,6 +8,7 @@ require(tools)
 # Load MIMIC database
 source("functions/mimic_load.R")
 source("functions/event_filter_discharge.R")
+source("functions/flag_within_discharge.R")
 
 # Load preprocessed data
 mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
@@ -199,46 +200,84 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   if(nrow(labs) > 0)
   {
     # Extract serum glucose measurements
-    serum_glucose <- labs %>% 
+    serum_glucose_measurements <- labs %>% 
       filter(itemid %in% ID_blood_glucose) %>% 
       event_filter_discharge(discharge_time)
     
-    # Hypoglycemia within 24h discharge
-    serum_glucose_24h <- serum_glucose %>% 
-      filter(before_discharge <= 24) %>% 
-      select(valuenum) %>% deframe()
-    hyperglycemia <- any(serum_glucose_24h > 180)
-    
-    # Final serum glucose measurement
-    serum_glucose <- serum_glucose %>% 
-      filter(before_discharge < 48) %>% 
-      summarise(serum_glucose = mean(valuenum, na.rm = TRUE)) %>% 
-      deframe()
-    
-    # Anaemia within 24h discharge
-    anaemia <- labs %>% 
+    # Extract haemoglobin measurements
+    haemoglobin_measurements <- labs %>% 
       filter(itemid %in% ID_haemoglobin) %>% 
-      event_filter_discharge(discharge_time) %>% 
-      filter(before_discharge <= 24) %>% 
-      select(valuenum) %>%
-      summarise(anaemia = any(valuenum < 7)) %>% 
-      select(anaemia) %>%  deframe()
+      event_filter_discharge(discharge_time) 
     
     # Extract blood urea nitrogen
-    blood_urea_nitrogen <- labs %>% 
+    blood_urea_nitrogen_measurements <- labs %>% 
       filter(itemid %in% ID_blood_urea_nitrogen) %>% 
-      event_filter_discharge(discharge_time) %>% 
-      filter(before_discharge < 48) %>% 
-      summarise(blood_urea_nitrogen = mean(valuenum, na.rm = TRUE)) %>% 
-      deframe()
+      event_filter_discharge(discharge_time)
     
     # Extract serum chloride
-    serum_choride <- labs %>% 
+    serum_choride_measurements <- labs %>% 
       filter(itemid %in% ID_serum_choride) %>% 
-      event_filter_discharge(discharge_time) %>% 
-      filter(before_discharge < 48) %>% 
-      summarise(serum_choride = mean(valuenum, na.rm = TRUE)) %>% 
-      deframe()
+      event_filter_discharge(discharge_time) 
+    
+    # If no serum glucose measurements
+    if(nrow(serum_glucose_measurements) == 0)
+    {
+      hyperglycemia <- NA
+      serum_glucose <- NA
+    }else
+    {
+      # Hypoglycemia within 24h discharge
+      serum_glucose_24h <- serum_glucose_measurements %>% 
+        flag_within_discharge(24) %>% 
+        select(valuenum) %>% deframe()
+      hyperglycemia <- any(serum_glucose_24h > 180)
+      
+      # Final serum glucose measurement
+      serum_glucose <- serum_glucose_measurements %>% 
+        flag_within_discharge(48) %>% 
+        summarise(serum_glucose = mean(valuenum, na.rm = TRUE)) %>% 
+        deframe()
+    }
+    
+    # If no haemoglobin measurements
+    if(nrow(haemoglobin_measurements) == 0)
+    {
+      anaemia <- NA
+    }else
+    {
+      # Anaemia within 24h discharge
+      anaemia <- haemoglobin_measurements %>% 
+        flag_within_discharge(24) %>% 
+        select(valuenum) %>%
+        summarise(anaemia = any(valuenum < 7)) %>% 
+        select(anaemia) %>%  deframe()
+    }
+    
+    # If no BUN measurements
+    if(nrow(blood_urea_nitrogen_measurements) == 0)
+    {
+      blood_urea_nitrogen <- NA
+    }else
+    {
+      # Final BUN measurement
+      blood_urea_nitrogen <- blood_urea_nitrogen_measurements %>% 
+        flag_within_discharge(48) %>% 
+        summarise(blood_urea_nitrogen = mean(valuenum, na.rm = TRUE)) %>% 
+        deframe()
+    }
+    
+    # If no serum chloride measurements
+    if(nrow(serum_choride_measurements) == 0)
+    {
+      serum_choride <- NA
+    }else
+    {
+      # Final serum chloride measurement
+      serum_choride <- serum_choride_measurements %>% 
+        flag_within_discharge(48) %>% 
+        summarise(serum_choride = mean(valuenum, na.rm = TRUE)) %>% 
+        deframe()
+    }
     
     lab_missing <- FALSE
   }else
@@ -303,6 +342,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
       rr_time <- 48
     }
     
+    #################################################
     ambulation <- charts %>% 
       filter(ITEMID %in% ID_ambulation) %>% 
       # Calculate time difference from discharge
@@ -397,6 +437,15 @@ predictors %<>% filter(chart_missing == FALSE)
 sum(predictors$lab_missing)
 predictors %<>% filter(lab_missing == FALSE)
 
+# Count and exclude no lab data within 48h discharge
+sum(is.na(predictors$serum_glucose))
+sum(is.na(predictors$serum_choride))
+sum(is.na(predictors$blood_urea_nitrogen))
+predictors %<>% 
+  filter(!is.na(serum_glucose)) %>% 
+  filter(!is.na(serum_choride)) %>% 
+  filter(!is.na(blood_urea_nitrogen))
+
 # Count and exclude missing respiratory rates
 sum(is.na(predictors$respiratory_rate))
 predictors %<>% filter(!is.na(predictors$respiratory_rate))
@@ -442,7 +491,9 @@ summary(predictors %>% filter(rr_time > 48) %>%
           select(respiratory_rate, rr_time))
 
 # Summarise continuous variables
-summary(predictors$serum_glucose) # 18
-summary(predictors$serum_choride) # 20
-summary(predictors$blood_urea_nitrogen) # 21
+summary(predictors$serum_glucose)
+summary(predictors$serum_choride)
+summary(predictors$blood_urea_nitrogen) 
+
+
 
