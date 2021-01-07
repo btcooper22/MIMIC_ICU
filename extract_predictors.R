@@ -96,7 +96,7 @@ registerDoParallel(ifelse(detectCores() <= 15,
 )
 
 # Run loop
-predictors <- foreach(i = 1:200, .combine = "rbind",
+predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
         .packages = c("magrittr", "readr", "dplyr",
                       "tibble", "lubridate")) %dopar%
 {
@@ -137,36 +137,6 @@ predictors <- foreach(i = 1:200, .combine = "rbind",
   general_surgery <- surg_type == "SURG"
   cardiac_surgery <- surg_type == "CSURG"
   
-  # Extract lab events
-  labfile <- paste("data/events/labevents_", adm, ".csv", sep = "")
-  labs <- read_csv(labfile)
-  
-  # Extract serum glucose measurements
-  serum_glucose <- labs %>% 
-    filter(itemid %in% ID_blood_glucose) %>% 
-    event_filter_discharge(discharge_time)
-  
-  # Hypoglycemia within 24h discharge
-  serum_glucose_24h <- serum_glucose %>% 
-    filter(before_discharge <= 24) %>% 
-    select(valuenum) %>% deframe()
-  hyperglycemia <- any(serum_glucose_24h > 180)
-    
-  # Final serum glucose measurement
-  serum_glucose <- serum_glucose %>% 
-    filter(before_discharge < 48) %>% 
-    summarise(serum_glucose = mean(valuenum, na.rm = TRUE)) %>% 
-    deframe()
-  
-  # Anaemia within 24h discharge
-  anaemia <- labs %>% 
-    filter(itemid %in% ID_haemoglobin) %>% 
-    event_filter_discharge(discharge_time) %>% 
-    filter(before_discharge <= 24) %>% 
-    select(valuenum) %>%
-    summarise(anaemia = any(valuenum < 7)) %>% 
-    select(anaemia) %>%  deframe()
-  
   # Duration of stay
   los <- mimic_preproc$stays %>% 
     # Select patient and admission
@@ -198,7 +168,7 @@ predictors <- foreach(i = 1:200, .combine = "rbind",
     filter(subject_id == subj,
            hadm_id == adm) %>% 
     slice_head()
-    
+  
   # Determine elective
   elective_admission <- admission_info %>% 
     select(admission_type) %>% 
@@ -207,7 +177,7 @@ predictors <- foreach(i = 1:200, .combine = "rbind",
       admission_type != "ELECTIVE" ~ FALSE,
     )) %>%
     select(elective) %>% deframe()
-    
+  
   # Determine source
   admission_source <- admission_info %>%
     select(admission_location) %>% 
@@ -220,30 +190,64 @@ predictors <- foreach(i = 1:200, .combine = "rbind",
     )) %>% 
     select(frost_source) %>%  deframe()
   
-  # Determine acute renal failure
-  acute_renal_failure <- mimic_preproc$diagnoses %>% 
-    # Select patient and admission
-    filter(subject_id == subj,
-           hadm_id == adm) %>% 
-    # Search for diagnoses of acute renal failure
-    summarise(ARF = any(icd9_code %in% ID_acute_renal_failure)) %>% 
-    deframe()
+  # Extract lab events
+  labfile <- paste("data/events/labevents_", adm, ".csv", sep = "")
+  labs <- read_csv(labfile)
   
-  # Extract blood urea nitrogen
-  blood_urea_nitrogen <- labs %>% 
-    filter(itemid %in% ID_blood_urea_nitrogen) %>% 
-    event_filter_discharge(discharge_time) %>% 
-    filter(before_discharge < 48) %>% 
-    summarise(blood_urea_nitrogen = mean(valuenum, na.rm = TRUE)) %>% 
-    deframe()
-  
-  # Extract serum chloride
-  serum_choride <- labs %>% 
-    filter(itemid %in% ID_serum_choride) %>% 
-    event_filter_discharge(discharge_time) %>% 
-    filter(before_discharge < 48) %>% 
-    summarise(serum_choride = mean(valuenum, na.rm = TRUE)) %>% 
-    deframe()
+  if(nrow(labs) > 0)
+  {
+    # Extract serum glucose measurements
+    serum_glucose <- labs %>% 
+      filter(itemid %in% ID_blood_glucose) %>% 
+      event_filter_discharge(discharge_time)
+    
+    # Hypoglycemia within 24h discharge
+    serum_glucose_24h <- serum_glucose %>% 
+      filter(before_discharge <= 24) %>% 
+      select(valuenum) %>% deframe()
+    hyperglycemia <- any(serum_glucose_24h > 180)
+    
+    # Final serum glucose measurement
+    serum_glucose <- serum_glucose %>% 
+      filter(before_discharge < 48) %>% 
+      summarise(serum_glucose = mean(valuenum, na.rm = TRUE)) %>% 
+      deframe()
+    
+    # Anaemia within 24h discharge
+    anaemia <- labs %>% 
+      filter(itemid %in% ID_haemoglobin) %>% 
+      event_filter_discharge(discharge_time) %>% 
+      filter(before_discharge <= 24) %>% 
+      select(valuenum) %>%
+      summarise(anaemia = any(valuenum < 7)) %>% 
+      select(anaemia) %>%  deframe()
+    
+    # Extract blood urea nitrogen
+    blood_urea_nitrogen <- labs %>% 
+      filter(itemid %in% ID_blood_urea_nitrogen) %>% 
+      event_filter_discharge(discharge_time) %>% 
+      filter(before_discharge < 48) %>% 
+      summarise(blood_urea_nitrogen = mean(valuenum, na.rm = TRUE)) %>% 
+      deframe()
+    
+    # Extract serum chloride
+    serum_choride <- labs %>% 
+      filter(itemid %in% ID_serum_choride) %>% 
+      event_filter_discharge(discharge_time) %>% 
+      filter(before_discharge < 48) %>% 
+      summarise(serum_choride = mean(valuenum, na.rm = TRUE)) %>% 
+      deframe()
+    
+    lab_missing <- FALSE
+  }else
+  {
+    hyperglycemia <- NA
+    serum_glucose <- NA
+    anaemia <- NA
+    blood_urea_nitrogen <- NA
+    serum_choride <- NA
+    lab_missing <- TRUE
+  }
   
   # Load chart data
   chartfile <- paste("data/events/chartevents_", adm, ".csv", sep = "")
@@ -281,6 +285,15 @@ predictors <- foreach(i = 1:200, .combine = "rbind",
     ambulation <- NA
     chart_missing <- TRUE
   }
+  
+  # Determine acute renal failure
+  acute_renal_failure <- mimic_preproc$diagnoses %>% 
+    # Select patient and admission
+    filter(subject_id == subj,
+           hadm_id == adm) %>% 
+    # Search for diagnoses of acute renal failure
+    summarise(ARF = any(icd9_code %in% ID_acute_renal_failure)) %>% 
+    deframe()
   
   # Extract past diagnoses for patient
   history <- mimic_admissions %>% 
