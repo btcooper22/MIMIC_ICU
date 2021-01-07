@@ -139,6 +139,75 @@ stopImplicitCluster()
 rm(labevents)
 gc()
 
-# inputevents_mv
 
-# inputevents_cv
+# inputevents_mv-------------
+inputevents_mv <- mimic$inputevents_mv %>% 
+  collect()
+
+# Prepare parallel options
+psnice(value = 19)
+registerDoParallel(ifelse(detectCores() <= 6,
+                          detectCores() - 1,
+                          6)
+)
+
+print(noquote("Extracting metavision input events"))
+foreach(i = 1:nrow(outcomes), .packages = c("dplyr","magrittr",
+                                            "readr")) %dopar%
+  {
+    # Find labevents
+    inputs <- inputevents_mv %>% 
+      # Select admission
+      filter(hadm_id == outcomes$hadm_id[i]) 
+    
+    if(nrow(inputs) > 0)
+    {
+      # Write to file
+      filename <- paste("data/events/inputeventsmv_", outcomes$hadm_id[i],
+                        ".csv", sep = "")
+      if(!file.exists(filename))
+      {
+        inputs %>% 
+          write_csv(filename)
+      }
+    }
+  }
+stopImplicitCluster()
+rm(inputevents_mv)
+gc()
+
+# inputevents_cv-------------
+inputevents_cv <- mimic$inputevents_cv %>% 
+  collect()
+
+# Prepare parallel options
+psnice(value = 19)
+registerDoParallel(ifelse(detectCores() <= 6,
+                          detectCores() - 1,
+                          6)
+)
+
+print(noquote("Extracting metavision input events"))
+foreach(i = 1:nrow(outcomes), .packages = c("dplyr","magrittr",
+                                            "readr")) %dopar%
+  {
+    # Find labevents
+    inputs <- inputevents_cv %>% 
+      # Select admission
+      filter(hadm_id == outcomes$hadm_id[i]) 
+    
+    if(nrow(inputs) > 0)
+    {
+      # Write to file
+      filename <- paste("data/events/inputeventscv_", outcomes$hadm_id[i],
+                        ".csv", sep = "")
+      if(!file.exists(filename))
+      {
+        inputs %>% 
+          write_csv(filename)
+      }
+    }
+  }
+stopImplicitCluster()
+rm(inputevents_cv)
+gc()
