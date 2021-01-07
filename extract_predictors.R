@@ -89,10 +89,11 @@ mimic_admissions <- mimic$admissions %>% collect()
 mimic_diagnoses <- mimic$diagnoses_icd %>% collect()
 
 # Prepare parallel options
+ptm <- proc.time()
 psnice(value = 19)
 registerDoParallel(ifelse(detectCores() <= 15,
                           detectCores() - 1,
-                          15)
+                          12)
 )
 
 # Run loop
@@ -134,8 +135,8 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     select(curr_service) %>% deframe() 
   
   # Define surgical types
-  general_surgery <- surg_type == "SURG"
-  cardiac_surgery <- surg_type == "CSURG"
+  general_surgery <-  "SURG" %in% surg_type
+  cardiac_surgery <-  "CSURG" %in% surg_type
   
   # Duration of stay
   los <- mimic_preproc$stays %>% 
@@ -343,3 +344,4 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              )
 }
 stopImplicitCluster()
+proc.time() - ptm
