@@ -114,9 +114,10 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     slice_min(outtime) 
   
   admit_time <- in_out_times %>% 
-    select(intime) %>% deframe()
+    select(intime) %>% 
+    deframe() %>% force_tz("UTC")
   discharge_time <- in_out_times %>% 
-    select(outtime) %>% deframe()
+    select(outtime) %>% deframe() %>% force_tz("UTC")
   
   # Detect after-hours discharge
   after_hours_discharge <-   hour(discharge_time) <= 7 | hour(discharge_time) >= 16 
@@ -130,7 +131,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   # Extract surgical type
   surg_type <- mimic_services %>% 
     filter(hadm_id == adm) %>%
-    mutate(before_discharge = discharge_time - transfertime) %>% 
+    mutate(before_discharge = difftime(discharge_time, transfertime, unit = "hours")) %>% 
     filter(before_discharge > 0) %>%
     select(curr_service) %>% deframe() 
   
@@ -260,7 +261,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     respiratory_rate <- charts %>% 
       filter(ITEMID %in% ID_respiratory_rate) %>% 
       # Calculate time difference from discharge
-      mutate(before_discharge = discharge_time - CHARTTIME) %>% 
+      mutate(before_discharge = difftime(discharge_time, CHARTTIME, unit = "hours")) %>% 
       # Select only events before discharge
       filter(before_discharge > 0) %>% 
       filter(before_discharge < 48)
@@ -271,7 +272,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
       respiratory_rate <- charts %>% 
         filter(ITEMID %in% ID_respiratory_rate) %>% 
         # Calculate time difference from discharge
-        mutate(before_discharge = discharge_time - CHARTTIME) %>% 
+        mutate(before_discharge = difftime(discharge_time, CHARTTIME, unit = "hours")) %>% 
         # Select only events before discharge
         filter(before_discharge > 0) %>% 
         # Find most recent
@@ -302,12 +303,10 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
       rr_time <- 48
     }
     
-
-    
     ambulation <- charts %>% 
       filter(ITEMID %in% ID_ambulation) %>% 
       # Calculate time difference from discharge
-      mutate(before_discharge = discharge_time - CHARTTIME) %>% 
+      mutate(before_discharge = difftime(discharge_time, CHARTTIME, unit = "hours")) %>% 
       # Select only events 24h before discharge
       filter(before_discharge > 0) %>% 
       filter(before_discharge < 24) %>% 
@@ -443,7 +442,7 @@ summary(predictors %>% filter(rr_time > 48) %>%
           select(respiratory_rate, rr_time))
 
 # Summarise continuous variables
-summary(predictors$serum_glucose) # 108
-summary(predictors$serum_choride) # 124
-summary(predictors$blood_urea_nitrogen) # 113
+summary(predictors$serum_glucose) # 18
+summary(predictors$serum_choride) # 20
+summary(predictors$blood_urea_nitrogen) # 21
 
