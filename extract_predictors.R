@@ -96,7 +96,7 @@ registerDoParallel(ifelse(detectCores() <= 15,
 )
 
 # Run loop
-predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
+predictors <- foreach(i = 1:200, .combine = "rbind",
         .packages = c("magrittr", "readr", "dplyr",
                       "tibble", "lubridate")) %dopar%
 {
@@ -155,7 +155,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   # Final serum glucose measurement
   serum_glucose <- serum_glucose %>% 
     filter(before_discharge < 48) %>% 
-    summarise(serum_glucose = mean(valuenum)) %>% 
+    summarise(serum_glucose = mean(valuenum, na.rm = TRUE)) %>% 
     deframe()
   
   # Anaemia within 24h discharge
@@ -234,7 +234,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     filter(itemid %in% ID_blood_urea_nitrogen) %>% 
     event_filter_discharge(discharge_time) %>% 
     filter(before_discharge < 48) %>% 
-    summarise(blood_urea_nitrogen = mean(valuenum)) %>% 
+    summarise(blood_urea_nitrogen = mean(valuenum, na.rm = TRUE)) %>% 
     deframe()
   
   # Extract serum chloride
@@ -242,23 +242,45 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     filter(itemid %in% ID_serum_choride) %>% 
     event_filter_discharge(discharge_time) %>% 
     filter(before_discharge < 48) %>% 
-    summarise(serum_choride = mean(valuenum)) %>% 
+    summarise(serum_choride = mean(valuenum, na.rm = TRUE)) %>% 
     deframe()
   
   # Load chart data
   chartfile <- paste("data/events/chartevents_", adm, ".csv", sep = "")
-  charts <- read_csv(chartfile)
-  
-  # Determine respiratory rate 
-  respiratory_rate <- charts %>% 
-    filter(ITEMID %in% ID_respiratory_rate) %>% 
-    # Calculate time difference from discharge
-    mutate(before_discharge = discharge_time - CHARTTIME) %>% 
-    # Select only events before discharge
-    filter(before_discharge > 0) %>% 
-    filter(before_discharge < 48) %>% 
-    summarise(respiratory_rate = mean(VALUENUM, na.rm = TRUE)) %>% 
-    deframe()
+  if(file.exists(chartfile))
+  {
+    charts <- read_csv(chartfile)
+    
+    # Determine respiratory rate 
+    respiratory_rate <- charts %>% 
+      filter(ITEMID %in% ID_respiratory_rate) %>% 
+      # Calculate time difference from discharge
+      mutate(before_discharge = discharge_time - CHARTTIME) %>% 
+      # Select only events before discharge
+      filter(before_discharge > 0) %>% 
+      filter(before_discharge < 48) %>% 
+      summarise(respiratory_rate = mean(VALUENUM, na.rm = TRUE)) %>% 
+      deframe()
+    
+    ambulation <- charts %>% 
+      filter(ITEMID %in% ID_ambulation) %>% 
+      # Calculate time difference from discharge
+      mutate(before_discharge = discharge_time - CHARTTIME) %>% 
+      # Select only events 24h before discharge
+      filter(before_discharge > 0) %>% 
+      filter(before_discharge < 24) %>% 
+      summarise(ambulation = any(grepl("walk", VALUE,
+                                       ignore.case = TRUE) |
+                                   VALUENUM >2, na.rm = TRUE)) %>% 
+      deframe()
+    
+    chart_missing <- FALSE
+  }else
+  {
+    respiratory_rate <- NA
+    ambulation <- NA
+    chart_missing <- TRUE
+  }
   
   # Extract past diagnoses for patient
   history <- mimic_admissions %>% 
@@ -288,22 +310,13 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   # FROST------------
   #---  Apache II score at admission
   
-  ambulation <- charts %>% 
-    filter(ITEMID %in% ID_ambulation) %>% 
-    # Calculate time difference from discharge
-    mutate(before_discharge = discharge_time - CHARTTIME) %>% 
-    # Select only events 24h before discharge
-    filter(before_discharge > 0) %>% 
-    filter(before_discharge < 24) %>% 
-    summarise(ambulation = any(grepl("walk", VALUE,
-                         ignore.case = TRUE) |
-                     VALUENUM >2, na.rm = TRUE)) %>% 
-    deframe()
+
   
   # Output
   data.frame(row_id = i,
              subject_id = subj,
              adm_id = adm,
+             chart_missing,
              readmission = outcomes$readmission[i],
              # Hammer variables
              sex, general_surgery, cardiac_surgery,
