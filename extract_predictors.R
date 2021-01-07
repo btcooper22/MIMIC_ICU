@@ -358,5 +358,45 @@ sum(predictors$chart_missing)
 predictors %<>% filter(chart_missing == FALSE)
 
 # Count and exclude missing lab data
-sum(predictors$)
-predictors %<>% filter(chart_missing == FALSE)
+sum(predictors$lab_missing)
+predictors %<>% filter(lab_missing == FALSE)
+
+# Count cases of readmission
+table(predictors$readmission)
+
+# Tabulate sex
+table(predictors$sex)
+
+# Tabulate surgical types
+table(predictors$general_surgery)
+table(predictors$cardiac_surgery)
+
+# Tabulate lengths of stay
+table(predictors$los_5)
+table(predictors$los_7)
+
+# Tabulate admission and discharge information
+table(predictors$after_hours_discharge)
+table(predictors$elective_admission)
+table(predictors$admission_source)
+
+# Tabulate hammer binary variables
+table(predictors$hyperglycemia)
+table(predictors$anaemia)
+table(predictors$ambulation)
+
+# Tabulate remaining binaries
+table(predictors$acute_renal_failure)
+table(predictors$atrial_fibrillation)
+table(predictors$renal_insufficiency)
+
+# Clean and summarise age
+predictors$age[predictors$age == ">90"] <- 90
+predictors$age <- floor(as.numeric(predictors$age))
+summary(predictors$age)
+
+# Summarise continuous variables
+summary(predictors$serum_glucose) # 115
+summary(predictors$serum_choride) # 132
+summary(predictors$blood_urea_nitrogen) # 120
+summary(predictors$respiratory_rate) # 1084
