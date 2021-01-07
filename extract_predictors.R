@@ -331,6 +331,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              subject_id = subj,
              adm_id = adm,
              chart_missing,
+             lab_missing,
              readmission = outcomes$readmission[i],
              # Hammer variables
              sex, general_surgery, cardiac_surgery,
@@ -344,4 +345,18 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              )
 }
 stopImplicitCluster()
-proc.time() - ptm
+proc.time() - ptm # 171s
+
+# Quality control------------
+
+# No duplicated patients or admissions
+length(unique(predictors$subject_id)) == nrow(predictors)
+length(unique(predictors$adm_id)) == nrow(predictors)
+
+# Count and exclude missing chart data
+sum(predictors$chart_missing)
+predictors %<>% filter(chart_missing == FALSE)
+
+# Count and exclude missing lab data
+sum(predictors$)
+predictors %<>% filter(chart_missing == FALSE)
