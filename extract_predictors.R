@@ -263,9 +263,46 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
       mutate(before_discharge = discharge_time - CHARTTIME) %>% 
       # Select only events before discharge
       filter(before_discharge > 0) %>% 
-      filter(before_discharge < 48) %>% 
-      summarise(respiratory_rate = mean(VALUENUM, na.rm = TRUE)) %>% 
-      deframe()
+      filter(before_discharge < 48)
+    
+    if(nrow(respiratory_rate) == 0)
+    {
+      # If no RR measurement within 48h of discharge
+      respiratory_rate <- charts %>% 
+        filter(ITEMID %in% ID_respiratory_rate) %>% 
+        # Calculate time difference from discharge
+        mutate(before_discharge = discharge_time - CHARTTIME) %>% 
+        # Select only events before discharge
+        filter(before_discharge > 0) %>% 
+        # Find most recent
+        slice_min(before_discharge)
+      
+      # If no RR measurements AT ALL before discharge
+      if(nrow(respiratory_rate) == 0)
+      {
+        respiratory_rate <- NA
+        rr_time <- NA
+      }else
+      {
+        # Record time before discharge
+        rr_time <- respiratory_rate$before_discharge %>% deframe()
+        
+        # Determine respiratory rate 
+        respiratory_rate %<>% 
+          summarise(respiratory_rate = mean(VALUENUM, na.rm = TRUE)) %>% 
+          deframe()
+      }
+
+    }else
+    {
+      # Determine respiratory rate 
+      respiratory_rate %<>% 
+        summarise(respiratory_rate = mean(VALUENUM, na.rm = TRUE)) %>% 
+        deframe()
+      rr_time <- 48
+    }
+    
+
     
     ambulation <- charts %>% 
       filter(ITEMID %in% ID_ambulation) %>% 
@@ -319,19 +356,17 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   # HAMMER------------
   #     APACHE II at admission (>20)
   #     Positive fluid balance (>5L over ICU stay)
-  #     No ambulation in last 24h
   
   # FROST------------
   #---  Apache II score at admission
   
-
-  
   # Output
-  data.frame(row_id = i,
+  output <- data.frame(row_id = i,
              subject_id = subj,
              adm_id = adm,
              chart_missing,
              lab_missing,
+             rr_time,
              readmission = outcomes$readmission[i],
              # Hammer variables
              sex, general_surgery, cardiac_surgery,
@@ -343,9 +378,11 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              serum_glucose, blood_urea_nitrogen, serum_choride,
              respiratory_rate, atrial_fibrillation, renal_insufficiency
              )
+  output
+  #data.frame(i, cols = ncol(output))
 }
 stopImplicitCluster()
-proc.time() - ptm # 171s
+proc.time() - ptm # 180s
 
 # Quality control------------
 
@@ -360,6 +397,10 @@ predictors %<>% filter(chart_missing == FALSE)
 # Count and exclude missing lab data
 sum(predictors$lab_missing)
 predictors %<>% filter(lab_missing == FALSE)
+
+# Count and exclude missing respiratory rates
+sum(is.na(predictors$respiratory_rate))
+predictors %<>% filter(!is.na(predictors$respiratory_rate))
 
 # Count cases of readmission
 table(predictors$readmission)
@@ -395,8 +436,14 @@ predictors$age[predictors$age == ">90"] <- 90
 predictors$age <- floor(as.numeric(predictors$age))
 summary(predictors$age)
 
+# Summarise respiratory rate measurements
+summary(predictors %>% filter(rr_time == 48) %>% 
+          select(respiratory_rate))
+summary(predictors %>% filter(rr_time > 48) %>% 
+          select(respiratory_rate, rr_time))
+
 # Summarise continuous variables
-summary(predictors$serum_glucose) # 115
-summary(predictors$serum_choride) # 132
-summary(predictors$blood_urea_nitrogen) # 120
-summary(predictors$respiratory_rate) # 1084
+summary(predictors$serum_glucose) # 108
+summary(predictors$serum_choride) # 124
+summary(predictors$blood_urea_nitrogen) # 113
+
