@@ -241,12 +241,41 @@ apacheII_score <- function(labs_df, chart_df, admission_time)
     is.numeric(wbc_value) ~ 0L
   )
   
-  # Glasgow coma score (units)
-  apache2_score.gcs <- function(x, ...) {
-    purrr::map_int(x, ~ 15L - as.integer(.x))
-  }
+  # Calculate Glasgow coma score---------
   
-  # Age
+  # Gather all GCS motor measurements
+  gcs_motor_measurements <- chart_df %>% 
+    filter(ITEMID %in% c(454, 223901))
+  
+  # Gather all GCS verbal measurements
+  gcs_verbal_measurements <- chart_df %>% 
+    filter(ITEMID %in% c(723, 223900))
+  
+  # Gather all GCS eye measurements
+  gcs_eye_measurements <- chart_df %>% 
+    filter(ITEMID %in% c(184, 220739))
+  
+  # Find closest motor measurement
+  gcs_motor_value <- gcs_motor_measurements %>% 
+    filter_closest(admission_time) %>% 
+    select(VALUENUM) %>%  deframe()
+  
+  # Find closest verbal measurement
+  gcs_verbal_value <- gcs_verbal_measurements %>% 
+    filter_closest(admission_time) %>% 
+    select(VALUENUM) %>%  deframe()
+  
+  # Find closest eye measurement
+  gcs_eye_value <- gcs_eye_measurements %>% 
+    filter_closest(admission_time) %>% 
+    select(VALUENUM) %>%  deframe()
+  
+  # Sum and score
+  gcs_value <- gcs_motor_value + gcs_verbal_value + gcs_eye_value
+  gcs_score <- 15 - gcs_value
+  
+  
+  # Calculate age-----------------
   apache2_score.age <- function(x, ...) {
     score <- function(y) {
       dplyr::case_when(
@@ -325,7 +354,6 @@ apacheII_score <- function(labs_df, chart_df, admission_time)
     (fio2 * (patm - ph2o) - (pco2 / 0.8)) - pao2
   }
   
-
   
   # Need elective admission + comorbs
   apache2_score.admit <- function(x, ..., comorbidity) {
