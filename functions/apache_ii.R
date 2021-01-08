@@ -71,35 +71,49 @@ apacheII_score <- function(labs_df, chart_df, admission_time)
     map_value >= 110 | map_value <= 69 ~ 2L,
     is.numeric(map_value) ~ 0L
   )
-
-  # Heart rate (ventricular response)
-  apache2_score.hr <- function(x, ...) {
-    score <- function(y) {
-      dplyr::case_when(
-        y >= 180 | y <= 39 ~ 4L,
-        y >= 140 | y <= 54 ~ 3L,
-        y >= 110 | y <= 69 ~ 2L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
   
-  # Respiratory rate (b/min)
-  apache2_score.rr <- function(x, ...) {
-    score <- function(y) {
-      dplyr::case_when(
-        y >= 50 | y <= 5 ~ 4L,
-        y >= 35 ~ 3L,
-        y <= 9 ~ 2L,
-        y >= 25 | y <= 11 ~ 1L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
+  # Calculate heart rate---------------
+  
+  # Gather all pulse measurements
+  pulse_measurements <- chart_df %>% 
+    filter(ITEMID %in% c(211, 220045)) 
+  
+  # Find closest to ICU admission 
+  pulse_value <- pulse_measurements %>% 
+    filter_closest(admission_time) %>% 
+    select(VALUENUM) %>% deframe()
+  
+  # Score
+  pulse_score <- case_when(
+    pulse_value >= 180 | pulse_value <= 39 ~ 4L,
+    pulse_value >= 140 | pulse_value <= 54 ~ 3L,
+    pulse_value >= 110 | pulse_value <= 69 ~ 2L,
+    is.numeric(pulse_value) ~ 0L
+  )
+  
+  # Calculate respiratory rate-----------
+  
+  # Gather all RR measurements
+  respiratory_measurements <- charts %>% 
+    filter(ITEMID %in% c(614, 615, 618, 219, 619, 653, 1884,
+                         8113, 1635, 3603, 224688, 224689,
+                         224690, 220210))
+  
+  # Find closest to ICU admission 
+  respiratory_value <- respiratory_measurements %>% 
+    filter_closest(admission_time) %>% 
+    select(VALUENUM) %>% deframe()
+  
+  # Score
+  respiratory_score <-  case_when(
+    respiratory_value >= 50 | respiratory_value <= 5 ~ 4L,
+    respiratory_value >= 35 ~ 3L,
+    respiratory_value <= 9 ~ 2L,
+    respiratory_value >= 25 | respiratory_value <= 11 ~ 1L,
+    is.numeric(respiratory_value) ~ 0L
+  )
+  
+  # Calculate arterial pH---------
   
   # Arterial pH
   apache2_score.ph <- function(x, ...) {
