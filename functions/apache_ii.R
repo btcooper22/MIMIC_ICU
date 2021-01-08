@@ -9,14 +9,24 @@ apacheII_score <- function(labs_df, chart_df, admission_time)
   chart_df <- charts
   admission_time <- admit_time
   
-  # Helper function: Find closest chart measurement to admission
-  filter_closest <- function(.df, time)
+  # Helper function: Find closest chart measurement to admission (or up to 12h before)
+  filter_closest <- function(.df, time, type = "chart")
   {
-    .df %>% 
-      mutate(after_admission = difftime(CHARTTIME, time,
-                                        units = "hours")) %>% 
-      filter(after_admission > 0) %>% 
-      slice_min(after_admission)
+    if(type == "chart")
+    {
+      .df %>% 
+        mutate(after_admission = difftime(CHARTTIME, time,
+                                          units = "hours"))  %>% 
+        filter(after_admission > -12) %>% 
+        slice_min(abs(after_admission))
+    } else
+    {
+      .df %>% 
+        mutate(after_admission = difftime(charttime, time,
+                                          units = "hours")) %>% 
+        filter(after_admission > -12) %>% 
+        slice_min(abs(after_admission))
+    }
   }
   
   # Calculate temperature---------
@@ -94,7 +104,7 @@ apacheII_score <- function(labs_df, chart_df, admission_time)
   # Calculate respiratory rate-----------
   
   # Gather all RR measurements
-  respiratory_measurements <- charts %>% 
+  respiratory_measurements <- chart_df %>% 
     filter(ITEMID %in% c(614, 615, 618, 219, 619, 653, 1884,
                          8113, 1635, 3603, 224688, 224689,
                          224690, 220210))
@@ -114,51 +124,65 @@ apacheII_score <- function(labs_df, chart_df, admission_time)
   )
   
   # Calculate arterial pH---------
+
+  # Gather all arterial pH measurements
+  artpH_measurements <- chart_df %>% 
+    filter(ITEMID %in% c(1126, 780,4753, 223830))
   
-  # Arterial pH
-  apache2_score.ph <- function(x, ...) {
-    score <- function(y) {
-      dplyr::case_when(
-        y >= 7.7 | y < 7.15 ~ 4L,
-        y >= 7.6 | y <= 7.24 ~ 3L,
-        y <= 7.32 ~ 2L,
-        y >= 7.5 ~ 1L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
+  # Find closest to ICU admission 
+  artpH_value <- artpH_measurements %>% 
+    filter_closest(admission_time) %>% 
+    select(VALUENUM) %>% deframe()
   
-  # Serum sodium (mMol/L)
-  apache2_score.sodium <- function(x, ...) {
-    score <- function(y) {
-      dplyr::case_when(
-        y >= 180 | y <= 110 ~ 4L,
-        y >= 160 | y <= 119 ~ 3L,
-        y >= 155 | y <= 129 ~ 2L,
-        y >= 150 ~ 1L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
+  # Score
+  artpH_score <-  case_when(
+    artpH_value >= 7.7 | artpH_value < 7.15 ~ 4L,
+    artpH_value >= 7.6 | artpH_value <= 7.24 ~ 3L,
+    artpH_value <= 7.32 ~ 2L,
+    artpH_value >= 7.5 ~ 1L,
+    is.numeric(artpH_value) ~ 0L
+  )
   
-  # Serum potassium (mMol/L)
-  apache2_score.potassium <- function(x, ...) {
-    score <- function(y) {
-      dplyr::case_when(
-        y >= 7 | y < 2.5 ~ 4L,
-        y >= 6 ~ 3L,
-        y <= 2.9 ~ 2L,
-        y >= 5.5 | y <= 3.4 ~ 1L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
+  # Calculate serum sodium (mMol/L)------------
+
+  # Gather all serum sodium measurements
+  sodium_measurements <- labs_df %>% 
+    filter(itemid %in% c(50824, 50983))
+  
+  # Find closest to ICU admission 
+  sodium_value <- sodium_measurements %>% 
+    filter_closest(admission_time, "labs") %>% 
+    select(valuenum) %>% deframe()
+  
+  # Score
+  sodium_score <-  case_when(
+    sodium_value >= 180 | sodium_value <= 110 ~ 4L,
+    sodium_value >= 160 | sodium_value <= 119 ~ 3L,
+    sodium_value >= 155 | sodium_value <= 129 ~ 2L,
+    sodium_value >= 150 ~ 1L,
+    is.numeric(sodium_value) ~ 0L
+  )
+  
+  # Calculate serum potassium (mMol/L)---------
+  
+  # Gather all serum sodium measurements
+  potassium_measurements <- labs_df %>% 
+    filter(itemid %in% c(50822, 50971))
+  
+  # Find closest to ICU admission 
+  potassium_value <- potassium_measurements %>% 
+    filter_closest(admission_time, "labs") %>% 
+    select(valuenum) %>% deframe()
+  
+  # Score
+  potassium_score <- case_when(
+    potassium_value >= 7 | potassium_value < 2.5 ~ 4L,
+    potassium_value >= 6 ~ 3L,
+    potassium_value <= 2.9 ~ 2L,
+    potassium_value >= 5.5 | potassium_value <= 3.4 ~ 1L,
+    is.numeric(potassium_value) ~ 0L
+  )
+
   
   # Serum Creatinine (mg/dL)
   apache2_score.scr <- function(x, ...) {
