@@ -298,8 +298,66 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time)
     is.numeric(age_value) ~ 0L
   )
   
+  # Calculate oxygenation score--------
   
-  # Serum bicarbonate (venous mMol/L, only use if no aaDo2 or Pa02)
+  ## Calculate fraction inspired oxygen
+  
+  # Gather all FiO2 measurements
+  fio2_measurements <- chart_df %>% 
+    filter(ITEMID %in% c(223835, 2981, 3420))
+  
+  # Find closest to ICU admission 
+  fio2_value <- fio2_measurements %>% 
+    filter_closest(admission_time) %>% 
+    select(VALUENUM) %>% deframe()
+  
+  # Calculate arterial o2
+  pao2_measurements <- chart_df %>% 
+    filter(ITEMID %in%  c(4203, 3785, 3837, 3828, 220224, 779))
+  
+  # Find closest to ICU admission 
+  pao2_value <- pao2_measurements %>% 
+    filter_closest(admission_time) %>% 
+    select(VALUENUM) %>% deframe()
+  
+  # If fio2 > 0.5 use aa_grad
+  if(fio2_value > 50)
+  {
+    # Calculate Pco2
+    paco2_measurements <- chart_df %>% 
+      filter(ITEMID %in%  c(779, 220235, 777, 778, 3784, 3835, 3836))
+    
+    # Find closest to ICU admission 
+    paco2_value <- paco2_measurements %>% 
+      filter_closest(admission_time) %>% 
+      select(VALUENUM) %>% deframe()
+    
+    # Calculate AA gradient
+    elev <-  5
+    patm <- 760 * exp(elev / -7000)
+    ph2o <- 47 * exp((temp_value - 37) / 18.4)
+    fio2 <- purrr::map_dbl(fio2_value, ~ dplyr::if_else(.x > 1, .x / 100, .x))
+    aa_grad <- (fio2 * (patm - ph2o) - (paco2_value / 0.8)) - pao2_value
+    
+    # Score AA gradient
+    oxygenation_score <- case_when(
+      aa_grad >= 500 ~ 4L,
+      aa_grad >= 350 ~ 3L,
+      aa_grad >= 200 ~ 2L,
+      is.numeric(aa_grad) ~ 0L
+    )
+    
+  }else # Else use Pao2
+  {
+    oxygenation_score <- case_when(
+      pao2_value < 55 ~ 4L,
+      pao2_value <= 60 ~ 3L,
+      pao2_value <= 70 ~ 1L,
+      is.numeric(pao2_value) ~ 0L
+    )
+  }
+  
+  # Serum bicarbonate (venous mMol/L, only use if no arterial blood gases)
   # apache2_score.hco3 <- function(x, ...) {
   #   score <- function(y) {
   #     dplyr::case_when(
@@ -313,56 +371,6 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time)
   #   
   #   purrr::map_int(x, score)
   # }
-  
-  # Arterial O2 (mmHg)
-  apache2_score.pao2 <- function(x, ...) {
-    score <- function(y) {
-      dplyr::case_when(
-        y < 55 ~ 4L,
-        y <= 60 ~ 3L,
-        y <= 70 ~ 1L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
-  
-  # Alveolar–arterial gradient (mmHg)
-  apache2_score.aa_grad <- function(x, ...) {
-    
-    score <- function(y) {
-      dplyr::case_when(
-        y >= 500 ~ 4L,
-        y >= 350 ~ 3L,
-        y >= 200 ~ 2L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
-  
-  # Calculate AA gradient
-  aa_gradient <- function(pco2, pao2, fio2 = 21, temp = 37, elev = 0) {
-    # pco2: partial pressure of carbon dioxide in arterial blood
-    # pao2: partial pressure of oxygen in arterial blood
-    # fio2:  Fraction of Inspired Oxygen
-    # temp: patient temperature in degrees Celsius
-    # elev  elevation above sea level in meters
-    
-    # Aa DO2 = (FIO2 * (Patm - PH2O) - (PaCO2 / 0.8)) - PaO2
-    # Patm = 760 * exp(Elevation / -7000); Houston elevation = 43 feet (13.106 m)
-    # PH2O = 47 * exp((Temp - 37) / 18.4)
-    
-    patm <- 760 * exp(elev / -7000)
-    ph2o <- 47 * exp((temp - 37) / 18.4)
-    
-    fio2 <- purrr::map_dbl(fio2, ~ dplyr::if_else(.x > 1, .x / 100, .x))
-    
-    (fio2 * (patm - ph2o) - (pco2 / 0.8)) - pao2
-  }
-  
   
   # Need elective admission + comorbs
   apache2_score.admit <- function(x, ..., comorbidity) {
