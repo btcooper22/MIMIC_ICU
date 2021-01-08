@@ -2,11 +2,14 @@
 # MIMIC extraction code modified from https://github.com/MIT-LCP/mimic-code/tree/master/concepts/cookbook
 require(purrr)
 
-apacheII_score <- function(labs_df, chart_df, admission_time)
+apacheII_score <- function(labs_df, chart_df, patient_df, admission_time)
 {
   # For debug
   labs_df <- labs
   chart_df <- charts
+  patient_df <- mimic_preproc$stays %>% 
+    filter(subject_id == subj,
+           hadm_id == adm)
   admission_time <- admit_time
   
   # Helper function: Find closest chart measurement to admission (or up to 12h before)
@@ -276,19 +279,25 @@ apacheII_score <- function(labs_df, chart_df, admission_time)
   
   
   # Calculate age-----------------
-  apache2_score.age <- function(x, ...) {
-    score <- function(y) {
-      dplyr::case_when(
-        y >= 75 ~ 6L,
-        y >= 65 ~ 5L,
-        y >= 55 ~ 3L,
-        y >= 45 ~ 2L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
+  
+  # Find patient data
+  age_value <- patient_df %>% 
+    slice_head() %>%
+    select(dob, intime) %>% 
+    # Generate age
+    mutate(age = (intime - dob) / 365) %>%
+    select(age) %>% deframe() %>% 
+    as.numeric()
+  
+  # Score
+  age_score <- case_when(
+    age_value >= 75 ~ 6L,
+    age_value >= 65 ~ 5L,
+    age_value >= 55 ~ 3L,
+    age_value >= 45 ~ 2L,
+    is.numeric(age_value) ~ 0L
+  )
+  
   
   # Serum bicarbonate (venous mMol/L, only use if no aaDo2 or Pa02)
   # apache2_score.hco3 <- function(x, ...) {
