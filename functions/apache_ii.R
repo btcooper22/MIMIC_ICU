@@ -165,7 +165,7 @@ apacheII_score <- function(labs_df, chart_df, admission_time)
   
   # Calculate serum potassium (mMol/L)---------
   
-  # Gather all serum sodium measurements
+  # Gather all serum potassium measurements
   potassium_measurements <- labs_df %>% 
     filter(itemid %in% c(50822, 50971))
   
@@ -184,67 +184,97 @@ apacheII_score <- function(labs_df, chart_df, admission_time)
   )
 
   
-  # Serum Creatinine (mg/dL)
-  apache2_score.scr <- function(x, ...) {
-    score <- function(y) {
-      dplyr::case_when(
-        y >= 3.5 ~ 4L,
-        y >= 2 ~ 3L,
-        y >= 1.5 | y < 0.6 ~ 2L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
+  # Calculate serum creatinine (mg/dL)------------
   
-  # Haematocrit (%)
-  apache2_score.hct <- function(x, ...) {
-    score <- function(y) {
-      dplyr::case_when(
-        y >= 60 | y < 20 ~ 4L,
-        y >= 50 | y <= 29.9 ~ 2L,
-        y >= 46 ~ 1L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
+  # Gather all serum creatinine measurements
+  creatinine_measurements <- labs_df %>% 
+    filter(itemid %in% c(50912))
   
-  # White blood count (1000s)
-  apache2_score.wbc <- function(x, ...) {
-    score <- function(y) {
-      dplyr::case_when(
-        y >= 40 | y < 1 ~ 4L,
-        y >= 20 | y <= 2.9 ~ 2L,
-        y >= 15 ~ 1L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
+  # Find closest to ICU admission 
+  creatinine_value <- creatinine_measurements %>% 
+    filter_closest(admission_time, "labs") %>% 
+    select(valuenum) %>% deframe()
+  
+  # Score
+  creatinine_score <- case_when(
+    creatinine_value >= 3.5 ~ 4L,
+    creatinine_value >= 2 ~ 3L,
+    creatinine_value >= 1.5 | creatinine_value < 0.6 ~ 2L,
+    is.numeric(creatinine_value) ~ 0L
+  )
+  
+  # Calculate haematocrit (%)-----------------
+  
+  # Gather all haematocrit measurements
+  hematocrit_measurements <- labs_df %>% 
+    filter(itemid %in% c(51221, 50810))
+  
+  # Find closest to ICU admission 
+  hematocrit_value <- hematocrit_measurements %>% 
+    filter_closest(admission_time, "labs") %>% 
+    select(valuenum) %>% deframe()
+  
+  # Score
+  hematocrit_score <- case_when(
+    hematocrit_value >= 60 | hematocrit_value < 20 ~ 4L,
+    hematocrit_value >= 50 | hematocrit_value <= 29.9 ~ 2L,
+    hematocrit_value >= 46 ~ 1L,
+    is.numeric(hematocrit_value) ~ 0L
+  )
+  
+  # Calculate white blood count (1000s)---------
+  
+  # Gather all WBC measurements
+  wbc_measurements <- labs_df %>% 
+    filter(itemid %in% c(51300, 51301))
+  
+  # Find closest to ICU admission 
+  wbc_value <- wbc_measurements %>% 
+    filter_closest(admission_time, "labs") %>% 
+    select(valuenum) %>% deframe()
+  
+  # Score
+  wbc_score <- case_when(
+    wbc_value >= 40 | wbc_value < 1 ~ 4L,
+    wbc_value >= 20 | wbc_value <= 2.9 ~ 2L,
+    wbc_value >= 15 ~ 1L,
+    is.numeric(wbc_value) ~ 0L
+  )
   
   # Glasgow coma score (units)
   apache2_score.gcs <- function(x, ...) {
     purrr::map_int(x, ~ 15L - as.integer(.x))
   }
   
-  # Serum bicarbonate (venous mMol/L, only use if no aaDo2 or Pa02)
-  apache2_score.hco3 <- function(x, ...) {
+  # Age
+  apache2_score.age <- function(x, ...) {
     score <- function(y) {
       dplyr::case_when(
-        y >= 52 | y < 15 ~ 4L,
-        y >= 41 | y <= 17.9 ~ 3L,
-        y <= 21.9 ~ 2L,
-        y >= 32 ~ 1L,
+        y >= 75 ~ 6L,
+        y >= 65 ~ 5L,
+        y >= 55 ~ 3L,
+        y >= 45 ~ 2L,
         is.numeric(y) ~ 0L
       )
     }
     
     purrr::map_int(x, score)
   }
+  
+  # Serum bicarbonate (venous mMol/L, only use if no aaDo2 or Pa02)
+  # apache2_score.hco3 <- function(x, ...) {
+  #   score <- function(y) {
+  #     dplyr::case_when(
+  #       y >= 52 | y < 15 ~ 4L,
+  #       y >= 41 | y <= 17.9 ~ 3L,
+  #       y <= 21.9 ~ 2L,
+  #       y >= 32 ~ 1L,
+  #       is.numeric(y) ~ 0L
+  #     )
+  #   }
+  #   
+  #   purrr::map_int(x, score)
+  # }
   
   # Arterial O2 (mmHg)
   apache2_score.pao2 <- function(x, ...) {
@@ -295,20 +325,7 @@ apacheII_score <- function(labs_df, chart_df, admission_time)
     (fio2 * (patm - ph2o) - (pco2 / 0.8)) - pao2
   }
   
-  # Age
-  apache2_score.age <- function(x, ...) {
-    score <- function(y) {
-      dplyr::case_when(
-        y >= 75 ~ 6L,
-        y >= 65 ~ 5L,
-        y >= 55 ~ 3L,
-        y >= 45 ~ 2L,
-        is.numeric(y) ~ 0L
-      )
-    }
-    
-    purrr::map_int(x, score)
-  }
+
   
   # Need elective admission + comorbs
   apache2_score.admit <- function(x, ..., comorbidity) {
