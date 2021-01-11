@@ -7,9 +7,9 @@
 fluid_balance <- function(icustay_df, chart_df)
 {
   # Debug
-  icustay_df <- mimic_preproc$stays %>% 
-    filter(hadm_id == adm) 
-  chart_df <- read_csv(paste("data/events/chartevents_", adm, ".csv", sep = ""))
+  #icustay_df <- mimic_preproc$stays %>% 
+  #  filter(hadm_id == adm) 
+  #chart_df <- read_csv(paste("data/events/chartevents_", adm, ".csv", sep = ""))
   
   # Extract database source
   dbsource <- icustay_df$dbsource
@@ -181,18 +181,3 @@ fluid_balance <- function(icustay_df, chart_df)
 # 100012 - metavision, fresh frozen plasma
 # 101019 - carevue, ffp
 # 100295 - carvue, fluid bolus
-
-events_carevue <- dir("data/events", pattern = "inputeventscv")
-for(E in 1:length(events_carevue))
-{
-  if(any(read.csv(paste("data/events/", events_carevue[E], sep = ""))$itemid %in% c(30008, 30009, 42832, 40548,
-                                                                                    45403, 44203, 30181, 46564,
-                                                                                    43237, 43353, 30012, 46313,
-                                                                                    30011, 30016, 42975, 42944,
-                                                                                    46336, 46729, 40033, 45410,
-                                                                                    42731)))
-  {
-    print(events_carevue[E])
-    break
-  }
-}
