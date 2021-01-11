@@ -96,13 +96,13 @@ ptm <- proc.time()
 psnice(value = 19)
 registerDoParallel(ifelse(detectCores() <= 12,
                           detectCores() - 1,
-                          2)
+                          12)
 )
 
 # Run loop
-predictors <- foreach(i = 1:10, .combine = "rbind",
+predictors <- foreach(i = 1:500, .combine = "rbind",
         .packages = c("magrittr", "readr", "dplyr",
-                      "tibble", "lubridate")) %dopar%
+                      "tibble", "lubridate", "purrr")) %dopar%
 {
   # Identify subject
   # print(i)
@@ -427,10 +427,25 @@ predictors <- foreach(i = 1:10, .combine = "rbind",
   # Positive fluid balance (>5L)
   if(!chart_missing)
   {
-    max_positive_fluid_balance <- fluid_balance(icustay_df = mimic_preproc$stays %>% 
-                                                  filter(hadm_id == adm),
-                                                chart_df = charts)
-    fluid_balance_5L <- max_positive_fluid_balance >= 5000
+    # Check if input and output files exist
+    inputfile_mv <- outputfile <- paste("data/events/inputeventsmv_", adm, ".csv", sep = "")
+    inputfile_cv <- outputfile <- paste("data/events/inputeventscv_", adm, ".csv", sep = "")
+    outputfile <- paste("data/events/outputevents_", adm, ".csv", sep = "")
+    
+    if(file.exists(outputfile) & (file.exists(inputfile_mv) | file.exists(inputfile_cv)))
+    {
+      # Calculate fluid balance
+      max_positive_fluid_balance <- fluid_balance(icustay_df = mimic_preproc$stays %>% 
+                                                    filter(hadm_id == adm),
+                                                  chart_df = charts,
+                                                  readmission = outcomes$readmission[i])
+      fluid_balance_5L <- max_positive_fluid_balance >= 5000
+      
+    } else
+    {
+      # Record as NA
+      fluid_balance_5L <- NA
+    }
   }else
   {
     fluid_balance_5L <- NA
@@ -477,6 +492,12 @@ predictors %<>% filter(lab_missing == FALSE)
 
 # Count cases of readmission
 table(predictors$readmission, useNA = "ifany")
+
+# Summarise APACHE-II scores
+summary(predictors$apache_II)
+
+# Tabulate fluid balance
+table(predictors$fluid_balance_5L, useNA = "ifany")
 
 # Tabulate sex
 table(predictors$sex, useNA = "ifany")

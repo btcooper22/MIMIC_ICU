@@ -10,6 +10,7 @@ fluid_balance <- function(icustay_df, chart_df, readmission)
   # icustay_df <- mimic_preproc$stays %>%
   #  filter(hadm_id == adm)
   # chart_df <- charts
+  #readmission <- outcomes$readmission[i]
   
   # Find icu stay
   if(readmission)
@@ -134,55 +135,62 @@ fluid_balance <- function(icustay_df, chart_df, readmission)
   
   # Read output events
   outputfile <- paste("data/events/outputevents_", icustay_df$hadm_id, ".csv", sep = "")
-  output_events <- read_csv(outputfile, col_types = c("ddddTddcTdlll"))
-  
-  # Select urine events
-  urine_out <- output_events %>% 
-    # Carevue urine items
-    filter(itemid %in% c(40055, 43175, 43175, 40069,
-                         40094, 40715, 40473, 40085,
-                         40057, 40056, 40405, 40428,
-                         40086, 40096, 40651,
-                         # Metavision urine items 
-                         226559, 226560, 226561,
-                         226584, 226563, 226564,
-                         226565, 226567, 226557,
-                         226558, 227488, 227489))
-  
-  # Correct for input of GU irrigants
-  urine_out %<>% 
-    mutate(value = ifelse(itemid == 227488, -value, value))
-  
-  # Standardise units to ml and round
-  urine_out %<>% 
-    mutate(amount = ifelse(valueuom == "L", 
-                           value * 1000, value) %>% 
-             round())
-  
-  # Combine
-  fluid_balance_df <- rbind(
-    # Input events
-    fluids_in %>% 
-      select(starttime, amount) %>% 
-      mutate(eventtype = "input") %>% 
-      rename("value" = amount,
-             "time" = starttime),
-    # Output events
-    urine_out %>% 
-      select(charttime, value) %>% 
-      mutate(eventtype = "output",
-             value = -value) %>% 
-      rename("time" = charttime)
-  )
-  
-  # Sort and calculate balance
-  fluid_balance_df %<>% 
-    arrange(time) %>% 
-    filter(!is.na(value)) %>% 
-    mutate(balance = cumsum(value))
-  
-  # Output max
-  return(max(fluid_balance_df$balance))
+  if(file.exists(outputfile))
+  {
+    output_events <- read_csv(outputfile, col_types = c("ddddTddcTdlll"))
+    
+    # Select urine events
+    urine_out <- output_events %>% 
+      # Carevue urine items
+      filter(itemid %in% c(40055, 43175, 43175, 40069,
+                           40094, 40715, 40473, 40085,
+                           40057, 40056, 40405, 40428,
+                           40086, 40096, 40651,
+                           # Metavision urine items 
+                           226559, 226560, 226561,
+                           226584, 226563, 226564,
+                           226565, 226567, 226557,
+                           226558, 227488, 227489))
+    
+    # Correct for input of GU irrigants
+    urine_out %<>% 
+      mutate(value = ifelse(itemid == 227488, -value, value))
+    
+    # Standardise units to ml and round
+    urine_out %<>% 
+      mutate(amount = ifelse(valueuom == "L", 
+                             value * 1000, value) %>% 
+               round())
+    
+    # Combine
+    fluid_balance_df <- rbind(
+      # Input events
+      fluids_in %>% 
+        select(starttime, amount) %>% 
+        mutate(eventtype = "input") %>% 
+        rename("value" = amount,
+               "time" = starttime),
+      # Output events
+      urine_out %>% 
+        select(charttime, value) %>% 
+        mutate(eventtype = "output",
+               value = -value) %>% 
+        rename("time" = charttime)
+    )
+    
+    # Sort and calculate balance
+    fluid_balance_df %<>% 
+      arrange(time) %>% 
+      filter(!is.na(value)) %>% 
+      mutate(balance = cumsum(value))
+    
+    # Output max
+    return(max(fluid_balance_df$balance))
+  }else
+  {
+    return(NA)
+  }
+
 }
 
 # EXAMPLE EVENTS
