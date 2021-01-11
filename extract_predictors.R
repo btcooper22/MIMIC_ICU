@@ -5,10 +5,11 @@ require(lubridate)
 require(doParallel)
 require(tools)
 
-# Load MIMIC database
+# Load MIMIC database and other functions
 source("functions/mimic_load.R")
 source("functions/event_filter_discharge.R")
 source("functions/flag_within_discharge.R")
+source("functions/apache_ii.R")
 
 # Load preprocessed data
 mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
@@ -407,6 +408,27 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   
   # FROST------------
   #---  Apache II score at admission
+  
+  # APACHE II
+  if(!chart_missing | !lab_missing | !is.na(respiratory_rate))
+  {
+    # Calculate apache score
+    apache_score_vector <- apacheII_score(labs_df = labs, chart_df = charts,
+                                          patient_df = mimic_preproc$stays %>% 
+                                               filter(subject_id == subj,
+                                                      hadm_id == adm),
+                                          admission_time = admit_time,
+                                          elect_admit = elective_admission,
+                                          prev_diagnoses = history,
+                                          arf = acute_renal_failure)
+    # Sum score
+    apache_II <- sum(apache_score_vector)
+    high_apache <- apache_II > 20
+  }else
+  {
+    apache_II <- NA
+    high_apache <- NA
+  }
   
   # Output
   output <- data.frame(row_id = i,
