@@ -100,7 +100,7 @@ registerDoParallel(ifelse(detectCores() <= 12,
 )
 
 # Run loop
-predictors <- foreach(i = 1:500, .combine = "rbind",
+predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
         .packages = c("magrittr", "readr", "dplyr",
                       "tibble", "lubridate", "purrr")) %dopar%
 {
@@ -474,7 +474,7 @@ predictors <- foreach(i = 1:500, .combine = "rbind",
   #data.frame(i, cols = ncol(output))
 }
 stopImplicitCluster()
-proc.time() - ptm # 180s
+proc.time() - ptm # 946s (~16 min)
 
 # Quality control and write ------------
 

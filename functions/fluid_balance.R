@@ -10,7 +10,7 @@ fluid_balance <- function(icustay_df, chart_df, readmission)
   # icustay_df <- mimic_preproc$stays %>%
   #  filter(hadm_id == adm)
   # chart_df <- charts
-  #readmission <- outcomes$readmission[i]
+  # readmission <- outcomes$readmission[i]
   
   # Find icu stay
   if(readmission)
@@ -20,6 +20,12 @@ fluid_balance <- function(icustay_df, chart_df, readmission)
   
   # Extract database source
   dbsource <- icustay_df$dbsource
+  
+  # Add specific exception for 110319
+  if(icustay_df$hadm_id == 110319)
+  {
+    dbsource <- "metavision"
+  }
   
   # Extract inputs for metavision
   if(dbsource == "metavision")
