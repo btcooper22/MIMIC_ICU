@@ -19,7 +19,7 @@ fluid_balance <- function(icustay_df, chart_df)
   {
     # Read input events
     inputfile <- paste("data/events/inputeventsmv_", icustay_df$hadm_id, ".csv", sep = "")
-    input_events <- read_csv(inputfile)
+    input_events <- read_csv(inputfile, col_types = c("ddddTTddcdcTdddccccddcdddcccTdd"))
     
     # Select colloid and crystalloid bolus items and round
     fluids_in <- input_events %>% 
@@ -30,8 +30,8 @@ fluid_balance <- function(icustay_df, chart_df)
                            225823, 225825, 225827,
                            225941, 226089, 225944)) %>% 
       filter(statusdescription != "Rewritten") %>% 
-      mutate(amount = ifelse(valueuom == "L", 
-                             value * 1000, value) %>% 
+      mutate(amount = ifelse(amountuom == "L", 
+                             amount * 1000, amount) %>% 
                round())
 
     # Find plasma transfusions
@@ -126,7 +126,7 @@ fluid_balance <- function(icustay_df, chart_df)
   
   # Read output events
   outputfile <- paste("data/events/outputevents_", icustay_df$hadm_id, ".csv", sep = "")
-  output_events <- read_csv(outputfile)
+  output_events <- read_csv(outputfile, col_types = c("ddddTddcTdlll"))
   
   # Select urine events
   urine_out <- output_events %>% 
