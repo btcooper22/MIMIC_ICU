@@ -18,6 +18,36 @@ mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
 # Load outcomes
 outcomes <- read_csv("data/outcomes.csv")
 
+# Correct "both" datasources where inaccurate-----------
+
+both_cases <- which(mimic_preproc$stays$dbsource == "both")
+new_both <- foreach(i = 1:length(both_cases),.combine = "c") %do%
+  {
+    # Find admission
+    hadm <- mimic_preproc$stays[both_cases[i],3]
+    
+    # Assess if admission in main data
+    if(hadm %in% outcomes$hadm_id)
+    {
+      # Find files
+      inputfile_mv <- paste("data/events/inputeventsmv_", hadm, ".csv", sep = "")
+      inputfile_cv <- paste("data/events/inputeventscv_", hadm, ".csv", sep = "")
+      
+      # Create new dbsource
+      case_when(
+        file.exists(inputfile_mv) & file.exists(inputfile_cv) ~ "both",
+        file.exists(inputfile_mv) ~ "metavision",
+        file.exists(inputfile_cv) ~ "carevue"
+      )
+    }else
+    {
+      # Flag as not in data
+      "irrelevant"
+    }
+  }
+mimic_preproc$stays$dbsource[mimic_preproc$stays$dbsource == "both"] <- new_both
+# test <- mimic_preproc$stays %>% filter(dbsource == "both")
+
 # Item definitions---------
 
 ID_blood_glucose <- mimic$d_labitems %>% 
@@ -428,8 +458,8 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   if(!chart_missing)
   {
     # Check if input and output files exist
-    inputfile_mv <- outputfile <- paste("data/events/inputeventsmv_", adm, ".csv", sep = "")
-    inputfile_cv <- outputfile <- paste("data/events/inputeventscv_", adm, ".csv", sep = "")
+    inputfile_mv <- paste("data/events/inputeventsmv_", adm, ".csv", sep = "")
+    inputfile_cv <- paste("data/events/inputeventscv_", adm, ".csv", sep = "")
     outputfile <- paste("data/events/outputevents_", adm, ".csv", sep = "")
     
     if(file.exists(outputfile) & (file.exists(inputfile_mv) | file.exists(inputfile_cv)))
