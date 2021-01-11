@@ -4,12 +4,18 @@
 # https://github.com/MIT-LCP/mimic-code/blob/master/concepts/fluid_balance/crystalloid_bolus.sql
 # https://github.com/MIT-LCP/mimic-code/blob/master/concepts/fluid_balance/urine_output.sql
 
-fluid_balance <- function(icustay_df, chart_df)
+fluid_balance <- function(icustay_df, chart_df, readmission)
 {
   # Debug
-  #icustay_df <- mimic_preproc$stays %>% 
-  #  filter(hadm_id == adm) 
-  #chart_df <- read_csv(paste("data/events/chartevents_", adm, ".csv", sep = ""))
+  # icustay_df <- mimic_preproc$stays %>%
+  #  filter(hadm_id == adm)
+  # chart_df <- charts
+  
+  # Find icu stay
+  if(readmission)
+  {
+    icustay_df <- icustay_df[1,]
+  }
   
   # Extract database source
   dbsource <- icustay_df$dbsource
@@ -104,11 +110,13 @@ fluid_balance <- function(icustay_df, chart_df)
     
     # Find plasma transfusions
     ffp_in <- input_events %>% 
-      filter(itemid %in% c(30005, 30180))
+      filter(itemid %in% c(30005, 30180)) %>% 
+      filter(amount > 0)
     
     # Find RBC transfusions
     rbc_in <- input_events %>% 
-      filter(itemid %in% c(30179, 30001, 30004))
+      filter(itemid %in% c(30179, 30001, 30004)) %>% 
+      filter(amount > 0)
     
     # Add to total fluids
     fluids_in %<>% 
