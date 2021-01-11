@@ -10,6 +10,7 @@ source("functions/mimic_load.R")
 source("functions/event_filter_discharge.R")
 source("functions/flag_within_discharge.R")
 source("functions/apache_ii.R")
+source("functions/fluid_balance.R")
 
 # Load preprocessed data
 mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
@@ -93,13 +94,13 @@ mimic_diagnoses <- mimic$diagnoses_icd %>% collect()
 # Prepare parallel options
 ptm <- proc.time()
 psnice(value = 19)
-registerDoParallel(ifelse(detectCores() <= 15,
+registerDoParallel(ifelse(detectCores() <= 12,
                           detectCores() - 1,
-                          12)
+                          2)
 )
 
 # Run loop
-predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
+predictors <- foreach(i = 1:10, .combine = "rbind",
         .packages = c("magrittr", "readr", "dplyr",
                       "tibble", "lubridate")) %dopar%
 {
@@ -402,13 +403,6 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
                          na.rm = TRUE)) %>% 
     deframe()
   
-  # HAMMER------------
-  #     APACHE II at admission (>20)
-  #     Positive fluid balance (>5L over ICU stay)
-  
-  # FROST------------
-  #---  Apache II score at admission
-  
   # APACHE II
   if(!chart_missing | !lab_missing | !is.na(respiratory_rate))
   {
@@ -430,6 +424,18 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     high_apache <- NA
   }
   
+  # Positive fluid balance (>5L)
+  if(!chart_missing)
+  {
+    max_positive_fluid_balance <- fluid_balance(icustay_df = mimic_preproc$stays %>% 
+                                                  filter(hadm_id == adm),
+                                                chart_df = charts)
+    fluid_balance_5L <- max_positive_fluid_balance >= 5000
+  }else
+  {
+    fluid_balance_5L <- NA
+  }
+  
   # Output
   output <- data.frame(row_id = i,
              subject_id = subj,
@@ -439,11 +445,12 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              rr_time,
              readmission = outcomes$readmission[i],
              # Hammer variables
-             sex, general_surgery, cardiac_surgery,
+             sex, general_surgery, cardiac_surgery, high_apache,
              hyperglycemia, anaemia, los_5, age, ambulation,
+             fluid_balance_5L,
              # Frost variables
              after_hours_discharge, los_7, elective_admission,
-             admission_source, acute_renal_failure,
+             admission_source, acute_renal_failure, apache_II,
              # Martin variables
              serum_glucose, blood_urea_nitrogen, serum_choride,
              respiratory_rate, atrial_fibrillation, renal_insufficiency
