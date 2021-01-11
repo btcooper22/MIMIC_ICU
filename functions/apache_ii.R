@@ -2,15 +2,18 @@
 # MIMIC extraction code modified from https://github.com/MIT-LCP/mimic-code/tree/master/concepts/cookbook
 require(purrr)
 
-apacheII_score <- function(labs_df, chart_df, patient_df, admission_time)
+apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
+                           elect_admit, prev_diagnoses)
 {
   # For debug
-  labs_df <- labs
-  chart_df <- charts
-  patient_df <- mimic_preproc$stays %>% 
-    filter(subject_id == subj,
-           hadm_id == adm)
-  admission_time <- admit_time
+  # labs_df <- labs
+  # chart_df <- charts
+  # patient_df <- mimic_preproc$stays %>% 
+  #   filter(subject_id == subj,
+  #          hadm_id == adm)
+  # admission_time <- admit_time
+  # elect_admit <- elective_admission
+  # prev_diagnoses <- history
   
   # Helper function: Find closest chart measurement to admission (or up to 12h before)
   filter_closest <- function(.df, time, type = "chart")
@@ -300,8 +303,6 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time)
   
   # Calculate oxygenation score--------
   
-  ## Calculate fraction inspired oxygen
-  
   # Gather all FiO2 measurements
   fio2_measurements <- chart_df %>% 
     filter(ITEMID %in% c(223835, 2981, 3420))
@@ -372,22 +373,29 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time)
   #   purrr::map_int(x, score)
   # }
   
-  # Need elective admission + comorbs
-  apache2_score.admit <- function(x, ..., comorbidity) {
-    score <- function(y, z) {
-      if (is.na(z) | z == FALSE) {
-        0L
-      } else {
-        if (is.na(y) | y == "elective") {
-          2L
-        } else {
-          5L
-        }
-      }
+  # Calculate chronic health score----------
+  
+  # Load comborbitity icd9 codes (from icuriskr)
+  load("functions/comorbidity_map_icd9.rda")
+  
+  # Unlist codes
+  comorbidity_icd9_codes <- unlist(comorbidity_map_icd9)
+  
+  # Search for any codes in patient history
+  comorbs <- any(comorbidity_icd9_codes %in% prev_diagnoses$icd9_code)
+  
+  # Score
+  if (comorbs == FALSE) {
+    chronic_score <- 0L
+  } else {
+    if (elect_admit == "elective") {
+      chronic_score <- 2L
+    } else {
+      chronic_score <- 5L
     }
-    
-    purrr::map2_int(x, comorbidity, score)
   }
+  
+  # Return full vector of scores
 }
 
 
