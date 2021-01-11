@@ -124,9 +124,9 @@ mimic_diagnoses <- mimic$diagnoses_icd %>% collect()
 # Prepare parallel options
 ptm <- proc.time()
 psnice(value = 19)
-registerDoParallel(ifelse(detectCores() <= 15,
+registerDoParallel(ifelse(detectCores() <= 12,
                           detectCores() - 1,
-                          15)
+                          12)
 )
 
 # Run loop
