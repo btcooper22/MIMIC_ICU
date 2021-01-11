@@ -124,9 +124,9 @@ mimic_diagnoses <- mimic$diagnoses_icd %>% collect()
 # Prepare parallel options
 ptm <- proc.time()
 psnice(value = 19)
-registerDoParallel(ifelse(detectCores() <= 12,
+registerDoParallel(ifelse(detectCores() <= 15,
                           detectCores() - 1,
-                          12)
+                          15)
 )
 
 # Run loop
@@ -506,7 +506,10 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
 stopImplicitCluster()
 proc.time() - ptm # 946s (~16 min)
 
-# Quality control and write ------------
+# Write and quality control ------------
+
+# Write to file
+predictors %>% write_csv("data/predictors.csv")
 
 # No duplicated patients or admissions
 length(unique(predictors$subject_id)) == nrow(predictors)
@@ -524,10 +527,10 @@ predictors %<>% filter(lab_missing == FALSE)
 table(predictors$readmission, useNA = "ifany")
 
 # Summarise APACHE-II scores
-summary(predictors$apache_II)
+summary(predictors$apache_II) # 7
 
 # Tabulate fluid balance
-table(predictors$fluid_balance_5L, useNA = "ifany")
+table(predictors$fluid_balance_5L, useNA = "ifany") # 45
 
 # Tabulate sex
 table(predictors$sex, useNA = "ifany")
@@ -572,5 +575,4 @@ summary(predictors$serum_choride)
 summary(predictors$blood_urea_nitrogen)
 summary(predictors$respiratory_rate)
 
-# Write to file
-predictors %>% write_csv("data/predictors.csv")
+
