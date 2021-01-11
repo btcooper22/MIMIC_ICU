@@ -8,7 +8,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   # For debug
   # labs_df <- labs
   # chart_df <- charts
-  # patient_df <- mimic_preproc$stays %>% 
+  # patient_df <- mimic_preproc$stays %>%
   #   filter(subject_id == subj,
   #          hadm_id == adm)
   # admission_time <- admit_time
@@ -318,6 +318,12 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   fio2_value <- fio2_measurements %>% 
     filter_closest(admission_time) %>% 
     select(VALUENUM) %>% deframe()
+  
+  # Set to 21 if measurements missing
+  if(is_empty(fio2_value))
+  {
+    fio2_value <- 21
+  }
   
   # Calculate arterial o2
   pao2_measurements <- chart_df %>% 
