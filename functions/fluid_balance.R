@@ -22,7 +22,7 @@ fluid_balance <- function(icustay_df, chart_df, readmission)
   dbsource <- icustay_df$dbsource
   
   # Add specific exceptions
-  if(icustay_df$hadm_id %in% c(110319, 133120))
+  if(icustay_df$hadm_id %in% c(110319, 133120, 176866))
   {
     dbsource <- "metavision"
   }
