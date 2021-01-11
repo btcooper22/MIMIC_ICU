@@ -215,3 +215,40 @@ foreach(i = 1:nrow(outcomes), .packages = c("dplyr","magrittr",
 stopImplicitCluster()
 rm(inputevents_cv)
 gc()
+
+# outputevents -------------
+outputevents <- mimic$outputevents %>% 
+  collect()
+
+# Prepare parallel options
+psnice(value = 19)
+registerDoParallel(ifelse(detectCores() <= 12,
+                          detectCores() - 1,
+                          12)
+)
+
+print(noquote("Extracting output events"))
+foreach(i = 1:nrow(outcomes), .packages = c("dplyr","magrittr",
+                                            "readr")) %dopar%
+  {
+    # Find labevents
+    outputs <- outputevents %>% 
+      # Select admission
+      filter(hadm_id == outcomes$hadm_id[i]) 
+    
+    if(nrow(outputs) > 0)
+    {
+      # Write to file
+      filename <- paste("data/events/outputevents_", outcomes$hadm_id[i],
+                        ".csv", sep = "")
+      if(!file.exists(filename))
+      {
+        outputs %>% 
+          write_csv(filename)
+      }
+    }
+  }
+stopImplicitCluster()
+rm(outputevents)
+gc()
+
