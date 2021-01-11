@@ -3,7 +3,7 @@
 require(purrr)
 
 apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
-                           elect_admit, prev_diagnoses)
+                           elect_admit, prev_diagnoses, arf)
 {
   # For debug
   # labs_df <- labs
@@ -14,6 +14,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   # admission_time <- admit_time
   # elect_admit <- elective_admission
   # prev_diagnoses <- history
+  # arf <- acute_renal_failure
   
   # Helper function: Find closest chart measurement to admission (or up to 12h before)
   filter_closest <- function(.df, time, type = "chart")
@@ -209,6 +210,12 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     is.numeric(creatinine_value) ~ 0L
   )
   
+  # Double for acute renal failure
+  if(arf)
+  {
+    creatinine_score <- creatinine_score * 2
+  }
+  
   # Calculate haematocrit (%)-----------------
   
   # Gather all haematocrit measurements
@@ -396,6 +403,21 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   }
   
   # Return full vector of scores
+  full_scores <- c("temperature" = temp_score,
+                   "map" = map_score,
+                   "pulse" = pulse_score,
+                   "respiratory" = respiratory_score,
+                   "oxygen" = oxygenation_score,
+                   "arterialpH" = artpH_score,
+                   "sodium" = sodium_score,
+                   "potassium" = potassium_score,
+                   "creatinine" = creatinine_score,
+                   "haematocrit" = hematocrit_score,
+                   "whitebloodcount" = wbc_score,
+                   "glasgowcoma" = gcs_score,
+                   "age" = age_score,
+                   "chronic" = chronic_score)
+  return(full_scores)
 }
 
 
