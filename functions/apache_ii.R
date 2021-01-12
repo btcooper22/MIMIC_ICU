@@ -16,7 +16,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   # prev_diagnoses <- history
   # arf <- acute_renal_failure
   
-  # Helper function: Find closest chart measurement to admission (or up to 12h before)
+  # Helper functions: Find closest chart measurement to admission (or up to 12h before)
   filter_closest <- function(.df, time, type = "chart")
   {
     if(type == "chart")
@@ -36,6 +36,26 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     }
   }
   
+  # Find all measurements within first 24h (or up to 12h before)
+  filter_admission <- function(.df, time, type = "chart")
+  {
+    if(type == "chart")
+    {
+      .df %>% 
+        mutate(after_admission = difftime(CHARTTIME, time,
+                                          units = "hours"))  %>% 
+        filter(after_admission > -12,
+               after_admission < 24)
+    } else
+    {
+      .df %>% 
+        mutate(after_admission = difftime(charttime, time,
+                                          units = "hours")) %>% 
+        filter(after_admission > -12,
+               after_admission < 24)
+    }
+  }
+  
   # Calculate temperature---------
   
   # Gather all temperature measurements
@@ -47,47 +67,95 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
                                VALUENUM)
            )
   
-  # Find closest to ICU admission 
+  # Find early measurements
   temp_value <- temp_measurements %>% 
-    filter_closest(admission_time) %>% 
+    filter_admission(admission_time)%>% 
     select(value_degC) %>% deframe()
   
-  # Score
-  temp_score <- case_when(
-    temp_value >= 41 | temp_value <= 29.9 ~ 4L,
-    temp_value >= 39 | temp_value <= 31.9 ~ 3L,
-    temp_value <= 33.9 ~ 2L,
-    temp_value >= 38.5 | temp_value <= 35.9 ~ 1L,
-    is.numeric(temp_value) ~ 0L
-  )
+  if(length(temp_value) > 0)
+  {
+    temp_scores <- case_when(
+      temp_value >= 41 | temp_value <= 29.9 ~ 4L,
+      temp_value >= 39 | temp_value <= 31.9 ~ 3L,
+      temp_value <= 33.9 ~ 2L,
+      temp_value >= 38.5 | temp_value <= 35.9 ~ 1L,
+      is.numeric(temp_value) ~ 0L
+    )
+    temp_score <- max(temp_scores)
+    
+  }else# If no early measurements
+  {
+    # Find closest to ICU admission 
+    temp_value <- temp_measurements %>% 
+      filter_closest(admission_time) %>% 
+      select(value_degC) %>% deframe()
+    
+    # Score
+    temp_score <- case_when(
+      temp_value >= 41 | temp_value <= 29.9 ~ 4L,
+      temp_value >= 39 | temp_value <= 31.9 ~ 3L,
+      temp_value <= 33.9 ~ 2L,
+      temp_value >= 38.5 | temp_value <= 35.9 ~ 1L,
+      is.numeric(temp_value) ~ 0L
+    )
+  }
   
   # Calculate mean arterial pressure----------
   
-  # Find first systolic BP measurement
+  # Find all systolic BP measurements
   systolic_bp <- chart_df %>% 
-    filter(ITEMID %in% c(6, 51, 455, 6701, 220050, 220179)) %>% 
-    # Find closest
-    filter_closest(admission_time) %>% 
-    # Extract sBP
-    select(VALUENUM) %>% deframe()
+    filter(ITEMID %in% c(6, 51, 455, 6701, 220050, 220179))
   
-  # Find first diastolic BP measurement
+  # Find all diastolic BP measurements
   diastolic_bp <- chart_df %>% 
     filter(ITEMID %in% c(8364, 8368, 8441, 
-                         8555, 220051, 220180)) %>% 
-    # Find closest
-    filter_closest(admission_time) %>% 
-    # Extract sBP
+                         8555, 220051, 220180))
+  
+  # Find early systolic BP measurement
+  systolic_value <- systolic_bp %>% 
+    filter_admission(admission_time) %>% 
+    arrange(CHARTTIME) %>% 
     select(VALUENUM) %>% deframe()
   
-  # Calculate MAP and score
-  map_value <- (systolic_bp + (2 * diastolic_bp) )/ 3
-  map_score <- case_when(
-    map_value >= 160 | map_value <= 49 ~ 4L,
-    map_value >= 130 ~ 3L,
-    map_value >= 110 | map_value <= 69 ~ 2L,
-    is.numeric(map_value) ~ 0L
-  )
+  # Find early diastolic BP measurement
+  diastolic_value <- diastolic_bp %>% 
+    filter_admission(admission_time)%>% 
+    arrange(CHARTTIME) %>% 
+    select(VALUENUM) %>% deframe()
+  
+  if(length(systolic_value) > 0 & 
+     length(diastolic_value) > 0)
+  {
+    # Take worst
+    map_value <- (systolic_value + (2 * diastolic_value) )/ 3
+    map_scores <- case_when(
+      map_value >= 160 | map_value <= 49 ~ 4L,
+      map_value >= 130 ~ 3L,
+      map_value >= 110 | map_value <= 69 ~ 2L,
+      is.numeric(map_value) ~ 0L
+    )
+    map_score <- max(map_scores)
+    
+  }else# If no early measurements
+  {
+    # Find closest to ICU admission 
+    diastolic_bp %<>% 
+      filter_closest(admission_time) %>% 
+      select(VALUENUM) %>% deframe()
+    
+    systolic_bp %<>% 
+      filter_closest(admission_time) %>% 
+      select(VALUENUM) %>% deframe()
+    
+    # Calculate MAP and score
+    map_value <- (systolic_bp + (2 * diastolic_bp) )/ 3
+    map_score <- case_when(
+      map_value >= 160 | map_value <= 49 ~ 4L,
+      map_value >= 130 ~ 3L,
+      map_value >= 110 | map_value <= 69 ~ 2L,
+      is.numeric(map_value) ~ 0L
+    )
+  }
   
   # Calculate heart rate---------------
   
@@ -95,18 +163,37 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   pulse_measurements <- chart_df %>% 
     filter(ITEMID %in% c(211, 220045)) 
   
-  # Find closest to ICU admission 
+  # Find early measurements
   pulse_value <- pulse_measurements %>% 
-    filter_closest(admission_time) %>% 
+    filter_admission(admission_time)%>% 
     select(VALUENUM) %>% deframe()
   
-  # Score
-  pulse_score <- case_when(
-    pulse_value >= 180 | pulse_value <= 39 ~ 4L,
-    pulse_value >= 140 | pulse_value <= 54 ~ 3L,
-    pulse_value >= 110 | pulse_value <= 69 ~ 2L,
-    is.numeric(pulse_value) ~ 0L
-  )
+  if(length(pulse_value) > 0)
+  {
+    # Take worst
+    pulse_scores <- case_when(
+      pulse_value >= 180 | pulse_value <= 39 ~ 4L,
+      pulse_value >= 140 | pulse_value <= 54 ~ 3L,
+      pulse_value >= 110 | pulse_value <= 69 ~ 2L,
+      is.numeric(pulse_value) ~ 0L
+    )
+    pulse_scores <- max(pulse_score)
+    
+  }else# If no early measurements
+  {
+    # Find closest to ICU admission 
+    pulse_value <- pulse_measurements %>% 
+      filter_closest(admission_time) %>% 
+      select(VALUENUM) %>% deframe()
+    
+    # Score
+    pulse_score <- case_when(
+      pulse_value >= 180 | pulse_value <= 39 ~ 4L,
+      pulse_value >= 140 | pulse_value <= 54 ~ 3L,
+      pulse_value >= 110 | pulse_value <= 69 ~ 2L,
+      is.numeric(pulse_value) ~ 0L
+    )
+  }
   
   # Calculate respiratory rate-----------
   
@@ -116,19 +203,39 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
                          8113, 1635, 3603, 224688, 224689,
                          224690, 220210))
   
-  # Find closest to ICU admission 
+  # Find early measurements
   respiratory_value <- respiratory_measurements %>% 
-    filter_closest(admission_time) %>% 
+    filter_admission(admission_time)%>% 
     select(VALUENUM) %>% deframe()
   
-  # Score
-  respiratory_score <-  case_when(
-    respiratory_value >= 50 | respiratory_value <= 5 ~ 4L,
-    respiratory_value >= 35 ~ 3L,
-    respiratory_value <= 9 ~ 2L,
-    respiratory_value >= 25 | respiratory_value <= 11 ~ 1L,
-    is.numeric(respiratory_value) ~ 0L
-  )
+  if(length(respiratory_value) > 0)
+  {
+    # Take worst
+    respiratory_scores <- case_when(
+      respiratory_value >= 50 | respiratory_value <= 5 ~ 4L,
+      respiratory_value >= 35 ~ 3L,
+      respiratory_value <= 9 ~ 2L,
+      respiratory_value >= 25 | respiratory_value <= 11 ~ 1L,
+      is.numeric(respiratory_value) ~ 0L
+    )
+    respiratory_score <- max(respiratory_scores)
+    
+  }else# If no early measurements
+  {
+    # Find closest to ICU admission 
+    respiratory_value <- respiratory_measurements %>% 
+      filter_closest(admission_time) %>% 
+      select(VALUENUM) %>% deframe()
+    
+    # Score
+    respiratory_score <- case_when(
+      respiratory_value >= 50 | respiratory_value <= 5 ~ 4L,
+      respiratory_value >= 35 ~ 3L,
+      respiratory_value <= 9 ~ 2L,
+      respiratory_value >= 25 | respiratory_value <= 11 ~ 1L,
+      is.numeric(respiratory_value) ~ 0L
+    )
+  }
   
   # Calculate arterial pH---------
 
@@ -136,19 +243,39 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   artpH_measurements <- chart_df %>% 
     filter(ITEMID %in% c(1126, 780,4753, 223830))
   
-  # Find closest to ICU admission 
+  # Find early measurements
   artpH_value <- artpH_measurements %>% 
-    filter_closest(admission_time) %>% 
+    filter_admission(admission_time)%>% 
     select(VALUENUM) %>% deframe()
   
-  # Score
-  artpH_score <-  case_when(
-    artpH_value >= 7.7 | artpH_value < 7.15 ~ 4L,
-    artpH_value >= 7.6 | artpH_value <= 7.24 ~ 3L,
-    artpH_value <= 7.32 ~ 2L,
-    artpH_value >= 7.5 ~ 1L,
-    is.numeric(artpH_value) ~ 0L
-  )
+  if(length(artpH_value) > 0)
+  {
+    # Take worst
+    artpH_scores <- case_when(
+      artpH_value >= 7.7 | artpH_value < 7.15 ~ 4L,
+      artpH_value >= 7.6 | artpH_value <= 7.24 ~ 3L,
+      artpH_value <= 7.32 ~ 2L,
+      artpH_value >= 7.5 ~ 1L,
+      is.numeric(artpH_value) ~ 0L
+    )
+    artpH_score <- max(artpH_scores)
+    
+  }else# If no early measurements
+  {
+    # Find closest to ICU admission 
+    artpH_value <- artpH_measurements %>% 
+      filter_closest(admission_time) %>% 
+      select(VALUENUM) %>% deframe()
+    
+    # Score
+    artpH_score <- case_when(
+      artpH_value >= 7.7 | artpH_value < 7.15 ~ 4L,
+      artpH_value >= 7.6 | artpH_value <= 7.24 ~ 3L,
+      artpH_value <= 7.32 ~ 2L,
+      artpH_value >= 7.5 ~ 1L,
+      is.numeric(artpH_value) ~ 0L
+    )
+  }
   
   # Calculate serum sodium (mMol/L)------------
 
@@ -156,39 +283,80 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   sodium_measurements <- labs_df %>% 
     filter(itemid %in% c(50824, 50983))
   
-  # Find closest to ICU admission 
+  # Find early measurements
   sodium_value <- sodium_measurements %>% 
-    filter_closest(admission_time, "labs") %>% 
+    filter_admission(admission_time, "labs")%>%
     select(valuenum) %>% deframe()
   
-  # Score
-  sodium_score <-  case_when(
-    sodium_value >= 180 | sodium_value <= 110 ~ 4L,
-    sodium_value >= 160 | sodium_value <= 119 ~ 3L,
-    sodium_value >= 155 | sodium_value <= 129 ~ 2L,
-    sodium_value >= 150 ~ 1L,
-    is.numeric(sodium_value) ~ 0L
-  )
-  
+  if(length(sodium_value) > 0)
+  {
+    # Take worst
+    sodium_scores <- case_when(
+      sodium_value >= 180 | sodium_value <= 110 ~ 4L,
+      sodium_value >= 160 | sodium_value <= 119 ~ 3L,
+      sodium_value >= 155 | sodium_value <= 129 ~ 2L,
+      sodium_value >= 150 ~ 1L,
+      is.numeric(sodium_value) ~ 0L
+    )
+    sodium_score <- max(sodium_scores)
+    
+  }else# If no early measurements
+  {
+    # Find closest to ICU admission 
+    sodium_value <- sodium_measurements %>% 
+      filter_closest(admission_time, "labs") %>%
+      select(valuenum) %>% deframe()
+    
+    # Score
+    sodium_score <- case_when(
+      sodium_value >= 180 | sodium_value <= 110 ~ 4L,
+      sodium_value >= 160 | sodium_value <= 119 ~ 3L,
+      sodium_value >= 155 | sodium_value <= 129 ~ 2L,
+      sodium_value >= 150 ~ 1L,
+      is.numeric(sodium_value) ~ 0L
+    )
+  }
+
   # Calculate serum potassium (mMol/L)---------
   
   # Gather all serum potassium measurements
   potassium_measurements <- labs_df %>% 
     filter(itemid %in% c(50822, 50971))
   
-  # Find closest to ICU admission 
+  # Find early measurements
   potassium_value <- potassium_measurements %>% 
-    filter_closest(admission_time, "labs") %>% 
+    filter_admission(admission_time, "labs") %>%
     select(valuenum) %>% deframe()
   
-  # Score
-  potassium_score <- case_when(
-    potassium_value >= 7 | potassium_value < 2.5 ~ 4L,
-    potassium_value >= 6 ~ 3L,
-    potassium_value <= 2.9 ~ 2L,
-    potassium_value >= 5.5 | potassium_value <= 3.4 ~ 1L,
-    is.numeric(potassium_value) ~ 0L
-  )
+  if(length(potassium_value) > 0)
+  {
+    # Take worst
+    potassium_scores <- case_when(
+      potassium_value >= 7 | potassium_value < 2.5 ~ 4L,
+      potassium_value >= 6 ~ 3L,
+      potassium_value <= 2.9 ~ 2L,
+      potassium_value >= 5.5 | potassium_value <= 3.4 ~ 1L,
+      is.numeric(potassium_value) ~ 0L
+    )
+    potassium_score <- max(potassium_scores)
+    
+  }else# If no early measurements
+  {
+    # Find closest to ICU admission 
+    potassium_value <- potassium_measurements %>% 
+      filter_closest(admission_time, "labs") %>%
+      select(valuenum) %>% deframe()
+    
+    # Score
+    potassium_score <- case_when(
+      potassium_value >= 7 | potassium_value < 2.5 ~ 4L,
+      potassium_value >= 6 ~ 3L,
+      potassium_value <= 2.9 ~ 2L,
+      potassium_value >= 5.5 | potassium_value <= 3.4 ~ 1L,
+      is.numeric(potassium_value) ~ 0L
+    )
+  }
+  
 
   
   # Calculate serum creatinine (mg/dL)------------
@@ -197,18 +365,37 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   creatinine_measurements <- labs_df %>% 
     filter(itemid %in% c(50912))
   
-  # Find closest to ICU admission 
+  # Find early measurements
   creatinine_value <- creatinine_measurements %>% 
-    filter_closest(admission_time, "labs") %>% 
+    filter_admission(admission_time, "labs") %>%
     select(valuenum) %>% deframe()
   
-  # Score
-  creatinine_score <- case_when(
-    creatinine_value >= 3.5 ~ 4L,
-    creatinine_value >= 2 ~ 3L,
-    creatinine_value >= 1.5 | creatinine_value < 0.6 ~ 2L,
-    is.numeric(creatinine_value) ~ 0L
-  )
+  if(length(creatinine_value) > 0)
+  {
+    # Take worst
+    creatinine_scores <- case_when(
+      creatinine_value >= 3.5 ~ 4L,
+      creatinine_value >= 2 ~ 3L,
+      creatinine_value >= 1.5 | creatinine_value < 0.6 ~ 2L,
+      is.numeric(creatinine_value) ~ 0L
+    )
+    creatinine_score <- max(creatinine_scores)
+    
+  }else# If no early measurements
+  {
+    # Find closest to ICU admission 
+    creatinine_value <- creatinine_measurements %>% 
+      filter_closest(admission_time, "labs") %>% # Labs + caps
+      select(valuenum) %>% deframe()
+    
+    # Score
+    creatinine_score <- case_when(
+      creatinine_value >= 3.5 ~ 4L,
+      creatinine_value >= 2 ~ 3L,
+      creatinine_value >= 1.5 | creatinine_value < 0.6 ~ 2L,
+      is.numeric(creatinine_value) ~ 0L
+    )
+  }
   
   # Double for acute renal failure
   if(arf)
@@ -222,18 +409,37 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   hematocrit_measurements <- labs_df %>% 
     filter(itemid %in% c(51221, 50810))
   
-  # Find closest to ICU admission 
+  # Find early measurements
   hematocrit_value <- hematocrit_measurements %>% 
-    filter_closest(admission_time, "labs") %>% 
+    filter_admission(admission_time, "labs") %>% 
     select(valuenum) %>% deframe()
   
-  # Score
-  hematocrit_score <- case_when(
-    hematocrit_value >= 60 | hematocrit_value < 20 ~ 4L,
-    hematocrit_value >= 50 | hematocrit_value <= 29.9 ~ 2L,
-    hematocrit_value >= 46 ~ 1L,
-    is.numeric(hematocrit_value) ~ 0L
-  )
+  if(length(hematocrit_value) > 0)
+  {
+    # Take worst
+    hematocrit_scores <- case_when(
+      hematocrit_value >= 60 | hematocrit_value < 20 ~ 4L,
+      hematocrit_value >= 50 | hematocrit_value <= 29.9 ~ 2L,
+      hematocrit_value >= 46 ~ 1L,
+      is.numeric(hematocrit_value) ~ 0L
+    )
+    hematocrit_score <- max(hematocrit_scores)
+    
+  }else# If no early measurements
+  {
+    # Find closest to ICU admission 
+    hematocrit_value <- hematocrit_measurements %>% 
+      filter_closest(admission_time, "labs") %>%
+      select(valuenum) %>% deframe()
+    
+    # Score
+    hematocrit_score <- case_when(
+      hematocrit_value >= 60 | hematocrit_value < 20 ~ 4L,
+      hematocrit_value >= 50 | hematocrit_value <= 29.9 ~ 2L,
+      hematocrit_value >= 46 ~ 1L,
+      is.numeric(hematocrit_value) ~ 0L
+    )
+  }
   
   # Calculate white blood count (1000s)---------
   
@@ -241,53 +447,100 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   wbc_measurements <- labs_df %>% 
     filter(itemid %in% c(51300, 51301))
   
-  # Find closest to ICU admission 
+  # Find early measurements
   wbc_value <- wbc_measurements %>% 
-    filter_closest(admission_time, "labs") %>% 
+    filter_admission(admission_time, "labs") %>%
     select(valuenum) %>% deframe()
   
-  # Score
-  wbc_score <- case_when(
-    wbc_value >= 40 | wbc_value < 1 ~ 4L,
-    wbc_value >= 20 | wbc_value <= 2.9 ~ 2L,
-    wbc_value >= 15 ~ 1L,
-    is.numeric(wbc_value) ~ 0L
-  )
-  
+  if(length(wbc_value) > 0)
+  {
+    # Take worst
+    wbc_scores <- case_when(
+      wbc_value >= 40 | wbc_value < 1 ~ 4L,
+      wbc_value >= 20 | wbc_value <= 2.9 ~ 2L,
+      wbc_value >= 15 ~ 1L,
+      is.numeric(wbc_value) ~ 0L
+    )
+    wbc_score <- max(wbc_scores)
+    
+  }else# If no early measurements
+  {
+    # Find closest to ICU admission 
+    wbc_value <- wbc_measurements %>% 
+      filter_closest(admission_time, "labs") %>% 
+      select(valuenum) %>% deframe()
+    
+    # Score
+    wbc_score <- case_when(
+      wbc_value >= 40 | wbc_value < 1 ~ 4L,
+      wbc_value >= 20 | wbc_value <= 2.9 ~ 2L,
+      wbc_value >= 15 ~ 1L,
+      is.numeric(wbc_value) ~ 0L
+    )
+  }
+
   # Calculate Glasgow coma score---------
   
   # Gather all GCS motor measurements
   gcs_motor_measurements <- chart_df %>% 
-    filter(ITEMID %in% c(454, 223901))
+    filter(ITEMID %in% c(454, 223901)) %>% 
+    select(CHARTTIME, VALUENUM) %>% 
+    mutate(type = "gcs_motor")
   
   # Gather all GCS verbal measurements
   gcs_verbal_measurements <- chart_df %>% 
-    filter(ITEMID %in% c(723, 223900))
+    filter(ITEMID %in% c(723, 223900)) %>% 
+    select(CHARTTIME, VALUENUM) %>% 
+    mutate(type = "gcs_verbal")
   
   # Gather all GCS eye measurements
   gcs_eye_measurements <- chart_df %>% 
-    filter(ITEMID %in% c(184, 220739))
+    filter(ITEMID %in% c(184, 220739)) %>% 
+    select(CHARTTIME, VALUENUM) %>% 
+    mutate(type = "gcs_eye")
   
-  # Find closest motor measurement
-  gcs_motor_value <- gcs_motor_measurements %>% 
-    filter_closest(admission_time) %>% 
-    select(VALUENUM) %>%  deframe()
+  # Create paired measurements and filter by early
+  gcs_value <- rbind(
+    gcs_motor_measurements,
+    gcs_verbal_measurements,
+    gcs_eye_measurements
+  ) %>% 
+    pivot_wider(id_cols = "CHARTTIME",
+                names_from = "type",
+                values_from = "VALUENUM") %>% 
+    mutate(VALUENUM = gcs_motor  + 
+             gcs_verbal + gcs_eye) %>% 
+    filter_admission(admission_time) %>%
+    select(VALUENUM) %>% deframe()
   
-  # Find closest verbal measurement
-  gcs_verbal_value <- gcs_verbal_measurements %>% 
-    filter_closest(admission_time) %>% 
-    select(VALUENUM) %>%  deframe()
-  
-  # Find closest eye measurement
-  gcs_eye_value <- gcs_eye_measurements %>% 
-    filter_closest(admission_time) %>% 
-    select(VALUENUM) %>%  deframe()
-  
-  # Sum and score
-  gcs_value <- gcs_motor_value + gcs_verbal_value + gcs_eye_value
-  gcs_score <- 15 - gcs_value
-  
-  
+  if(length(gcs_value) > 0)
+  {
+    # Take worst
+    gcs_scores <- 15 - gcs_value
+    gcs_score <- max(gcs_scores)
+    
+  }else# If no early measurements
+  {
+    # Find closest motor measurement
+    gcs_motor_value <- gcs_motor_measurements %>% 
+      filter_closest(admission_time) %>% 
+      select(VALUENUM) %>%  deframe()
+    
+    # Find closest verbal measurement
+    gcs_verbal_value <- gcs_verbal_measurements %>% 
+      filter_closest(admission_time) %>% 
+      select(VALUENUM) %>%  deframe()
+    
+    # Find closest eye measurement
+    gcs_eye_value <- gcs_eye_measurements %>% 
+      filter_closest(admission_time) %>% 
+      select(VALUENUM) %>%  deframe()
+    
+    # Sum and score
+    gcs_value <- gcs_motor_value + gcs_verbal_value + gcs_eye_value
+    gcs_score <- 15 - gcs_value
+  }
+
   # Calculate age-----------------
   
   # Find patient data
@@ -370,21 +623,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
       is.numeric(pao2_value) ~ 0L
     )
   }
-  
-  # Serum bicarbonate (venous mMol/L, only use if no arterial blood gases)
-  # apache2_score.hco3 <- function(x, ...) {
-  #   score <- function(y) {
-  #     dplyr::case_when(
-  #       y >= 52 | y < 15 ~ 4L,
-  #       y >= 41 | y <= 17.9 ~ 3L,
-  #       y <= 21.9 ~ 2L,
-  #       y >= 32 ~ 1L,
-  #       is.numeric(y) ~ 0L
-  #     )
-  #   }
-  #   
-  #   purrr::map_int(x, score)
-  # }
+
   
   # Calculate chronic health score----------
   
@@ -408,7 +647,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     }
   }
   
-  # Return full vector of scores
+  # Return full vector of scores-----------
   full_scores <- c("temperature" = temp_score,
                    "map" = map_score,
                    "pulse" = pulse_score,
