@@ -241,27 +241,56 @@ points_system_output <- data.frame(
 probs_frost <- nomogram_convert(scores_frost, points_system_input,
                  points_system_output, log = TRUE)
 
+# Cooper---------
+
+# Build formula
+formu <- paste(names(patients)[8:29], collapse = " + ")
+
+# Build model
+dirty_model <- glm(paste("readmission", "~", formu, sep = " "),
+                   data = patients, family = "binomial")
+
+
+if(file.exists("data/cooper_model.RDS"))
+{
+  cooper_model <- readRDS("data/cooper_model.RDS")
+}else
+{
+  # Automated model selection
+  cooper_model <- step(dirty_model)
+  write_rds(cooper_model, "data/cooper_model.RDS")
+}
+
+
+# Predict
+probs_cooper <- predict(cleaner_model, newdata = patients) %>% 
+  inverse_logit()
+
 # Discrimination----------
 
 # Create prediction objects
 prediction_hammer <- prediction(probs_hammer, patients$readmission)
 prediction_martin <- prediction(probs_martin, patients$readmission)
 prediction_frost <- prediction(probs_frost, patients$readmission)
+prediction_cooper <- prediction(probs_cooper, patients$readmission)
 
 # Create performance objects
 performance_hammer <- performance(prediction_hammer, "tpr", "fpr")
 performance_martin <- performance(prediction_martin, "tpr", "fpr")
 performance_frost <- performance(prediction_frost, "tpr", "fpr")
+performance_cooper <- performance(prediction_cooper, "tpr", "fpr")
 
 # Create AUC objects
 auc_hammer <- performance(prediction_hammer, measure = "auc")
 auc_martin <- performance(prediction_martin, measure = "auc")
 auc_frost <- performance(prediction_frost, measure = "auc")
+auc_cooper <- performance(prediction_cooper, measure = "auc")
 
 # Print AUC
 auc_hammer@y.values[[1]]
 auc_martin@y.values[[1]]
 auc_frost@y.values[[1]]
+auc_cooper@y.values[[1]]
 
 # Plot AUC
 data.frame(x = performance_hammer@x.values[[1]],
@@ -273,7 +302,10 @@ data.frame(x = performance_hammer@x.values[[1]],
                model = "Martin"),
     data.frame(x = performance_frost@x.values[[1]],
                y = performance_frost@y.values[[1]],
-               model = "Frost")
+               model = "Frost"),
+    data.frame(x = performance_cooper@x.values[[1]],
+               y = performance_cooper@y.values[[1]],
+               model = "Cooper")
   ) %>% 
   ggplot(aes(x, y, colour = model))+
   geom_abline(slope = 1, intercept = 0,
