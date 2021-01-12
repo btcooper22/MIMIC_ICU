@@ -143,7 +143,7 @@ points_hammer <- ifelse(patients$sex == "M", 1, 0) +
 table(points_hammer)
 
 # Score data - coefficients
-coefficients_hammer <- -2.944439 +
+coefficients_hammer <- log(0.005 / (1- 0.005)) +
   ifelse(patients$sex == "M", 0.43, 0) +
   ifelse(patients$general_surgery, 0.64, 0) +
   ifelse(patients$cardiac_surgery, -1.01, 0) +
@@ -166,5 +166,20 @@ scale_hammer <- data.frame(
 probs_points_hammer <- scale_hammer$probs[match(points_hammer, scale_hammer$points)] / 100
 
 # Correlate points with coefficients
-plot(probs_coefficients_hammer, probs_points_hammer)
 cor(probs_coefficients_hammer, probs_points_hammer)
+probs_hammer <- probs_coefficients_hammer
+
+# Martin ------------
+
+# Score data - coefficients
+coefficients_martin <- -9.284491 +
+  (0.04883 * patients$respiratory_rate) +
+  (0.011588 * patients$age) +
+  (0.036104 * patients$serum_choride) +
+  (0.004967 * patients$blood_urea_nitrogen) +
+  (0.580153 * patients$atrial_fibrillation) +
+  (0.458202 * patients$renal_insufficiency) +
+  (0.003519 * patients$serum_glucose)
+  
+# Convert to probabilities
+probs_martin <- inverse_logit(coefficients_martin)
