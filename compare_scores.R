@@ -10,6 +10,7 @@ patients <- read_csv("data/predictors.csv")
 
 # Load functions
 source("functions/NA_count.R")
+source("functions/inverse_logit.R")
 
 # Filter missing data----------
 
@@ -125,3 +126,45 @@ patients %>%
   crosstab("serum_choride", .)
 crosstab("atrial_fibrillation")
 crosstab("renal_insufficiency")
+
+
+# Hammer----------
+
+# Score data - points
+points_hammer <- ifelse(patients$sex == "M", 1, 0) +
+  ifelse(patients$general_surgery, 2, 0) +
+  ifelse(patients$cardiac_surgery, -3, 0) +
+  ifelse(patients$hyperglycemia, 1, 0) +
+  ifelse(patients$anaemia, 3, 0) +
+  ifelse(patients$high_apache, 1, 0) +
+  ifelse(patients$fluid_balance_5L, 1, 0) +
+  ifelse(patients$ambulation == FALSE, 2, 0) +
+  ifelse(patients$los_5, 2, 0)
+table(points_hammer)
+
+# Score data - coefficients
+coefficients_hammer <- -2.944439 +
+  ifelse(patients$sex == "M", 0.43, 0) +
+  ifelse(patients$general_surgery, 0.64, 0) +
+  ifelse(patients$cardiac_surgery, -1.01, 0) +
+  ifelse(patients$hyperglycemia, 0.36, 0) +
+  ifelse(patients$anaemia, 1.11, 0) +
+  ifelse(patients$high_apache, 0.44, 0) +
+  ifelse(patients$fluid_balance_5L, 0.52, 0) +
+  ifelse(patients$ambulation == FALSE, 0.7, 0) +
+  ifelse(patients$los_5, 0.88, 0)
+
+# Convert coefficients to probs
+probs_coefficients_hammer <- inverse_logit(coefficients_hammer)
+
+# Convert scores to probs
+scale_hammer <- data.frame(
+  points = -3:12,
+  probs = c(0.1, 0.2, 0.35, 0.5, 0.75, 1, 1.5, 2, 3.1,
+            4.2, 6.4, 8.6, 12.55, 16.5, 23.05, 29.6)
+)
+probs_points_hammer <- scale_hammer$probs[match(points_hammer, scale_hammer$points)] / 100
+
+# Correlate points with coefficients
+plot(probs_coefficients_hammer, probs_points_hammer)
+cor(probs_coefficients_hammer, probs_points_hammer)
