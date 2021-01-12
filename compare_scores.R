@@ -11,6 +11,7 @@ patients <- read_csv("data/predictors.csv")
 # Load functions
 source("functions/NA_count.R")
 source("functions/inverse_logit.R")
+source("functions/nomogram_convert.R")
 
 # Filter missing data----------
 
@@ -169,7 +170,7 @@ probs_points_hammer <- scale_hammer$probs[match(points_hammer, scale_hammer$poin
 cor(probs_coefficients_hammer, probs_points_hammer)
 probs_hammer <- probs_coefficients_hammer
 
-# Martin ------------
+# Martin------------
 
 # Score data - coefficients
 coefficients_martin <- -9.284491 +
@@ -183,3 +184,57 @@ coefficients_martin <- -9.284491 +
   
 # Convert to probabilities
 probs_martin <- inverse_logit(coefficients_martin)
+
+# Frost---------------
+
+# Create scoring system from nomogram for age
+age_score_system_input <- data.frame(
+  input = seq(15, 90, 5),
+  pix = seq(2, 287, length.out = 16)
+)
+age_score_system_output <- data.frame(
+  output = seq(0, 8, 1),
+  pix = seq(2, 290, length.out = 9)
+)
+
+# Create scoring system from nomogram for APACHE-II
+apache_score_system_input <- data.frame(
+  input = seq(0, 45, 5),
+  pix = seq(12, 733, length.out = 10)
+)
+apache_score_system_output <- data.frame(
+  output = seq(0, 20, 1),
+  pix = seq(12, 733, length.out = 21)
+)
+
+# Score data - points
+scores_frost <- nomogram_convert(patients$age, age_score_system_input,
+                 age_score_system_output) +
+  ifelse(patients$sex == "M", 2, 0) +
+  ifelse(patients$elective_admission == FALSE, 12.25, 0) +
+  case_when(
+    patients$admission_source == "OT" ~ 0,
+    patients$admission_source == "Emergency" ~ 9.5,
+    patients$admission_source == "OtherHosp" ~ 10.25,
+    patients$admission_source == "Ward" ~ 14.75
+  ) +
+  nomogram_convert(patients$apache_II, apache_score_system_input,
+                   apache_score_system_output) +
+  ifelse(patients$los_7, 17, 0) +
+  ifelse(patients$after_hours_discharge, 4, 0) +
+  ifelse(patients$acute_renal_failure, 10, 0)
+
+# Create nomogram system for total points
+points_system_input <- data.frame(
+  input = seq(0, 100, 5),
+  pix = seq(7, 727, length.out = 21)
+)
+points_system_output <- data.frame(
+  output = seq(0.05, 0.5, 0.05),
+  pix = c(212, 330, 403, 460, 506,
+          547, 583, 618, 652, 683)
+)
+
+# Convert using logarithmic transform
+probs_frost <- nomogram_convert(scores_frost, points_system_input,
+                 points_system_output, log = TRUE)
