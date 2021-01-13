@@ -139,6 +139,8 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   subj <- outcomes$subject_id[i]
   adm <- outcomes$hadm_id[i]
   
+  # ICU stay and demographic predictors------------
+  
   # Extract admission and discharge time
   in_out_times <- mimic_icustays %>% 
     filter(subject_id == subj) %>% 
@@ -224,6 +226,39 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
       TRUE ~ "OtherHosp"
     )) %>% 
     select(frost_source) %>%  deframe()
+  
+  # History predictors---------
+  
+  # Determine acute renal failure
+  acute_renal_failure <- mimic_preproc$diagnoses %>% 
+    # Select patient and admission
+    filter(subject_id == subj,
+           hadm_id == adm) %>% 
+    # Search for diagnoses of acute renal failure
+    summarise(ARF = any(icd9_code %in% ID_acute_renal_failure)) %>% 
+    deframe()
+  
+  # Extract past diagnoses for patient
+  history <- mimic_admissions %>% 
+    filter(subject_id == subj,
+           admittime < admit_time) %>% 
+    select(hadm_id) %>% 
+    left_join(mimic_diagnoses,
+              by = "hadm_id")
+  
+  # Extract aFib
+  atrial_fibrillation <- history %>% 
+    summarise(afib = any(icd9_code == ID_atrial_fibrillation,
+                         na.rm = TRUE)) %>% 
+    deframe()
+  
+  # Extract renal insufficiency
+  renal_insufficiency <- history %>% 
+    summarise(renal = any(icd9_code %in% ID_renal_insufficiency,
+                          na.rm = TRUE)) %>% 
+    deframe()
+  
+  # Lab predictors----------
   
   # Extract lab events
   labfile <- paste("data/events/labevents_", adm, ".csv", sep = "")
@@ -322,6 +357,8 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     lab_missing <- TRUE
   }
   
+  # Charted predictors--------
+  
   # Load chart data
   chartfile <- paste("data/events/chartevents_", adm, ".csv", sep = "")
   if(file.exists(chartfile))
@@ -404,43 +441,14 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     chart_missing <- TRUE
   }
   
-  # Determine acute renal failure
-  acute_renal_failure <- mimic_preproc$diagnoses %>% 
-    # Select patient and admission
-    filter(subject_id == subj,
-           hadm_id == adm) %>% 
-    # Search for diagnoses of acute renal failure
-    summarise(ARF = any(icd9_code %in% ID_acute_renal_failure)) %>% 
-    deframe()
-  
-  # Extract past diagnoses for patient
-  history <- mimic_admissions %>% 
-    filter(subject_id == subj,
-           admittime < admit_time) %>% 
-    select(hadm_id) %>% 
-    left_join(mimic_diagnoses,
-              by = "hadm_id")
-  
-  # Extract aFib
-  atrial_fibrillation <- history %>% 
-    summarise(afib = any(icd9_code == ID_atrial_fibrillation,
-                         na.rm = TRUE)) %>% 
-    deframe()
-  
-  # Extract renal insufficiency
-  renal_insufficiency <- history %>% 
-    summarise(renal = any(icd9_code %in% ID_renal_insufficiency,
-                         na.rm = TRUE)) %>% 
-    deframe()
-  
   # APACHE II
   if(!chart_missing | !lab_missing | !is.na(respiratory_rate))
   {
     # Calculate apache score
     apache_score_vector <- apacheII_score(labs_df = labs, chart_df = charts,
                                           patient_df = mimic_preproc$stays %>% 
-                                               filter(subject_id == subj,
-                                                      hadm_id == adm),
+                                            filter(subject_id == subj,
+                                                   hadm_id == adm),
                                           admission_time = admit_time,
                                           elect_admit = elective_admission,
                                           prev_diagnoses = history,
@@ -453,6 +461,8 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     apache_II <- NA
     high_apache <- NA
   }
+  
+  # I/O Predictors----------
   
   # Positive fluid balance (>5L)
   if(!chart_missing)
@@ -480,6 +490,8 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   {
     fluid_balance_5L <- NA
   }
+  
+  # Final output----------
   
   # Output
   output <- data.frame(row_id = i,
