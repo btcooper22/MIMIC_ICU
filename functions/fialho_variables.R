@@ -103,10 +103,23 @@ fialho_variables <- function(time_of_discharge, chart_df,
   # Average all within 24h of discharge
   lactate_value <- lactate_measurements %>% 
     discharge_filter(time_of_discharge,
-                     type = "labs") %>% 
-    select(valuenum) %>%
-    deframe() %>% mean(na.rm = TRUE)
+                     type = "labs") 
   
+  # If none, then last
+  if(nrow(lactate_value) == 0)
+  {
+    lactate_value <- lactate_measurements %>% 
+      mutate(before_discharge = difftime(charttime, time_of_discharge,
+                                        units = "hours")) %>% 
+      filter(before_discharge <= 0) %>% 
+      slice_min(abs(before_discharge)) %>% 
+      select(valuenum) %>%
+      deframe() %>% mean(na.rm = TRUE)
+  } else
+  {
+    lactate_value <- NA
+  }
+
   # Convert to mg/dl
   lactate_value <- lactate_value * 0.111
   
