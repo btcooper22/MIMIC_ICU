@@ -6,6 +6,7 @@ require(magrittr)
 require(lubridate)
 require(ROCR)
 require(ggplot2)
+require(tidyr)
 require(ResourceSelection)
 require(s2dverification)
 
@@ -16,6 +17,8 @@ patients <- read_csv("data/predictors.csv")
 source("functions/NA_count.R")
 source("functions/inverse_logit.R")
 source("functions/nomogram_convert.R")
+source("functions/calibration.R")
+source("functions/brier_extraction.R")
 
 # Filter missing data----------
 
@@ -341,14 +344,38 @@ deciles_df <- tibble(
 )
 
 # Calculate calibration
-cal_hammer <- calibration(deciles_df, "probs_hammer", "decile_hammer")
-cal_martin <- calibration(deciles_df, "probs_martin", "decile_martin")
-cal_frost <- calibration(deciles_df, "probs_frost", "decile_frost")
-cal_cooper <- calibration(deciles_df, "probs_cooper", "decile_cooper")
-
-# Summarise together
+cal_hammer <- calibration(deciles_df, "probs_hammer", "decile_hammer") %>% 
+  mutate(model = "hammer")
+cal_martin <- calibration(deciles_df, "probs_martin", "decile_martin") %>% 
+  mutate(model = "martin")
+cal_frost <- calibration(deciles_df, "probs_frost", "decile_frost") %>% 
+  mutate(model = "frost")
+cal_cooper <- calibration(deciles_df, "probs_cooper", "decile_cooper") %>% 
+  mutate(model = "cooper")
 
 # Plot
+rbind(cal_hammer %>% select(-decile_hammer), 
+      cal_martin %>% select(-decile_martin),
+      cal_frost %>% select(-decile_frost), 
+      cal_cooper %>% select(-decile_cooper)) %>% 
+  ggplot(aes(predicted, observed ,
+             colour = model))+
+  geom_abline(slope = 1, intercept = 0,
+              size = 1)+
+  geom_path(size = 1)+
+  geom_pointrange(aes(ymin = observed - error ,
+                      ymax = observed + error,
+                      y = observed,
+                      x = predicted,
+                      colour = model)) +
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  labs(x = "Predicted mortality",
+       y = "Observed mortality")+
+  scale_colour_brewer(palette = "Set1",
+                      name = "")+
+  facet_wrap(~model, scales = "free_x")
+
 
 # Calculate hosmer-lemeshow chi-squared
 hoslem.test(patients$readmission == "Readmitted to ICU",
@@ -361,26 +388,32 @@ hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_cooper, g = 10)
 
 # Calculate brier scores
-brier_hammer <- BrierScore(patients$readmission == "Readmitted to ICU", probs_hammer)
-brier_martin <- BrierScore(patients$readmission == "Readmitted to ICU", probs_martin)
-brier_frost <- BrierScore(patients$readmission == "Readmitted to ICU", probs_frost)
-brier_cooper <- BrierScore(patients$readmission == "Readmitted to ICU", probs_cooper)
+brier_df <- rbind(
+  brier_extraction(patients$readmission == "Readmitted to ICU", probs_hammer) %>% 
+    mutate(model = "hammer"),
+  brier_extraction(patients$readmission == "Readmitted to ICU", probs_martin) %>% 
+    mutate(model = "martin"),  
+  brier_extraction(patients$readmission == "Readmitted to ICU", probs_frost) %>% 
+    mutate(model = "frost"),
+  brier_extraction(patients$readmission == "Readmitted to ICU", probs_cooper) %>% 
+    mutate(model = "cooper")
+)
 
-# Extract brier scores
-brier_hammer$bs
-brier_martin$bs
-brier_frost$bs
-brier_cooper$bs
+# Plot brier scores
+brier_df %>% 
+  pivot_longer(1:3) %>% 
+  ggplot(aes(x = model, y = value))+
+  geom_bar(stat = "identity", colour = "black",
+           aes(fill = model))+
+  facet_wrap(~name, scales = "free_y")+
+  theme_classic(20)+
+  theme(legend.position = "none")+
+  labs(x = "", y = "")+
+  scale_fill_brewer(palette = "Set1",
+                      name = "")
 
-# Extract reliability
-brier_hammer$rel
-brier_martin$rel
-brier_frost$rel
-brier_cooper$rel
 
-# Extract resolution
-brier_hammer$res
-brier_martin$res
-brier_frost$res
-brier_cooper$res
+
+
+
 
