@@ -11,6 +11,7 @@ source("functions/event_filter_discharge.R")
 source("functions/flag_within_discharge.R")
 source("functions/apache_ii.R")
 source("functions/fluid_balance.R")
+source("functions/fialho_variables.R")
 
 # Load preprocessed data
 mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
@@ -124,9 +125,9 @@ mimic_diagnoses <- mimic$diagnoses_icd %>% collect()
 # Prepare parallel options
 ptm <- proc.time()
 psnice(value = 19)
-registerDoParallel(ifelse(detectCores() <= 12,
+registerDoParallel(ifelse(detectCores() <= 15,
                           detectCores() - 1,
-                          12)
+                          15)
 )
 
 # Run loop
@@ -444,7 +445,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   # APACHE II
   if(!chart_missing | !lab_missing | !is.na(respiratory_rate))
   {
-    # Calculate apache score
+    # Calculate apache score at admission
     apache_score_vector <- apacheII_score(labs_df = labs, chart_df = charts,
                                           patient_df = mimic_preproc$stays %>% 
                                             filter(subject_id == subj,
@@ -456,11 +457,36 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     # Sum score
     apache_II <- sum(apache_score_vector)
     high_apache <- apache_II > 20
+    
+    # Calculate apache score at discharge
+    apache_score_vector <- apacheII_score(labs_df = labs, chart_df = charts,
+                                          patient_df = mimic_preproc$stays %>% 
+                                            filter(subject_id == subj,
+                                                   hadm_id == adm),
+                                          admission_time = discharge_time,
+                                          elect_admit = elective_admission,
+                                          prev_diagnoses = history,
+                                          arf = acute_renal_failure)
+    # Sum score
+    apache_II_discharge <- sum(apache_score_vector)
   }else
   {
     apache_II <- NA
     high_apache <- NA
+    apache_II_discharge <- NA
   }
+  
+  # Fialho's variables
+  if(!chart_missing | !lab_missing | !is.na(respiratory_rate))
+  {
+    fialho_vars <- fialho_variables(discharge_time,
+                                    charts,
+                                    labs)
+  }else
+  {
+    fialho_vars <- rep(NA, 6)
+  }
+  
   
   # I/O Predictors----------
   
@@ -510,13 +536,19 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              admission_source, acute_renal_failure, apache_II,
              # Martin variables
              serum_glucose, blood_urea_nitrogen, serum_choride,
-             respiratory_rate, atrial_fibrillation, renal_insufficiency
+             respiratory_rate, atrial_fibrillation, renal_insufficiency,
+             # Fialho variables
+             final_pulse = fialho_vars[1], final_temp = fialho_vars[2],
+             final_pO2 = fialho_vars[3], final_bp = fialho_vars[4],
+             final_platelets = fialho_vars[5], final_lactate = fialho_vars[6],
+             # Additional variables
+             apache_II_discharge
              )
   output
   #data.frame(i, cols = ncol(output))
 }
 stopImplicitCluster()
-proc.time() - ptm # 897s (~15 min)
+proc.time() - ptm # 1276s (~20 min)
 
 # Write and quality control ------------
 
