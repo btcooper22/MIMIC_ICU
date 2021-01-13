@@ -73,13 +73,27 @@ fialho_variables <- function(time_of_discharge, chart_df,
   # Gather all art. BP measurements
   BP_measurements <- chart_df %>% 
     filter(ITEMID %in% c(52, 6702, 6702, 6927,
-                         220052)) 
+                         220052)) %>% 
+    filter(!is.na(VALUENUM))
   
   # Average all within 24h of discharge
   BP_value <- BP_measurements %>% 
-    discharge_filter(time_of_discharge) %>% 
-    select(VALUENUM) %>%
-    deframe() %>% mean(na.rm = TRUE)
+    discharge_filter(time_of_discharge)
+  
+  # If none, then last
+  if(nrow(BP_value) == 0)
+  {
+    BP_value <- BP_measurements %>% 
+      mutate(before_discharge = difftime(CHARTTIME, time_of_discharge,
+                                         units = "hours")) %>% 
+      filter(before_discharge <= 0) %>% 
+      slice_min(abs(before_discharge)) %>% 
+      select(VALUENUM) %>%
+      deframe() %>% mean(na.rm = TRUE)
+  } else
+  {
+    BP_value <- NA
+  }
   
   # Platelets-----------
   
