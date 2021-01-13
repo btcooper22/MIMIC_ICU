@@ -1,11 +1,11 @@
 fialho_variables <- function(time_of_discharge, chart_df,
-                             lab_df)
+                             labs_df)
 {
   # Debug
   # time_of_discharge <- discharge_time
   # labs_df <- labs
   # chart_df <- charts
-  
+
   # Function to filter to 24h pre-discharge
   discharge_filter <- function(.df, time = time_of_discharge,
                                type = "chart")
@@ -78,23 +78,44 @@ fialho_variables <- function(time_of_discharge, chart_df,
   
   # Average all within 24h of discharge
   BP_value <- BP_measurements %>% 
-    discharge_filter(time_of_discharge)
+    discharge_filter(time_of_discharge) %>% 
+    select(VALUENUM) %>%
+    deframe() %>% mean(na.rm = TRUE)
   
   # If none, then last
-  if(nrow(BP_value) == 0)
+  if(is.na(BP_value))
   {
-    BP_value <- BP_measurements %>% 
+    BP_value <- BP_measurements %>%
       mutate(before_discharge = difftime(CHARTTIME, time_of_discharge,
-                                         units = "hours")) %>% 
-      filter(before_discharge <= 0) %>% 
-      slice_min(abs(before_discharge)) %>% 
+                                         units = "hours")) %>%
+      filter(before_discharge <= 0) %>%
+      slice_min(abs(before_discharge)) %>%
       select(VALUENUM) %>%
       deframe() %>% mean(na.rm = TRUE)
-  } else
-  {
-    BP_value <- NA
   }
   
+  # If still none, infer from syst. and diast.
+  if(is.na(BP_value))
+  {
+    # Mean systolic BP
+    systolic_bp <- chart_df %>% 
+      filter(ITEMID %in% c(6, 51, 455, 6701, 220050, 220179)) %>% 
+      discharge_filter(time_of_discharge) %>% 
+      select(VALUENUM) %>%
+      deframe() %>% mean(na.rm = TRUE)
+    
+    # Mean diastolic BP
+    diastolic_bp <- chart_df %>% 
+      filter(ITEMID %in% c(8364, 8368, 8441, 
+                           8555, 220051, 220180)) %>% 
+      discharge_filter(time_of_discharge) %>% 
+      select(VALUENUM) %>%
+      deframe() %>% mean(na.rm = TRUE)
+    
+    # Calculate MAP
+    BP_value <- (systolic_bp + (2 * diastolic_bp) )/ 3
+  }
+
   # Platelets-----------
   
   # Gather all platelet measures
@@ -117,25 +138,24 @@ fialho_variables <- function(time_of_discharge, chart_df,
   # Average all within 24h of discharge
   lactate_value <- lactate_measurements %>% 
     discharge_filter(time_of_discharge,
-                     type = "labs") 
+                     type = "labs") %>% 
+    select(valuenum) %>%
+    deframe() %>% mean(na.rm = TRUE)
   
   # If none, then last
-  if(nrow(lactate_value) == 0)
+  if(is.na(lactate_value))
   {
-    lactate_value <- lactate_measurements %>% 
+    lactate_value <- lactate_measurements %>%
       mutate(before_discharge = difftime(charttime, time_of_discharge,
-                                        units = "hours")) %>% 
-      filter(before_discharge <= 0) %>% 
-      slice_min(abs(before_discharge)) %>% 
+                                        units = "hours")) %>%
+      filter(before_discharge <= 0) %>%
+      slice_min(abs(before_discharge)) %>%
       select(valuenum) %>%
       deframe() %>% mean(na.rm = TRUE)
-  } else
-  {
-    lactate_value <- NA
   }
-
+  
   # Convert to mg/dl
-  lactate_value <- lactate_value * 0.111
+  lactate_value <- lactate_value / 0.111
   
   # Output------------
   return(
