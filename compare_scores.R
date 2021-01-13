@@ -6,6 +6,8 @@ require(magrittr)
 require(lubridate)
 require(ROCR)
 require(ggplot2)
+require(ResourceSelection)
+require(s2dverification)
 
 # Load data
 patients <- read_csv("data/predictors.csv")
@@ -63,6 +65,10 @@ patients %>%
 patients %<>% 
   mutate(age = ifelse(age == ">90", 90, age)) %>% 
   mutate(age = floor(as.numeric(age)))
+
+# Fix admission source
+patients %<>% 
+  mutate(admission_source = fct_relevel(admission_source, "OT"))
 
 # Table 1-------------
 
@@ -146,7 +152,7 @@ points_hammer <- ifelse(patients$sex == "M", 1, 0) +
 table(points_hammer)
 
 # Score data - coefficients
-coefficients_hammer <- log(0.005 / (1- 0.005)) +
+coefficients_hammer <- log(0.005 / (1 - 0.005)) +
   ifelse(patients$sex == "M", 0.43, 0) +
   ifelse(patients$general_surgery, 0.64, 0) +
   ifelse(patients$cardiac_surgery, -1.01, 0) +
@@ -169,7 +175,7 @@ scale_hammer <- data.frame(
 probs_points_hammer <- scale_hammer$probs[match(points_hammer, scale_hammer$points)] / 100
 
 # Correlate points with coefficients
-cor(probs_coefficients_hammer, probs_points_hammer)
+#cor(probs_coefficients_hammer, probs_points_hammer)
 probs_hammer <- probs_coefficients_hammer
 
 # Martin------------
@@ -261,18 +267,17 @@ if(file.exists("data/cooper_model.RDS"))
   write_rds(cooper_model, "data/cooper_model.RDS")
 }
 
-
 # Predict
-probs_cooper <- predict(cleaner_model, newdata = patients) %>% 
+probs_cooper <- predict(cooper_model, newdata = patients) %>% 
   inverse_logit()
 
 # Discrimination----------
 
 # Create prediction objects
-prediction_hammer <- prediction(probs_hammer, patients$readmission)
-prediction_martin <- prediction(probs_martin, patients$readmission)
-prediction_frost <- prediction(probs_frost, patients$readmission)
-prediction_cooper <- prediction(probs_cooper, patients$readmission)
+prediction_hammer <- prediction(probs_hammer, patients$readmission == "Readmitted to ICU")
+prediction_martin <- prediction(probs_martin, patients$readmission == "Readmitted to ICU")
+prediction_frost <- prediction(probs_frost, patients$readmission == "Readmitted to ICU")
+prediction_cooper <- prediction(probs_cooper, patients$readmission == "Readmitted to ICU")
 
 # Create performance objects
 performance_hammer <- performance(prediction_hammer, "tpr", "fpr")
@@ -318,4 +323,64 @@ data.frame(x = performance_hammer@x.values[[1]],
   theme(legend.position = "top")+
   scale_color_brewer(palette = "Set1",
                      name = "")
+
+# Calibration----------
+
+# Split data into deciles
+deciles_df <- tibble(
+  patient_id = 1:nrow(patients),
+  readmission = patients$readmission == "Readmitted to ICU",
+  probs_hammer,
+  decile_hammer = ntile(probs_hammer, 10),
+  probs_martin,
+  decile_martin = ntile(probs_martin, 10),
+  probs_frost,
+  decile_frost = ntile(probs_frost, 10),
+  probs_cooper,
+  decile_cooper = ntile(probs_cooper, 10)
+)
+
+# Calculate calibration
+cal_hammer <- calibration(deciles_df, "probs_hammer", "decile_hammer")
+cal_martin <- calibration(deciles_df, "probs_martin", "decile_martin")
+cal_frost <- calibration(deciles_df, "probs_frost", "decile_frost")
+cal_cooper <- calibration(deciles_df, "probs_cooper", "decile_cooper")
+
+# Summarise together
+
+# Plot
+
+# Calculate hosmer-lemeshow chi-squared
+hoslem.test(patients$readmission == "Readmitted to ICU",
+            probs_hammer, g = 10)
+hoslem.test(patients$readmission == "Readmitted to ICU",
+            probs_martin, g = 10)
+hoslem.test(patients$readmission == "Readmitted to ICU",
+            probs_frost, g = 10)
+hoslem.test(patients$readmission == "Readmitted to ICU",
+            probs_cooper, g = 10)
+
+# Calculate brier scores
+brier_hammer <- BrierScore(patients$readmission == "Readmitted to ICU", probs_hammer)
+brier_martin <- BrierScore(patients$readmission == "Readmitted to ICU", probs_martin)
+brier_frost <- BrierScore(patients$readmission == "Readmitted to ICU", probs_frost)
+brier_cooper <- BrierScore(patients$readmission == "Readmitted to ICU", probs_cooper)
+
+# Extract brier scores
+brier_hammer$bs
+brier_martin$bs
+brier_frost$bs
+brier_cooper$bs
+
+# Extract reliability
+brier_hammer$rel
+brier_martin$rel
+brier_frost$rel
+brier_cooper$rel
+
+# Extract resolution
+brier_hammer$res
+brier_martin$res
+brier_frost$res
+brier_cooper$res
 
