@@ -44,12 +44,36 @@ sum(is.na(patients$ambulation))
 patients %<>% filter(!is.na(patients$ambulation))
 
 # Filter patients missing information to calculate APACHE-II score
-sum(is.na(patients$apache_II))
-patients %<>% filter(!is.na(patients$apache_II))
+sum(is.na(patients$apache_II) | is.na(patients$apache_II_discharge))
+patients %<>% filter(!is.na(patients$apache_II),
+                     !is.na(patients$apache_II_discharge))
 
 # Filter patients with no blood labs 24h before discharge
 sum(is.na(patients$hyperglycemia) | is.na(patients$anaemia))
 patients %<>% filter(!is.na(patients$hyperglycemia) & !is.na(patients$anaemia))
+
+# Filter patients missing Fialho criteria
+sum(is.na(patients$final_bp) | is.na(patients$final_lactate) |
+      is.na(patients$final_platelets) | is.na(patients$final_pO2) |
+      is.na(patients$final_pulse) | is.na(patients$final_temp))
+patients %<>% filter(!is.na(final_bp) & !is.na(final_lactate) &
+                       !is.na(final_platelets) & !is.na(final_pO2) &
+                       !is.na(final_pulse) & !is.na(final_temp))
+
+# Fix Fialho variables
+patients %<>% 
+  # Fix lactate
+  mutate(final_lactate = final_lactate / 9) %>% 
+  # Rename SpO2
+  rename("final_SpO2" = final_pO2)
+
+# Filter patients with physiologically implausible values
+patients %<>% 
+  mutate(physiologically_implausible = final_temp < 30 |
+           final_temp > 40 | final_SpO2 > 100 | final_bp < 22 |
+           final_bp > 136 | final_platelets > 1043)
+sum(patients$physiologically_implausible)
+patients %<>% filter(physiologically_implausible == FALSE)
 
 # Data cleanup-------
 
@@ -76,7 +100,7 @@ patients %<>%
 # Table 1-------------
 
 
-# Crosstabulation function
+# Crosstabulation function (combine over readmission column)
 crosstab <- function(varname, .df = patients)
 {
   # Find
@@ -109,7 +133,7 @@ crosstab("sex")
 crosstab("elective_admission")
 crosstab("admission_source")
 patients %>% 
-  mutate(apache_II = cut(apache_II, seq(0,60,10),
+  mutate(apache_II = cut(apache_II_discharge, seq(0,35,5),
                          right = FALSE)) %>% 
   crosstab("apache_II", .)
 crosstab("los_7")
@@ -229,7 +253,7 @@ scores_frost <- nomogram_convert(patients$age, age_score_system_input,
     patients$admission_source == "OtherHosp" ~ 10.25,
     patients$admission_source == "Ward" ~ 14.75
   ) +
-  nomogram_convert(patients$apache_II, apache_score_system_input,
+  nomogram_convert(patients$apache_II_discharge, apache_score_system_input,
                    apache_score_system_output) +
   ifelse(patients$los_7, 17, 0) +
   ifelse(patients$after_hours_discharge, 4, 0) +
