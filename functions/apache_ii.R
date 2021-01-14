@@ -411,7 +411,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   if (comorbs == FALSE) {
     chronic_score <- 0L
   } else {
-    if (elect_admit == "elective") {
+    if (elect_admit == TRUE) {
       chronic_score <- 2L
     } else {
       chronic_score <- 5L
