@@ -417,20 +417,31 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     )
   }
   
-  # Serum bicarbonate (venous mMol/L, only use if no arterial blood gases)
-  # apache2_score.hco3 <- function(x, ...) {
-  #   score <- function(y) {
-  #     dplyr::case_when(
-  #       y >= 52 | y < 15 ~ 4L,
-  #       y >= 41 | y <= 17.9 ~ 3L,
-  #       y <= 21.9 ~ 2L,
-  #       y >= 32 ~ 1L,
-  #       is.numeric(y) ~ 0L
-  #     )
-  #   }
-  #   
-  #   purrr::map_int(x, score)
-  # }
+  # Serum bicarbonate (venous mMol/L, only use if no arterial blood gases)-----------
+  if(is_empty(oxygenation_score) & is_empty(artpH_score))
+  {
+    # Gather all bicarbonate measurements
+    bicarbonate_measurements <- labs_df %>% 
+      filter(itemid %in% c(50803, 50882))
+    
+    # Find closest to ICU admission 
+    bicarbonate_value <- bicarbonate_measurements %>% 
+      filter_closest(admission_time, "labs") %>% 
+      select(valuenum) %>% deframe()
+    bicarbonate_value %<>% average()
+    
+    # Score
+    bicarbonate_score <- case_when(
+            bicarbonate_value >= 52 | bicarbonate_value < 15 ~ 4L,
+            bicarbonate_value >= 41 | bicarbonate_value <= 17.9 ~ 3L,
+            bicarbonate_value <= 21.9 ~ 2L,
+            bicarbonate_value >= 32 ~ 1L,
+            is.numeric(bicarbonate_value) ~ 0L
+          )
+  }else
+  {
+    bicarbonate_score <- NA
+  }
   
   # Calculate chronic health score----------
   
@@ -468,7 +479,8 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
                    "whitebloodcount" = missing_to_na(wbc_score),
                    "glasgowcoma" = missing_to_na(gcs_score),
                    "age" = missing_to_na(age_score),
-                   "chronic" = missing_to_na(chronic_score))
+                   "chronic" = missing_to_na(chronic_score),
+                   "bicarbonate" = missing_to_na(bicarbonate_score))
   return(full_scores)
 }
 
