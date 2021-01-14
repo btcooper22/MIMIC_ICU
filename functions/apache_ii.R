@@ -36,6 +36,30 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     }
   }
   
+  # Average value if multiple "simultaneous" measurements
+  average <- function(val)
+  {
+    if(length(val) > 1)
+    {
+      return(mean(val))
+    }else
+    {
+      return(val)
+    }
+  }
+  
+  # NA value if missing score
+  missing_to_na <- function(val)
+  {
+    if(is_empty(val))
+    {
+      return(NA)
+    }else
+    {
+      return(val)
+    }
+  }
+  
   # Calculate temperature---------
   
   # Gather all temperature measurements
@@ -52,10 +76,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     filter_closest(admission_time) %>% 
     select(value_degC) %>% deframe()
   
-  if(length(temp_value) > 1)
-  {
-    temp_value <- mean(temp_value)
-  }
+  temp_value %<>% average()
   
   # Score
   temp_score <- case_when(
@@ -87,6 +108,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Calculate MAP and score
   map_value <- (systolic_bp + (2 * diastolic_bp) )/ 3
+  map_value %<>% average()
   map_score <- case_when(
     map_value >= 160 | map_value <= 49 ~ 4L,
     map_value >= 130 ~ 3L,
@@ -104,6 +126,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   pulse_value <- pulse_measurements %>% 
     filter_closest(admission_time) %>% 
     select(VALUENUM) %>% deframe()
+  pulse_value %<>% average()
   
   # Score
   pulse_score <- case_when(
@@ -125,6 +148,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   respiratory_value <- respiratory_measurements %>% 
     filter_closest(admission_time) %>% 
     select(VALUENUM) %>% deframe()
+  respiratory_value %<>% average()
   
   # Score
   respiratory_score <-  case_when(
@@ -145,6 +169,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   artpH_value <- artpH_measurements %>% 
     filter_closest(admission_time) %>% 
     select(VALUENUM) %>% deframe()
+  artpH_value %<>% average()
   
   if(length(artpH_value) > 1)
   {
@@ -170,6 +195,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   sodium_value <- sodium_measurements %>% 
     filter_closest(admission_time, "labs") %>% 
     select(valuenum) %>% deframe()
+  sodium_value %<>% average()
   
   # Score
   sodium_score <-  case_when(
@@ -190,6 +216,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   potassium_value <- potassium_measurements %>% 
     filter_closest(admission_time, "labs") %>% 
     select(valuenum) %>% deframe()
+  potassium_value %<>% average()
   
   # Score
   potassium_score <- case_when(
@@ -211,6 +238,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   creatinine_value <- creatinine_measurements %>% 
     filter_closest(admission_time, "labs") %>% 
     select(valuenum) %>% deframe()
+  creatinine_value %<>% average()
   
   # Score
   creatinine_score <- case_when(
@@ -236,6 +264,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   hematocrit_value <- hematocrit_measurements %>% 
     filter_closest(admission_time, "labs") %>% 
     select(valuenum) %>% deframe()
+  hematocrit_value %<>% average()
   
   # Score
   hematocrit_score <- case_when(
@@ -255,6 +284,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   wbc_value <- wbc_measurements %>% 
     filter_closest(admission_time, "labs") %>% 
     select(valuenum) %>% deframe()
+  wbc_value %<>% average()
   
   # Score
   wbc_score <- case_when(
@@ -282,16 +312,19 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   gcs_motor_value <- gcs_motor_measurements %>% 
     filter_closest(admission_time) %>% 
     select(VALUENUM) %>%  deframe()
+  gcs_motor_value %<>% average()
   
   # Find closest verbal measurement
   gcs_verbal_value <- gcs_verbal_measurements %>% 
     filter_closest(admission_time) %>% 
     select(VALUENUM) %>%  deframe()
+  gcs_verbal_value %<>% average()
   
   # Find closest eye measurement
   gcs_eye_value <- gcs_eye_measurements %>% 
     filter_closest(admission_time) %>% 
     select(VALUENUM) %>%  deframe()
+  gcs_eye_value %<>% average()
   
   # Sum and score
   gcs_value <- gcs_motor_value + gcs_verbal_value + gcs_eye_value
@@ -328,6 +361,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   fio2_value <- fio2_measurements %>% 
     filter_closest(admission_time) %>% 
     select(VALUENUM) %>% deframe()
+  fio2_value %<>% average()
   
   # Set to 21 if measurements missing
   if(is_empty(fio2_value))
@@ -343,6 +377,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   pao2_value <- pao2_measurements %>% 
     filter_closest(admission_time) %>% 
     select(VALUENUM) %>% deframe()
+  pao2_value %<>% average()
   
   # If fio2 > 0.5 use aa_grad
   if(fio2_value > 50)
@@ -355,6 +390,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     paco2_value <- paco2_measurements %>% 
       filter_closest(admission_time) %>% 
       select(VALUENUM) %>% deframe()
+    paco2_value %<>% average()
     
     # Calculate AA gradient
     elev <-  5
@@ -419,20 +455,20 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   }
   
   # Return full vector of scores
-  full_scores <- c("temperature" = temp_score,
-                   "map" = map_score,
-                   "pulse" = pulse_score,
-                   "respiratory" = respiratory_score,
-                   "oxygen" = oxygenation_score,
-                   "arterialpH" = artpH_score,
-                   "sodium" = sodium_score,
-                   "potassium" = potassium_score,
-                   "creatinine" = creatinine_score,
-                   "haematocrit" = hematocrit_score,
-                   "whitebloodcount" = wbc_score,
-                   "glasgowcoma" = gcs_score,
-                   "age" = age_score,
-                   "chronic" = chronic_score)
+  full_scores <- c("temperature" = missing_to_na(temp_score),
+                   "map" = missing_to_na(map_score),
+                   "pulse" = missing_to_na(pulse_score),
+                   "respiratory" = missing_to_na(respiratory_score),
+                   "oxygen" = missing_to_na(oxygenation_score),
+                   "arterialpH" = missing_to_na(artpH_score),
+                   "sodium" = missing_to_na(sodium_score),
+                   "potassium" = missing_to_na(potassium_score),
+                   "creatinine" = missing_to_na(creatinine_score),
+                   "haematocrit" = missing_to_na(hematocrit_score),
+                   "whitebloodcount" = missing_to_na(wbc_score),
+                   "glasgowcoma" = missing_to_na(gcs_score),
+                   "age" = missing_to_na(age_score),
+                   "chronic" = missing_to_na(chronic_score))
   return(full_scores)
 }
 
