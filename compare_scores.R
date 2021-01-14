@@ -45,8 +45,7 @@ patients %<>% filter(!is.na(patients$ambulation))
 
 # Filter patients missing information to calculate APACHE-II score
 sum(is.na(patients$apache_II) | is.na(patients$apache_II_discharge))
-patients %<>% filter(!is.na(patients$apache_II),
-                     !is.na(patients$apache_II_discharge))
+patients %<>% filter(!is.na(patients$apache_II) & !is.na(patients$apache_II_discharge))
 
 # Filter patients with no blood labs 24h before discharge
 sum(is.na(patients$hyperglycemia) | is.na(patients$anaemia))
@@ -140,9 +139,9 @@ patients %>%
 crosstab("elective_admission")
 crosstab("admission_source")
 patients %>% 
-  mutate(apache_II = cut(apache_II_discharge, decile_cut(apache_II_discharge),
+  mutate(apache_II_discharge = cut(apache_II_discharge, decile_cut(apache_II_discharge),
                          right = FALSE)) %>% 
-  crosstab("apache_II", .)
+  crosstab("apache_II_discharge", .)
 crosstab("los_7")
 crosstab("after_hours_discharge")  
 crosstab("acute_renal_failure")
@@ -423,8 +422,8 @@ rbind(cal_hammer %>% select(-decile_hammer),
                       colour = model)) +
   theme_classic(20)+
   theme(legend.position = "top")+
-  labs(x = "Predicted mortality",
-       y = "Observed mortality")+
+  labs(x = "Predicted readmission",
+       y = "Observed readmission")+
   scale_colour_brewer(palette = "Set1",
                       name = "")+
   facet_wrap(~model, scales = "free_x")
