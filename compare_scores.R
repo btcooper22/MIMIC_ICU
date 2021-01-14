@@ -325,6 +325,7 @@ points_system_output <- data.frame(
 probs_frost <- nomogram_convert(scores_frost, points_system_input,
                  points_system_output, log = TRUE)
 
+# Fialho-----------
 
 # Discrimination----------
 
@@ -332,25 +333,25 @@ probs_frost <- nomogram_convert(scores_frost, points_system_input,
 prediction_hammer <- prediction(probs_hammer, patients$readmission == "Readmitted to ICU")
 prediction_martin <- prediction(probs_martin, patients$readmission == "Readmitted to ICU")
 prediction_frost <- prediction(probs_frost, patients$readmission == "Readmitted to ICU")
-prediction_cooper <- prediction(probs_cooper, patients$readmission == "Readmitted to ICU")
+prediction_apache <- prediction(probs_apache, patients$readmission == "Readmitted to ICU")
 
 # Create performance objects
 performance_hammer <- performance(prediction_hammer, "tpr", "fpr")
 performance_martin <- performance(prediction_martin, "tpr", "fpr")
 performance_frost <- performance(prediction_frost, "tpr", "fpr")
-performance_cooper <- performance(prediction_cooper, "tpr", "fpr")
+performance_apache <- performance(prediction_apache, "tpr", "fpr")
 
 # Create AUC objects
 auc_hammer <- performance(prediction_hammer, measure = "auc")
 auc_martin <- performance(prediction_martin, measure = "auc")
 auc_frost <- performance(prediction_frost, measure = "auc")
-auc_cooper <- performance(prediction_cooper, measure = "auc")
+auc_apache <- performance(prediction_apache, measure = "auc")
 
 # Print AUC
 auc_hammer@y.values[[1]]
 auc_martin@y.values[[1]]
 auc_frost@y.values[[1]]
-auc_cooper@y.values[[1]]
+auc_apache@y.values[[1]]
 
 # Plot AUC
 data.frame(x = performance_hammer@x.values[[1]],
@@ -363,9 +364,9 @@ data.frame(x = performance_hammer@x.values[[1]],
     data.frame(x = performance_frost@x.values[[1]],
                y = performance_frost@y.values[[1]],
                model = "Frost"),
-    data.frame(x = performance_cooper@x.values[[1]],
-               y = performance_cooper@y.values[[1]],
-               model = "Cooper")
+    data.frame(x = performance_apache@x.values[[1]],
+               y = performance_apache@y.values[[1]],
+               model = "APACHE-II")
   ) %>% 
   ggplot(aes(x, y, colour = model))+
   geom_abline(slope = 1, intercept = 0,
@@ -391,8 +392,8 @@ deciles_df <- tibble(
   decile_martin = ntile(probs_martin, 10),
   probs_frost,
   decile_frost = ntile(probs_frost, 10),
-  probs_cooper,
-  decile_cooper = ntile(probs_cooper, 10)
+  probs_apache,
+  decile_apache = ntile(probs_apache, 10)
 )
 
 # Calculate calibration
@@ -402,14 +403,14 @@ cal_martin <- calibration(deciles_df, "probs_martin", "decile_martin") %>%
   mutate(model = "martin")
 cal_frost <- calibration(deciles_df, "probs_frost", "decile_frost") %>% 
   mutate(model = "frost")
-cal_cooper <- calibration(deciles_df, "probs_cooper", "decile_cooper") %>% 
-  mutate(model = "cooper")
+cal_apache <- calibration(deciles_df, "probs_apache", "decile_apache") %>% 
+  mutate(model = "apache")
 
 # Plot
 rbind(cal_hammer %>% select(-decile_hammer), 
       cal_martin %>% select(-decile_martin),
       cal_frost %>% select(-decile_frost), 
-      cal_cooper %>% select(-decile_cooper)) %>% 
+      cal_apache %>% select(-decile_apache)) %>% 
   ggplot(aes(predicted, observed ,
              colour = model))+
   geom_abline(slope = 1, intercept = 0,
@@ -437,7 +438,7 @@ hoslem.test(patients$readmission == "Readmitted to ICU",
 hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_frost, g = 10)
 hoslem.test(patients$readmission == "Readmitted to ICU",
-            probs_cooper, g = 10)
+            probs_apache, g = 10)
 
 # Calculate brier scores
 brier_df <- rbind(
@@ -447,8 +448,8 @@ brier_df <- rbind(
     mutate(model = "martin"),  
   brier_extraction(patients$readmission == "Readmitted to ICU", probs_frost) %>% 
     mutate(model = "frost"),
-  brier_extraction(patients$readmission == "Readmitted to ICU", probs_cooper) %>% 
-    mutate(model = "cooper")
+  brier_extraction(patients$readmission == "Readmitted to ICU", probs_apache) %>% 
+    mutate(model = "apache")
 )
 
 # Plot brier scores
