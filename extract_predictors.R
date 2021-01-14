@@ -12,6 +12,7 @@ source("functions/flag_within_discharge.R")
 source("functions/apache_ii.R")
 source("functions/fluid_balance.R")
 source("functions/fialho_variables.R")
+source("functions/NA_count.r")
 
 # Load preprocessed data
 mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
@@ -127,7 +128,7 @@ ptm <- proc.time()
 psnice(value = 19)
 registerDoParallel(ifelse(detectCores() <= 15,
                           detectCores() - 1,
-                          15)
+                          12)
 )
 
 # Run loop
@@ -458,17 +459,17 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     apache_II <- sum(apache_score_vector)
     high_apache <- apache_II > 20
     
-    # Calculate apache score at discharge
-    apache_score_vector <- apacheII_score(labs_df = labs, chart_df = charts,
-                                          patient_df = mimic_preproc$stays %>% 
-                                            filter(subject_id == subj,
-                                                   hadm_id == adm),
-                                          admission_time = discharge_time,
-                                          elect_admit = elective_admission,
-                                          prev_diagnoses = history,
-                                          arf = acute_renal_failure)
-    # Sum score
-    apache_II_discharge <- sum(apache_score_vector)
+    # # Calculate apache score at discharge
+    # apache_score_vector_discharge <- apacheII_score(labs_df = labs, chart_df = charts,
+    #                                       patient_df = mimic_preproc$stays %>% 
+    #                                         filter(subject_id == subj,
+    #                                                hadm_id == adm),
+    #                                       admission_time = discharge_time,
+    #                                       elect_admit = elective_admission,
+    #                                       prev_diagnoses = history,
+    #                                       arf = acute_renal_failure)
+    # # Sum score
+    # apache_II_discharge <- sum(apache_score_vector_discharge)
   }else
   {
     apache_II <- NA
@@ -542,8 +543,23 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              final_pO2 = fialho_vars[3], final_bp = fialho_vars[4],
              final_platelets = fialho_vars[5], final_lactate = fialho_vars[6],
              # Additional variables
-             apache_II_discharge
+             #apache_II_discharge,
+             apache_temperature = apache_score_vector["temperature"],
+             apache_map = apache_score_vector["map"],
+             apache_pulse = apache_score_vector["pulse"],
+             apache_respiratory = apache_score_vector["oxygen"],
+             apache_artpH = apache_score_vector["arterialpH"],
+             apache_sodium = apache_score_vector["sodium"],
+             apache_potassium = apache_score_vector["potassium"],
+             apache_creatinine = apache_score_vector["creatinine"],
+             apache_hematocrit = apache_score_vector["haematocrit"],
+             apache_wbc = apache_score_vector["whitebloodcount"],
+             apache_gcs = apache_score_vector["glasgowcoma"],
+             apache_age = apache_score_vector["age"],
+             apache_oxygenation = apache_score_vector["oxygen"],
+             apache_chronic = apache_score_vector["chronic"]
              )
+  #row.names(output) <- i
   output
   #data.frame(i, cols = ncol(output))
 }
