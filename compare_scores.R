@@ -199,6 +199,22 @@ patients %>%
 
 
 
+# Apache------------
+
+# Build model on 25% of data
+set.seed(1)
+apache_model <- glm(readmission ~ apache_II_discharge, 
+            family = "binomial", 
+            data = patients %>% 
+              group_by(readmission) %>% 
+              slice_sample(prop = 0.25)) %>% 
+  coefficients()
+apache_model
+
+# Convert apache scores to probs
+apache_logits <- apache_model[1] + (patients$apache_II_discharge * apache_model[2])
+probs_apache <- inverse_logit(apache_logits)
+
 # Hammer----------
 
 # Score data - points
@@ -309,29 +325,6 @@ points_system_output <- data.frame(
 probs_frost <- nomogram_convert(scores_frost, points_system_input,
                  points_system_output, log = TRUE)
 
-# Cooper---------
-
-# Build formula
-formu <- paste(names(patients)[8:29], collapse = " + ")
-
-# Build model
-dirty_model <- glm(paste("readmission", "~", formu, sep = " "),
-                   data = patients, family = "binomial")
-
-
-if(file.exists("data/cooper_model.RDS"))
-{
-  cooper_model <- readRDS("data/cooper_model.RDS")
-}else
-{
-  # Automated model selection
-  cooper_model <- step(dirty_model)
-  write_rds(cooper_model, "data/cooper_model.RDS")
-}
-
-# Predict
-probs_cooper <- predict(cooper_model, newdata = patients) %>% 
-  inverse_logit()
 
 # Discrimination----------
 
