@@ -52,6 +52,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     filter_closest(admission_time) %>% 
     select(value_degC) %>% deframe()
   
+  if(length(temp_value) > 1)
+  {
+    temp_value <- mean(temp_value)
+  }
+  
   # Score
   temp_score <- case_when(
     temp_value >= 41 | temp_value <= 29.9 ~ 4L,
@@ -140,6 +145,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   artpH_value <- artpH_measurements %>% 
     filter_closest(admission_time) %>% 
     select(VALUENUM) %>% deframe()
+  
+  if(length(artpH_value) > 1)
+  {
+    artpH_value <- mean(artpH_value)
+  }
   
   # Score
   artpH_score <-  case_when(
