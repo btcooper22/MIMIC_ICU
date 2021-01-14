@@ -196,24 +196,6 @@ patients %>%
                            right = FALSE)) %>% 
   crosstab("final_lactate", .)
 
-
-
-# Apache------------
-
-# Build model on 25% of data
-set.seed(1)
-apache_model <- glm(readmission ~ apache_II_discharge, 
-            family = "binomial", 
-            data = patients %>% 
-              group_by(readmission) %>% 
-              slice_sample(prop = 0.25)) %>% 
-  coefficients()
-apache_model
-
-# Convert apache scores to probs
-apache_logits <- apache_model[1] + (patients$apache_II_discharge * apache_model[2])
-probs_apache <- inverse_logit(apache_logits)
-
 # Hammer----------
 
 # Score data - points
@@ -332,7 +314,8 @@ probs_frost <- nomogram_convert(scores_frost, points_system_input,
 prediction_hammer <- prediction(probs_hammer, patients$readmission == "Readmitted to ICU")
 prediction_martin <- prediction(probs_martin, patients$readmission == "Readmitted to ICU")
 prediction_frost <- prediction(probs_frost, patients$readmission == "Readmitted to ICU")
-prediction_apache <- prediction(probs_apache, patients$readmission == "Readmitted to ICU")
+prediction_apache <- prediction(patients$apache_II_discharge,
+                                patients$readmission == "Readmitted to ICU")
 
 # Create performance objects
 performance_hammer <- performance(prediction_hammer, "tpr", "fpr")
