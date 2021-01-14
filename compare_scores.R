@@ -99,7 +99,6 @@ patients %<>%
 
 # Table 1-------------
 
-
 # Crosstabulation function
 crosstab <- function(varname, .df = patients)
 {
@@ -117,6 +116,11 @@ crosstab <- function(varname, .df = patients)
                 values_from = "n (%)") %>% 
     as.data.frame()
 }
+decile_cut <- function(in_var)
+{
+  quantile(in_var, probs = seq(0, 1, 0.1)) %>% 
+    round()
+}
 
 ### Hammer variables
 crosstab("sex")
@@ -131,17 +135,12 @@ crosstab("los_5")
 
 ### Frost variables
 patients %>%       
-  mutate(age = cut(age, c(0, 25, 35, 45, 55,
-                                   65, 75, 85, 89, 100),
-                   c("18-25", "25-35", "35-45",
-                     "45-55", "55-65", "65-75",
-                     "75-85", "85-90", ">90"))) %>% 
+  mutate(age = cut(age, decile_cut(age))) %>% 
   crosstab("age", .)
-crosstab("sex")
 crosstab("elective_admission")
 crosstab("admission_source")
 patients %>% 
-  mutate(apache_II = cut(apache_II_discharge, seq(0,35,5),
+  mutate(apache_II = cut(apache_II_discharge, decile_cut(apache_II_discharge),
                          right = FALSE)) %>% 
   crosstab("apache_II", .)
 crosstab("los_7")
@@ -150,26 +149,54 @@ crosstab("acute_renal_failure")
 
 ### Martin variables
 patients %>% 
-  mutate(respiratory_rate = cut(respiratory_rate, seq(0, 90, 10),
+  mutate(respiratory_rate = cut(respiratory_rate, decile_cut(respiratory_rate),
                                 right = FALSE)) %>% 
   crosstab("respiratory_rate", .)
 patients %>% 
-  mutate(blood_urea_nitrogen = cut(blood_urea_nitrogen, seq(0, 160, 40),
+  mutate(blood_urea_nitrogen = cut(blood_urea_nitrogen, 
+                                   decile_cut(blood_urea_nitrogen),
                                 right = FALSE)) %>% 
   crosstab("blood_urea_nitrogen", .)
 patients %>% 
-  mutate(age = cut(age, seq(0, 100, 20), right = FALSE)) %>% 
-  crosstab("age", .)
-patients %>% 
-  mutate(serum_glucose = cut(serum_glucose, seq(0, 650, 50),
+  mutate(serum_glucose = cut(serum_glucose, decile_cut(serum_glucose),
                                    right = FALSE)) %>% 
   crosstab("serum_glucose", .)
 patients %>% 
-  mutate(serum_choride = cut(serum_choride, seq(80, 130, 10),
+  mutate(serum_choride = cut(serum_choride, decile_cut(serum_choride),
                              right = FALSE)) %>% 
   crosstab("serum_choride", .)
 crosstab("atrial_fibrillation")
 crosstab("renal_insufficiency")
+
+### Fialho variables
+patients %>% 
+  mutate(final_pulse = cut(final_pulse, decile_cut(final_pulse),
+                                right = FALSE)) %>% 
+  crosstab("final_pulse", .)
+patients %>% 
+  mutate(final_temp = cut(final_temp, c(30,36, 36.5, 37,
+                                        37.5, 38,40),
+                           right = FALSE)) %>% 
+  crosstab("final_temp", .)
+patients %>% 
+  mutate(final_SpO2 = cut(final_SpO2, c(75,90, 93:100),
+                          right = TRUE)) %>% 
+  crosstab("final_SpO2", .)
+patients %>% 
+  mutate(final_bp = cut(final_bp, c(20,60, 70, 80, 85, 90,
+                                    100, 140),
+                          right = TRUE)) %>% 
+  crosstab("final_bp", .)
+patients %>% 
+  mutate(final_platelets = cut(final_platelets, decile_cut(final_platelets),
+                           right = FALSE)) %>% 
+  crosstab("final_platelets", .)
+patients %>% 
+  mutate(final_lactate = cut(final_lactate, c(0, 0.5, 1, 1.25, 1.5, 2, 
+                                              2.5, 4, 8),
+                           right = FALSE)) %>% 
+  crosstab("final_lactate", .)
+
 
 
 # Hammer----------
