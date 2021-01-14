@@ -10,6 +10,7 @@ source("functions/mimic_load.R")
 source("functions/event_filter_discharge.R")
 source("functions/flag_within_discharge.R")
 source("functions/apache_ii.R")
+source("functions/apache_ii_discharge.R")
 source("functions/fluid_balance.R")
 source("functions/fialho_variables.R")
 source("functions/NA_count.r")
@@ -128,7 +129,7 @@ ptm <- proc.time()
 psnice(value = 19)
 registerDoParallel(ifelse(detectCores() <= 15,
                           detectCores() - 1,
-                          12)
+                          15)
 )
 
 # Run loop
@@ -456,20 +457,45 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
                                           prev_diagnoses = history,
                                           arf = acute_renal_failure)
     # Sum score
-    apache_II <- sum(apache_score_vector)
+    if(is.na(apache_score_vector["bicarbonate"]))
+    {
+      apache_II <- sum(apache_score_vector[c("temperature", "map", "pulse", "respiratory",
+                                             "oxygen", "arterialpH", "sodium", "potassium",
+                                             "creatinine", "haematocrit", "whitebloodcount",
+                                             "glasgowcoma", "age", "chronic")])
+    }else
+    {
+      apache_II <- sum(apache_score_vector[c("temperature", "map", "pulse", "respiratory",
+                                             "bicarbonate", "sodium", "potassium",
+                                             "creatinine", "haematocrit", "whitebloodcount",
+                                             "glasgowcoma", "age", "chronic")])
+    }
+
     high_apache <- apache_II > 20
     
-    # # Calculate apache score at discharge
-    # apache_score_vector_discharge <- apacheII_score(labs_df = labs, chart_df = charts,
-    #                                       patient_df = mimic_preproc$stays %>% 
-    #                                         filter(subject_id == subj,
-    #                                                hadm_id == adm),
-    #                                       admission_time = discharge_time,
-    #                                       elect_admit = elective_admission,
-    #                                       prev_diagnoses = history,
-    #                                       arf = acute_renal_failure)
-    # # Sum score
-    # apache_II_discharge <- sum(apache_score_vector_discharge)
+    # Calculate apache score at discharge
+    apache_score_vector_discharge <- apacheII_score_discharge(labs_df = labs, chart_df = charts,
+                                          patient_df = mimic_preproc$stays %>%
+                                            filter(subject_id == subj,
+                                                   hadm_id == adm),
+                                          time_of_discharge = discharge_time,
+                                          elect_admit = elective_admission,
+                                          prev_diagnoses = history,
+                                          arf = acute_renal_failure)
+    # Sum score
+    if(is.na(apache_score_vector_discharge["bicarbonate"]))
+    {
+      apache_II_discharge <- sum(apache_score_vector_discharge[c("temperature", "map", "pulse", "respiratory",
+                                             "oxygen", "arterialpH", "sodium", "potassium",
+                                             "creatinine", "haematocrit", "whitebloodcount",
+                                             "glasgowcoma", "age", "chronic")])
+    }else
+    {
+      apache_II_discharge <- sum(apache_score_vector_discharge[c("temperature", "map", "pulse", "respiratory",
+                                             "bicarbonate", "sodium", "potassium",
+                                             "creatinine", "haematocrit", "whitebloodcount",
+                                             "glasgowcoma", "age", "chronic")])
+    }
   }else
   {
     apache_II <- NA
@@ -542,8 +568,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              final_pulse = fialho_vars[1], final_temp = fialho_vars[2],
              final_pO2 = fialho_vars[3], final_bp = fialho_vars[4],
              final_platelets = fialho_vars[5], final_lactate = fialho_vars[6],
-             # Additional variables
-             #apache_II_discharge,
+             # APACHE-II variables
              apache_temperature = apache_score_vector["temperature"],
              apache_map = apache_score_vector["map"],
              apache_pulse = apache_score_vector["pulse"],
@@ -557,14 +582,32 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              apache_gcs = apache_score_vector["glasgowcoma"],
              apache_age = apache_score_vector["age"],
              apache_oxygenation = apache_score_vector["oxygen"],
-             apache_chronic = apache_score_vector["chronic"]
+             apache_chronic = apache_score_vector["chronic"],
+             apache_bicarbonate = apache_score_vector["bicarbonate"],
+             apache_II_discharge,
+             apache_temperature_discharge = apache_score_vector_discharge["temperature"],
+             apache_map_discharge = apache_score_vector_discharge["map"],
+             apache_pulse_discharge = apache_score_vector_discharge["pulse"],
+             apache_respiratory_discharge = apache_score_vector_discharge["oxygen"],
+             apache_artpH_discharge = apache_score_vector_discharge["arterialpH"],
+             apache_sodium_discharge = apache_score_vector_discharge["sodium"],
+             apache_potassium_discharge = apache_score_vector_discharge["potassium"],
+             apache_creatinine_discharge = apache_score_vector_discharge["creatinine"],
+             apache_hematocrit_discharge = apache_score_vector_discharge["haematocrit"],
+             apache_wbc_discharge = apache_score_vector_discharge["whitebloodcount"],
+             apache_gcs_discharge = apache_score_vector_discharge["glasgowcoma"],
+             apache_age_discharge = apache_score_vector_discharge["age"],
+             apache_oxygenation_discharge = apache_score_vector_discharge["oxygen"],
+             apache_chronic_discharge = apache_score_vector_discharge["chronic"],
+             apache_bicarbonate_discharge = apache_score_vector_discharge["bicarbonate"]
              )
   #row.names(output) <- i
   output
   #data.frame(i, cols = ncol(output))
 }
+row.names(predictors) <- c()
 stopImplicitCluster()
-proc.time() - ptm # 1276s (~20 min)
+proc.time() - ptm # 1481s (~25 min)
 
 # Write and quality control ------------
 
