@@ -68,7 +68,7 @@ patients %<>%
 
 # Filter patients with physiologically implausible values
 patients %<>% 
-  mutate(physiologically_implausible = final_temp < 30 |
+  mutate(physiologically_implausible = final_temp < 35 |
            final_temp > 40 | final_SpO2 > 100 | final_bp < 22 |
            final_bp > 136 | final_platelets > 1043)
 sum(patients$physiologically_implausible)
@@ -374,8 +374,8 @@ deciles_df <- tibble(
   decile_martin = ntile(probs_martin, 10),
   probs_frost,
   decile_frost = ntile(probs_frost, 10),
-  probs_apache,
-  decile_apache = ntile(probs_apache, 10)
+  probs_apache = patients$apache_II_discharge / 200,
+  decile_apache = ntile(patients$apache_II_discharge, 10)
 )
 
 # Calculate calibration
@@ -409,7 +409,7 @@ rbind(cal_hammer %>% select(-decile_hammer),
        y = "Observed readmission")+
   scale_colour_brewer(palette = "Set1",
                       name = "")+
-  facet_wrap(~model, scales = "free_x")
+  facet_wrap(~model, scales = "fixed")
 
 
 # Calculate hosmer-lemeshow chi-squared
@@ -420,7 +420,7 @@ hoslem.test(patients$readmission == "Readmitted to ICU",
 hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_frost, g = 10)
 hoslem.test(patients$readmission == "Readmitted to ICU",
-            probs_apache, g = 10)
+            patients$apache_II_discharge / 200, g = 10)
 
 # Calculate brier scores
 brier_df <- rbind(
@@ -430,7 +430,8 @@ brier_df <- rbind(
     mutate(model = "martin"),  
   brier_extraction(patients$readmission == "Readmitted to ICU", probs_frost) %>% 
     mutate(model = "frost"),
-  brier_extraction(patients$readmission == "Readmitted to ICU", probs_apache) %>% 
+  brier_extraction(patients$readmission == "Readmitted to ICU", 
+                   patients$apache_II_discharge / 200) %>% 
     mutate(model = "apache")
 )
 
@@ -447,8 +448,109 @@ brier_df %>%
   scale_fill_brewer(palette = "Set1",
                       name = "")
 
+# Recalibration-----------
+
+# Split data
+set.seed(123)
+patients_train <- patients %>% 
+  group_by(readmission) %>% 
+  slice_sample(prop = 0.5) %>% 
+  mutate(type = "train")
+
+patients_validate <- patients %>% 
+  filter(row_id %in% patients_train$row_id == FALSE)
+
+### Recalibrate models
+
+# Hammer
+hammer_recalibrate <- glm(readmission ~ sex + general_surgery + cardiac_surgery + hyperglycemia +
+                            high_apache + fluid_balance_5L + ambulation + los_5,
+                          data = patients_train, family = "binomial")
+
+# Martin
+martin_recalibrate <- glm(readmission ~ respiratory_rate + age + serum_choride + blood_urea_nitrogen +
+                            atrial_fibrillation + renal_insufficiency + serum_glucose,
+                          data = patients_train, family = "binomial")
+
+# Frost
+frost_recalibrate <- glm(readmission ~ age + sex + elective_admission + admission_source +
+                            apache_II_discharge + los_7 + after_hours_discharge + acute_renal_failure,
+                          data = patients_train, family = "binomial")
+
+# APACHE
+apache_recalibrate <- glm(readmission ~ apache_II_discharge,
+                          data = patients_train, family = "binomial")
+
+### Fit novel model automatically
+
+# Build formula
+formu <- paste(names(patients_train)[c(9:10, 12, 14,
+                                       16:18, 20:35, 51)], collapse = " + ")
+
+# Build model
+dirty_model <- glm(paste("readmission", "~", formu, sep = " "),
+                   data = patients_train, family = "binomial")
 
 
+if(file.exists("data/cooper_model.RDS"))
+{
+  cooper_model <- readRDS("data/cooper_model.RDS")
+}else
+{
+  # Automated model selection
+  cooper_model <- step(dirty_model)
+  write_rds(cooper_model, "data/cooper_model.RDS")
+}
+
+### Predict on new data
+hammer_rc_probs <- predict(hammer_recalibrate, newdata = patients_validate) %>% inverse_logit()
+martin_rc_probs <- predict(martin_recalibrate, newdata = patients_validate) %>% inverse_logit()
+frost_rc_probs <- predict(frost_recalibrate, newdata = patients_validate) %>% inverse_logit()
+apache_rc_probs <- predict(apache_recalibrate, newdata = patients_validate) %>% inverse_logit()
+cooper_probs <- predict(cooper_model, newdata = patients_validate) %>% inverse_logit()
+
+### Assess discrimination
+
+# Create prediction objects
+prediction_rc_hammer <- prediction(hammer_rc_probs, patients_validate$readmission)
+prediction_rc_hammer <- prediction(hammer_rc_probs, patients_validate$readmission)
+
+# Create performance objects
+performance_rc_hammer <- performance(prediction_rc_hammer, "tpr", "fpr")
+
+# Create AUC objects
+auc_rc_hammer <- performance(prediction_rc_hammer, measure = "auc")
+
+# Print AUC
+auc_rc_hammer@y.values[[1]]
+
+
+# Plot AUC
+data.frame(x = performance_hammer@x.values[[1]],
+           y = performance_hammer@y.values[[1]],
+           model = "Hammer") %>% 
+  rbind(
+    data.frame(x = performance_martin@x.values[[1]],
+               y = performance_martin@y.values[[1]],
+               model = "Martin"),
+    data.frame(x = performance_frost@x.values[[1]],
+               y = performance_frost@y.values[[1]],
+               model = "Frost"),
+    data.frame(x = performance_apache@x.values[[1]],
+               y = performance_apache@y.values[[1]],
+               model = "APACHE-II")
+  ) %>% 
+  ggplot(aes(x, y, colour = model))+
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dotted",
+              size = 1)+
+  geom_path(size = 1)+
+  labs(x = "1 - Specificity",
+       y = "Sensitivity")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_color_brewer(palette = "Set1",
+                     name = "")
 
 
 
