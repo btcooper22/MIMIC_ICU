@@ -32,29 +32,41 @@ outcomes <- foreach(i = 1:length(mimic_preproc$patients),
   stays <- mimic_preproc$stays %>% 
     filter(subject_id == SUBJECT_ID)
   
-  # Count stays (126-128)
-  stays %<>% 
-    group_by(hadm_id) %>% 
-    summarise(counts = n()) %>% 
-    left_join(stays, by  = "hadm_id") %>% 
-    arrange(row_id.x)
+  # Identify surgical admission
+  surgical_stay <- stays %>%
+    group_by(hadm_id) %>%
+    filter(any(surgical_stay == TRUE)) %>% 
+    ungroup()
   
-  # Generate output points for each stay (130-132)
-  stays %<>% 
-    group_by(hadm_id) %>% 
-    mutate(max_outtime = max(outtime) == outtime)
+  # Flag readmission
+  readmission_flag <- nrow(surgical_stay) > 1
+  surgical_stay %<>% 
+    mutate(readmission = readmission_flag)
   
+  
+  # # Count stays (126-128)
+  # stays %<>%
+  #   group_by(hadm_id) %>%
+  #   summarise(counts = n()) %>%
+  #   left_join(stays, by  = "hadm_id") %>%
+  #   arrange(row_id.x)
+  #
+  # # Generate output points for each stay (130-132)
+  # stays %<>%
+  #   group_by(hadm_id) %>%
+  #   mutate(max_outtime = max(outtime) == outtime)
+
   # Detect back transfers to ICU (134)
-  stays %<>% 
-    mutate(readmission = (counts > 1) & (max_outtime == 0)) %>% 
-    # Restrict to surgical hospitalisations
-    filter(surgical_stay == TRUE)
-    
-  # Write all information
-  stays %>% 
-    select(subject_id, hadm_id, in_hospital_mortality, readmission) %>% 
-    mutate(subject_n = i) %>% 
-    group_by(hadm_id) %>% 
+  # stays %<>%
+  #   mutate(readmission = (counts > 1) & (max_outtime == 0)) %>%
+  #   # Restrict to surgical hospitalisations
+  #   filter(surgical_stay == TRUE)
+  #
+  # # Write all information
+  surgical_stay %>%
+    select(subject_id, hadm_id, in_hospital_mortality, readmission) %>%
+    mutate(subject_n = i) %>%
+    group_by(hadm_id) %>%
     slice_head()
 }
 stopImplicitCluster()
