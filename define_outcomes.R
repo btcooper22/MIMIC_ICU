@@ -35,7 +35,7 @@ outcomes <- foreach(i = 1:length(mimic_preproc$patients),
   # Identify surgical admission
   surgical_stay <- stays %>%
     group_by(hadm_id) %>%
-    filter(any(surgical_stay == TRUE)) %>% 
+    filter(any(surgical_hospitalisation == TRUE)) %>% 
     ungroup()
   
   # Flag readmission

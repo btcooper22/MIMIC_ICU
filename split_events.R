@@ -13,9 +13,8 @@ outcomes <- read_csv("data/outcomes.csv")
 
 # chartevents----------
 
-header <- names(read_csv("C:/Users/benco/chart/chartevents_aa", n_max = 1))
-files <- dir("C:/Users/benco/chart/", pattern = "_")
-
+header <- names(read_csv("C:/Users/benco/charts/chartevents_aa", n_max = 1))
+files <- dir("C:/Users/benco/charts/", pattern = "_")
 
 # Make database of hadm_ids in which split
 if(!file.exists("data/chart_database.csv"))
@@ -32,7 +31,7 @@ if(!file.exists("data/chart_database.csv"))
     {
       # Load in chart
       print(files[i])
-      chart_search <- read_csv(paste("C:/Users/benco/chart/", files[i], sep = ""),
+      chart_search <- read_csv(paste("C:/Users/benco/charts/", files[i], sep = ""),
                                col_types = "ccccccccccccccc", col_names = header)
       
       # List admissions
@@ -52,6 +51,12 @@ if(!file.exists("data/chart_database.csv"))
 {
   chart_database <- read_csv("data/chart_database.csv")
 }
+
+# Filter outcomes by missing chart data
+outcomes %<>% 
+  filter(outcomes$hadm_id %in% chart_database$hadm_id == TRUE)
+write_csv(outcomes, "data/outcomes.csv")
+
 
 # Prepare parallel options
 psnice(value = 19)
@@ -83,7 +88,7 @@ foreach(i = 1:nrow(outcomes), .packages = c("readr", "dplyr",
     chart_df <- foreach(cn = 1:length(chart_n), .combine = "rbind") %do% 
       {
         print(cn)
-        chart_in <- read_csv(paste("C:/Users/benco/chart/", chart_n[cn], sep = ""),
+        chart_in <- read_csv(paste("C:/Users/benco/charts/", chart_n[cn], sep = ""),
                  col_types = "ccccccccccccccc", col_names = header)
         
         # Subset

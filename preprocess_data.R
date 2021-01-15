@@ -5,6 +5,8 @@
 require(tidyverse)
 require(magrittr)
 require(lubridate)
+require(doParallel)
+require(tools)
 
 # Load MIMIC database
 source("functions/mimic_load.R")
@@ -14,11 +16,11 @@ source("functions/in_hospital_mortality.R")
 source("functions/in_unit_mortality.R")
 
 # Load valid patients
-valid_patients <- read_csv("data/valid_patients.csv") %>% 
+patient_df <- read_csv("data/valid_patients.csv") 
+valid_patients <- patient_df %>% 
   select(subject_id) %>%  deframe()
-surgical_stays <- read_csv("data/valid_patients.csv") %>% 
+surgical_hospitalisations <- patient_df %>% 
   select(hadm_id) %>%  deframe()
-
 
 
 # Read and filter stay data-------------------------------------------------
@@ -53,11 +55,56 @@ stays %<>%
   mutate(age = ifelse(age > 90, 90, age)) %>% 
   mutate(in_unit_mortality = in_unit_mortality(.),
          in_hospital_mortality = in_hospital_mortality(.),
-         surgical_stay = ifelse(hadm_id %in% surgical_stays,
+         surgical_hospitalisation = ifelse(hadm_id %in% surgical_hospitalisations,
                                 TRUE, FALSE)) %>% 
   filter(age >= 18)
 
-# Should now be saved to csv (62-65)
+# Trim to only hospitalisations involving a surgical service
+surgical_hosps_df <- stays %>% 
+  filter(surgical_hospitalisation == TRUE)
+
+# Prepare parallel engine
+ptm <- proc.time()
+psnice(value = 19)
+registerDoParallel(ifelse(detectCores() <= 12,
+                          detectCores() - 1,
+                          8)
+)
+
+# Flag which stays involved or followed surgeries
+unique_admissions <- unique(surgical_hosps_df$hadm_id)
+stays_filtered <- foreach(i = 1:length(unique_admissions),
+        .combine = "rbind",
+        .packages = c("dplyr", "lubridate",
+                      "tibble")) %dopar%
+{
+  admission_df <- surgical_hosps_df %>% 
+    filter(hadm_id == unique_admissions[i])
+  
+  if(nrow(admission_df) > 1)
+  {
+    # Find time moved to surgical service
+    surgery_time <- patient_df %>%
+      filter(hadm_id == unique_admissions[i]) %>% 
+      select(transfertime) %>% deframe()
+    
+    # Compare to ICU times
+    post_surgery <- difftime(admission_df$outtime, surgery_time,
+                                units = "hours")
+    
+    # Negative times == icu stays pre-surgery
+    if(any(post_surgery < 0))
+    {
+      admission_df <- admission_df[post_surgery > 0,]
+    }
+  }
+  admission_df
+}
+stopImplicitCluster()
+proc.time() - ptm
+
+stays <- stays_filtered
+
 
 # Read and filter input data per stay----------------------------------
 
