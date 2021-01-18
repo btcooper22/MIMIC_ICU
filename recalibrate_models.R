@@ -37,7 +37,7 @@ patients %<>%
 # Create categorised versions of continous variables----------
 
 # Factorise variables
-patients %<>% 
+patients %<>%
   # Serum choride (98 - 107)
   mutate(serum_chloride = case_when(
     serum_choride > 107 ~ "High",
@@ -50,31 +50,11 @@ patients %<>%
     blood_urea_nitrogen > 7 ~ "Normal",
     is.numeric(blood_urea_nitrogen) ~ "Low"
   ),
-  # Serum glucose (< 140)
-  serum_glucose = case_when(
-    serum_glucose > 140 ~ "High",
-    is.numeric(serum_glucose) ~ "Normal"
-  ),
   # final_pulse (60-100)
   final_pulse = case_when(
     final_pulse > 100 ~ "High",
     final_pulse > 60 ~ "Normal",
     is.numeric(final_pulse) ~ "Low"
-  ),
-  # final_temp (>36.5)
-  final_temp = case_when(
-    final_temp > 36.49 ~ "Normal",
-    is.numeric(final_temp) ~ "Low"
-  ),
-  # SpO2 (< 95)
-  final_SpO2 = case_when(
-    final_SpO2 < 95 ~ "Low",
-    is.numeric(final_SpO2) ~ "Normal"
-  ),
-  # bp *(> 100)
-  final_bp = case_when(
-    final_bp > 100 ~ "High",
-    is.numeric(final_bp) ~ "Normal"
   ),
   # platelets (150-450)
   final_platelets = case_when(
@@ -82,25 +62,14 @@ patients %<>%
     final_platelets > 150 ~ "Normal",
     is.numeric(final_platelets) ~ "Low"
   ),
-  # Lactate (> 2)
-  final_lactate = case_when(
-    final_lactate > 2 ~ "High",
-    is.numeric(final_lactate) ~ "Normal"
-  )
   )
 
 # Reorder factor levels
-patients %<>% 
+patients %<>%
   mutate(serum_chloride = fct_relevel(serum_chloride, "Normal"),
          blood_urea_nitrogen = fct_relevel(blood_urea_nitrogen, "Normal"),
-         serum_glucose = fct_relevel(serum_glucose, "Normal"),
          final_pulse = fct_relevel(final_pulse, "Normal"),
-         final_temp = fct_relevel(final_temp, "Normal"),
-         final_SpO2 = fct_relevel(final_SpO2, "Normal"),
-         final_bp = fct_relevel(final_bp, "Normal"),
-         final_platelets = fct_relevel(final_platelets, "Normal"),
-         final_lactate = fct_relevel(final_lactate, "Normal"))
-  
+         final_platelets = fct_relevel(final_platelets, "Normal"))
 
 # Recalibrate models------------
 
