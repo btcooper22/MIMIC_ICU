@@ -345,8 +345,8 @@ brier_df %>%
                      name = "")+
   theme(axis.text.x = element_blank())
 
-# Plot combined
-data.frame(
+# Tabulate and plot optimality
+optimality <- data.frame(
   model = c("hammer", "martin", "frost", "apache", "cooper", "fialho"),
   discrimination = c(auc_rc_hammer@y.values[[1]],
                      auc_rc_martin@y.values[[1]],
@@ -361,6 +361,13 @@ data.frame(
                   hoslem_cooper$statistic,
                   hoslem_fialho$statistic)
 ) %>% 
+  mutate(discrim_dist = (scale(discrimination) - max(scale(discrimination)))^2,
+         calib_dist = (scale(calibration) - min(scale(calibration)))^2) %>% 
+  mutate(optimality = sqrt(discrim_dist + calib_dist)) %>% 
+  select(-discrim_dist, -calib_dist) %>% 
+  arrange(optimality)
+
+optimality %>% 
   ggplot(aes(x = discrimination,
              y = calibration))+
   geom_point(aes(fill = model),
