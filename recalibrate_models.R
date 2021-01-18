@@ -11,7 +11,9 @@ require(ResourceSelection)
 require(s2dverification)
 require(scales)
 
-source()
+source("functions/inverse_logit.R")
+source("functions/calibration.R")
+source("functions/brier_extraction.R")
 
 # Process data----------
 
@@ -149,7 +151,8 @@ if(file.exists("data/cooper_model.RDS"))
 }else
 {
   # Automated model selection
-  cooper_model <- step(dirty_model)
+  cooper_model <- step(glm(readmission ~ 1, data = patients_train, family = "binomial"),
+                       scope = paste("readmission", "~", formu, sep = " "))
   write_rds(cooper_model, "data/cooper_model.RDS")
 }
 
@@ -229,7 +232,7 @@ data.frame(x = performance_rc_hammer@x.values[[1]],
 # Split data into deciles
 deciles_rc <- tibble(
   patient_id = 1:nrow(patients_validate),
-  readmission = patients_validate$readmission == "Readmitted to ICU",
+  readmission = patients_validate$readmission,
   hammer_rc_probs,
   decile_hammer = ntile(hammer_rc_probs, 10),
   martin_rc_probs,
@@ -280,15 +283,15 @@ rbind(cal_hammer %>% select(-decile_hammer),
 
 
 # Calculate hosmer-lemeshow chi-squared
-hoslem_hammer <- hoslem.test(patients_validate$readmission == "Readmitted to ICU",
+hoslem_hammer <- hoslem.test(patients_validate$readmission,
                              hammer_rc_probs, g = 10)
-hoslem_martin <- hoslem.test(patients_validate$readmission == "Readmitted to ICU",
+hoslem_martin <- hoslem.test(patients_validate$readmission,
                              martin_rc_probs, g = 10)
-hoslem_frost <- hoslem.test(patients_validate$readmission == "Readmitted to ICU",
+hoslem_frost <- hoslem.test(patients_validate$readmission,
                             frost_rc_probs, g = 10)
-hoslem_apache <- hoslem.test(patients_validate$readmission == "Readmitted to ICU",
+hoslem_apache <- hoslem.test(patients_validate$readmission,
                              apache_rc_probs, g = 10)
-hoslem_cooper <- hoslem.test(patients_validate$readmission == "Readmitted to ICU",
+hoslem_cooper <- hoslem.test(patients_validate$readmission,
                              cooper_rc_probs, g = 10)
 hoslem_hammer
 hoslem_martin
@@ -298,15 +301,15 @@ hoslem_cooper
 
 # Calculate brier scores
 brier_df <- rbind(
-  brier_extraction(patients_validate$readmission == "Readmitted to ICU", hammer_rc_probs) %>% 
+  brier_extraction(patients_validate$readmission, hammer_rc_probs) %>% 
     mutate(model = "hammer"),
-  brier_extraction(patients_validate$readmission == "Readmitted to ICU", martin_rc_probs) %>% 
+  brier_extraction(patients_validate$readmission, martin_rc_probs) %>% 
     mutate(model = "martin"),  
-  brier_extraction(patients_validate$readmission == "Readmitted to ICU", frost_rc_probs) %>% 
+  brier_extraction(patients_validate$readmission, frost_rc_probs) %>% 
     mutate(model = "frost"),
-  brier_extraction(patients_validate$readmission == "Readmitted to ICU", apache_rc_probs) %>% 
+  brier_extraction(patients_validate$readmission, apache_rc_probs) %>% 
     mutate(model = "apache"),
-  brier_extraction(patients_validate$readmission == "Readmitted to ICU", cooper_rc_probs) %>% 
+  brier_extraction(patients_validate$readmission, cooper_rc_probs) %>% 
     mutate(model = "cooper")
 )
 
