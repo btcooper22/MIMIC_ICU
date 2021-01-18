@@ -10,6 +10,7 @@ require(tidyr)
 require(ResourceSelection)
 require(s2dverification)
 require(scales)
+require(RColorBrewer)
 
 source("functions/inverse_logit.R")
 source("functions/calibration.R")
@@ -174,6 +175,7 @@ prediction_rc_martin <- prediction(martin_rc_probs, patients_validate$readmissio
 prediction_rc_frost <- prediction(frost_rc_probs, patients_validate$readmission)
 prediction_rc_apache <- prediction(apache_rc_probs, patients_validate$readmission)
 prediction_rc_cooper <- prediction(cooper_rc_probs, patients_validate$readmission)
+prediction_rc_fialho <- prediction(fialho_rc_probs, patients_validate$readmission)
 
 # Create performance objects
 performance_rc_hammer <- performance(prediction_rc_hammer, "tpr", "fpr")
@@ -181,6 +183,7 @@ performance_rc_martin <- performance(prediction_rc_martin, "tpr", "fpr")
 performance_rc_frost <- performance(prediction_rc_frost, "tpr", "fpr")
 performance_rc_apache <- performance(prediction_rc_apache, "tpr", "fpr")
 performance_rc_cooper <- performance(prediction_rc_cooper, "tpr", "fpr")
+performance_rc_fialho <- performance(prediction_rc_fialho, "tpr", "fpr")
 
 # Create AUC objects
 auc_rc_hammer <- performance(prediction_rc_hammer, measure = "auc")
@@ -188,6 +191,7 @@ auc_rc_martin <- performance(prediction_rc_martin, measure = "auc")
 auc_rc_frost <- performance(prediction_rc_frost, measure = "auc")
 auc_rc_apache <- performance(prediction_rc_apache, measure = "auc")
 auc_rc_cooper <- performance(prediction_rc_cooper, measure = "auc")
+auc_rc_fialho <- performance(prediction_rc_fialho, measure = "auc")
 
 # Print AUC
 auc_rc_hammer@y.values[[1]]
@@ -195,6 +199,7 @@ auc_rc_martin@y.values[[1]]
 auc_rc_frost@y.values[[1]]
 auc_rc_apache@y.values[[1]]
 auc_rc_cooper@y.values[[1]]
+auc_rc_fialho@y.values[[1]]
 
 
 # Plot AUC
@@ -213,7 +218,10 @@ data.frame(x = performance_rc_hammer@x.values[[1]],
                model = "APACHE-II"),
     data.frame(x = performance_rc_cooper@x.values[[1]],
                y = performance_rc_cooper@y.values[[1]],
-               model = "Cooper")
+               model = "Cooper"),
+    data.frame(x = performance_rc_fialho@x.values[[1]],
+               y = performance_rc_fialho@y.values[[1]],
+               model = "Fialho")
   ) %>% 
   ggplot(aes(x, y, colour = model))+
   geom_abline(slope = 1, intercept = 0,
@@ -224,7 +232,7 @@ data.frame(x = performance_rc_hammer@x.values[[1]],
        y = "Sensitivity")+
   theme_classic(20)+
   theme(legend.position = "top")+
-  scale_color_brewer(palette = "Set1",
+  scale_color_manual(values = brewer.pal(7, "Set1")[-6],
                      name = "")
 
 # Assess calibration-----------
@@ -243,6 +251,8 @@ deciles_rc <- tibble(
   decile_apache = ntile(apache_rc_probs, 10),
   cooper_rc_probs,
   decile_cooper = ntile(cooper_rc_probs, 10),
+  fialho_rc_probs,
+  decile_fialho = ntile(fialho_rc_probs, 10)
 )
 
 # Calculate calibration
@@ -256,13 +266,16 @@ cal_apache <- calibration(deciles_rc, "apache_rc_probs", "decile_apache") %>%
   mutate(model = "apache")
 cal_cooper <- calibration(deciles_rc, "cooper_rc_probs", "decile_cooper") %>% 
   mutate(model = "cooper")
+cal_fialho <- calibration(deciles_rc, "fialho_rc_probs", "decile_fialho") %>% 
+  mutate(model = "fialho")
 
 # Plot
 rbind(cal_hammer %>% select(-decile_hammer), 
       cal_martin %>% select(-decile_martin),
       cal_frost %>% select(-decile_frost), 
       cal_apache %>% select(-decile_apache),
-      cal_cooper %>% select(-decile_cooper)) %>% 
+      cal_cooper %>% select(-decile_cooper),
+      cal_fialho %>% select(-decile_fialho)) %>% 
   ggplot(aes(predicted, observed ,
              colour = model))+
   geom_abline(slope = 1, intercept = 0,
@@ -277,8 +290,8 @@ rbind(cal_hammer %>% select(-decile_hammer),
   theme(legend.position = "top")+
   labs(x = "Predicted readmission",
        y = "Observed readmission")+
-  scale_colour_brewer(palette = "Set1",
-                      name = "")+
+  scale_color_manual(values = brewer.pal(7, "Set1")[-6],
+                     name = "")+
   facet_wrap(~model, scales = "fixed")
 
 
@@ -293,11 +306,14 @@ hoslem_apache <- hoslem.test(patients_validate$readmission,
                              apache_rc_probs, g = 10)
 hoslem_cooper <- hoslem.test(patients_validate$readmission,
                              cooper_rc_probs, g = 10)
+hoslem_fialho <- hoslem.test(patients_validate$readmission,
+                             fialho_rc_probs, g = 10)
 hoslem_hammer
 hoslem_martin
 hoslem_frost
 hoslem_apache
 hoslem_cooper
+hoslem_fialho
 
 # Calculate brier scores
 brier_df <- rbind(
@@ -310,7 +326,9 @@ brier_df <- rbind(
   brier_extraction(patients_validate$readmission, apache_rc_probs) %>% 
     mutate(model = "apache"),
   brier_extraction(patients_validate$readmission, cooper_rc_probs) %>% 
-    mutate(model = "cooper")
+    mutate(model = "cooper"),
+  brier_extraction(patients_validate$readmission, fialho_rc_probs) %>% 
+    mutate(model = "fialho")
 )
 
 # Plot brier scores
@@ -321,24 +339,27 @@ brier_df %>%
            aes(fill = model))+
   facet_wrap(~name, scales = "free_y")+
   theme_classic(20)+
-  theme(legend.position = "none")+
+  theme(legend.position = "top")+
   labs(x = "", y = "")+
-  scale_fill_brewer(palette = "Set1",
-                    name = "")
+  scale_fill_manual(values = brewer.pal(7, "Set1")[-6],
+                     name = "")+
+  theme(axis.text.x = element_blank())
 
 # Plot combined
 data.frame(
-  model = c("hammer", "martin", "frost", "apache", "cooper"),
+  model = c("hammer", "martin", "frost", "apache", "cooper", "fialho"),
   discrimination = c(auc_rc_hammer@y.values[[1]],
                      auc_rc_martin@y.values[[1]],
                      auc_rc_frost@y.values[[1]],
                      auc_rc_apache@y.values[[1]],
-                     auc_rc_cooper@y.values[[1]]),
+                     auc_rc_cooper@y.values[[1]],
+                     auc_rc_fialho@y.values[[1]]),
   calibration = c(hoslem_hammer$statistic,
                   hoslem_martin$statistic,
                   hoslem_frost$statistic,
                   hoslem_apache$statistic,
-                  hoslem_cooper$statistic)
+                  hoslem_cooper$statistic,
+                  hoslem_fialho$statistic)
 ) %>% 
   ggplot(aes(x = discrimination,
              y = calibration))+
@@ -346,7 +367,7 @@ data.frame(
              size = 6,
              shape = 21)+
   theme_classic(20)+
-  scale_fill_brewer(palette = "Set1",
+  scale_fill_manual(values = brewer.pal(7, "Set1")[-6],
                     name = "")+
   theme(legend.position = "top")+
   scale_y_reverse()+
