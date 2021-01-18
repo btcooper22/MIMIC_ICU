@@ -11,6 +11,10 @@ require(ResourceSelection)
 require(s2dverification)
 require(scales)
 require(RColorBrewer)
+require(doParallel)
+require(caret)
+require(glmnet)
+require(tibble)
 
 source("functions/inverse_logit.R")
 source("functions/calibration.R")
@@ -136,26 +140,23 @@ fialho_recalibrate <- glm(readmission ~ final_pulse + final_temp + final_SpO2 +
 
 # Fit novel model-----------
 
-# Build formula
-formu <- paste(names(patients_train)[c(9:10, 12, 14, 16:18, 
-                                       20:25, 27:35, 51, 74)],
-               collapse = " + ")
+# Vector of acceptable features
+feature_id <- c(9:10, 12, 14, 16:18, 20:25, 27:35, 51, 74)
 
-# Build model
-dirty_model <- glm(paste("readmission", "~", formu, sep = " "),
-                   data = patients_train, family = "binomial")
+# Binarise readmission column
+patients_train %<>%
+  mutate(readmission = ifelse(readmission == TRUE, 1, 0))
 
+# Select predictor and outcome vectors
+x <- model.matrix(readmission~., patients_train[,c(7,feature_id)])[,-1]
+y <- patients_train$readmission
 
-if(file.exists("data/cooper_model.RDS"))
-{
-  cooper_model <- readRDS("data/cooper_model.RDS")
-}else
-{
-  # Automated model selection
-  cooper_model <- step(glm(readmission ~ 1, data = patients_train, family = "binomial"),
-                       scope = paste("readmission", "~", formu, sep = " "))
-  write_rds(cooper_model, "data/cooper_model.RDS")
-}
+# Find optimal lambda
+cv <- cv.glmnet(x, y, alpha = 1)
+
+# Fit model
+cooper_model <- glmnet(x, y, alpha = 1, lambda = cv$lambda.min)
+
 
 # Compare coefficients and predict---------
 
@@ -164,8 +165,18 @@ hammer_rc_probs <- predict(hammer_recalibrate, newdata = patients_validate) %>% 
 martin_rc_probs <- predict(martin_recalibrate, newdata = patients_validate) %>% inverse_logit()
 frost_rc_probs <- predict(frost_recalibrate, newdata = patients_validate) %>% inverse_logit()
 apache_rc_probs <- predict(apache_recalibrate, newdata = patients_validate) %>% inverse_logit()
-cooper_rc_probs <- predict(cooper_model, newdata = patients_validate) %>% inverse_logit()
 fialho_rc_probs <- predict(fialho_recalibrate, newdata = patients_validate) %>% inverse_logit()
+
+# Seperate section for cooper model
+cooper_rc_probs <- cooper_model %>% 
+  predict(model.matrix(readmission~., 
+                       patients_validate[,c(7,feature_id)])[,-1]) %>% 
+  as_tibble() %>% deframe()
+if(any(cooper_rc_probs < 0))
+{
+  cooper_rc_probs <- cooper_rc_probs + abs(min(cooper_rc_probs))
+}
+
 
 # Assess discrimination----------
 
@@ -366,6 +377,7 @@ optimality <- data.frame(
   mutate(optimality = sqrt(discrim_dist + calib_dist)) %>% 
   select(-discrim_dist, -calib_dist) %>% 
   arrange(optimality)
+optimality
 
 optimality %>% 
   ggplot(aes(x = discrimination,
