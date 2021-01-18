@@ -1,4 +1,4 @@
-# Packages
+# Packages and functions
 require(dplyr)
 require(readr)
 require(forcats)
@@ -11,7 +11,91 @@ require(ResourceSelection)
 require(s2dverification)
 require(scales)
 
-# Process data ----------
+source()
+
+# Process data----------
+
+# Load data
+patients <- read_csv("data/final_patients.csv")
+
+# Fix variables
+patients %<>% 
+  # Readmission
+  mutate(readmission = readmission == "Readmitted to ICU") %>% 
+  # Admission source
+  mutate(admission_source = fct_relevel(admission_source, "OT"))
+
+
+
+# Create categorised versions of continous variables----------
+
+# Factorise variables
+patients %<>% 
+  # Serum choride (98 - 107)
+  mutate(serum_chloride = case_when(
+    serum_choride > 107 ~ "High",
+    serum_choride > 98 ~ "Normal",
+    is.numeric(serum_choride) ~ "Low"
+  ),
+  # BUN (7 - 20)
+  blood_urea_nitrogen = case_when(
+    blood_urea_nitrogen > 20 ~ "High",
+    blood_urea_nitrogen > 7 ~ "Normal",
+    is.numeric(blood_urea_nitrogen) ~ "Low"
+  ),
+  # Serum glucose (< 140)
+  serum_glucose = case_when(
+    serum_glucose > 140 ~ "High",
+    is.numeric(serum_glucose) ~ "Normal"
+  ),
+  # final_pulse (60-100)
+  final_pulse = case_when(
+    final_pulse > 100 ~ "High",
+    final_pulse > 60 ~ "Normal",
+    is.numeric(final_pulse) ~ "Low"
+  ),
+  # final_temp (>36.5)
+  final_temp = case_when(
+    final_temp > 36.49 ~ "Normal",
+    is.numeric(final_temp) ~ "Low"
+  ),
+  # SpO2 (< 95)
+  final_SpO2 = case_when(
+    final_SpO2 < 95 ~ "Low",
+    is.numeric(final_SpO2) ~ "Normal"
+  ),
+  # bp *(> 100)
+  final_bp = case_when(
+    final_bp > 100 ~ "High",
+    is.numeric(final_bp) ~ "Normal"
+  ),
+  # platelets (150-450)
+  final_platelets = case_when(
+    final_platelets > 450 ~ "High",
+    final_platelets > 150 ~ "Normal",
+    is.numeric(final_platelets) ~ "Low"
+  ),
+  # Lactate (> 2)
+  final_lactate = case_when(
+    final_lactate > 2 ~ "High",
+    is.numeric(final_lactate) ~ "Normal"
+  )
+  )
+
+# Reorder factor levels
+patients %<>% 
+  mutate(serum_chloride = fct_relevel(serum_chloride, "Normal"),
+         blood_urea_nitrogen = fct_relevel(blood_urea_nitrogen, "Normal"),
+         serum_glucose = fct_relevel(serum_glucose, "Normal"),
+         final_pulse = fct_relevel(final_pulse, "Normal"),
+         final_temp = fct_relevel(final_temp, "Normal"),
+         final_SpO2 = fct_relevel(final_SpO2, "Normal"),
+         final_bp = fct_relevel(final_bp, "Normal"),
+         final_platelets = fct_relevel(final_platelets, "Normal"),
+         final_lactate = fct_relevel(final_lactate, "Normal"))
+  
+
+# Recalibrate models------------
 
 # Split data
 set.seed(123)
@@ -23,17 +107,13 @@ patients_train <- patients %>%
 patients_validate <- patients %>% 
   filter(row_id %in% patients_train$row_id == FALSE)
 
-# Create catagorised versions of continous variables based on quantiles----------
-
-# Recalibrate models------------
-
 # Hammer
 hammer_recalibrate <- glm(readmission ~ sex + general_surgery + cardiac_surgery + hyperglycemia +
                             high_apache + fluid_balance_5L + ambulation + los_5,
                           data = patients_train, family = "binomial")
 
 # Martin
-martin_recalibrate <- glm(readmission ~ respiratory_rate + age + serum_choride + blood_urea_nitrogen +
+martin_recalibrate <- glm(readmission ~ respiratory_rate + age + serum_chloride + blood_urea_nitrogen +
                             atrial_fibrillation + renal_insufficiency + serum_glucose,
                           data = patients_train, family = "binomial")
 
@@ -51,11 +131,12 @@ fialho_recalibrate <- glm(readmission ~ final_pulse + final_temp + final_SpO2 +
                             final_bp + final_platelets + final_lactate,
                           data = patients_train, family = "binomial")
 
-### Fit novel model automatically
+# Fit novel model-----------
 
 # Build formula
-formu <- paste(names(patients_train)[c(9:10, 12, 14,
-                                       16:18, 20:35, 51)], collapse = " + ")
+formu <- paste(names(patients_train)[c(9:10, 12, 14, 16:18, 
+                                       20:25, 27:35, 51, 74)],
+               collapse = " + ")
 
 # Build model
 dirty_model <- glm(paste("readmission", "~", formu, sep = " "),
@@ -72,7 +153,7 @@ if(file.exists("data/cooper_model.RDS"))
   write_rds(cooper_model, "data/cooper_model.RDS")
 }
 
-### Compare coefficients
+# Compare coefficients and predict---------
 
 ### Predict on new data
 hammer_rc_probs <- predict(hammer_recalibrate, newdata = patients_validate) %>% inverse_logit()
@@ -80,8 +161,9 @@ martin_rc_probs <- predict(martin_recalibrate, newdata = patients_validate) %>% 
 frost_rc_probs <- predict(frost_recalibrate, newdata = patients_validate) %>% inverse_logit()
 apache_rc_probs <- predict(apache_recalibrate, newdata = patients_validate) %>% inverse_logit()
 cooper_rc_probs <- predict(cooper_model, newdata = patients_validate) %>% inverse_logit()
+fialho_rc_probs <- predict(fialho_recalibrate, newdata = patients_validate) %>% inverse_logit()
 
-### Assess discrimination
+# Assess discrimination----------
 
 # Create prediction objects
 prediction_rc_hammer <- prediction(hammer_rc_probs, patients_validate$readmission)
@@ -142,7 +224,7 @@ data.frame(x = performance_rc_hammer@x.values[[1]],
   scale_color_brewer(palette = "Set1",
                      name = "")
 
-### Assess calibration
+# Assess calibration-----------
 
 # Split data into deciles
 deciles_rc <- tibble(
