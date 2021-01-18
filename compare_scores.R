@@ -311,49 +311,49 @@ probs_frost <- nomogram_convert(scores_frost, points_system_input,
 
 # Normalise fialho variables
 patients %<>% 
-  mutate(final_pulse = rescale(final_pulse, to = c(0, 1)),
-         final_temp = rescale(final_temp, to = c(0, 1)),
-         final_SpO2 = rescale(final_SpO2, to = c(0, 1)),
-         final_bp = rescale(final_bp, to = c(0, 1)),
-         final_platelets = rescale(final_platelets, to = c(0, 1)),
-         final_lactate = rescale(final_lactate, to = c(0, 1)))
+  mutate(final_pulse_n = rescale(final_pulse, to = c(0, 1)),
+         final_temp_n = rescale(final_temp, to = c(0, 1)),
+         final_SpO2_n = rescale(final_SpO2, to = c(0, 1)),
+         final_bp_n = rescale(final_bp, to = c(0, 1)),
+         final_platelets_n = rescale(final_platelets, to = c(0, 1)),
+         final_lactate_n = rescale(final_lactate, to = c(0, 1)))
 
 # Generate fuzzy thesholds
 
-threshold_pulse <- quantile(patients$final_pulse, c(0.25,0.75)) # pulse low/normal/high
-threshold_temp <- quantile(patients$final_temp, 0.75) # temp normal/high
-threshold_SpO2 <- quantile(patients$final_SpO2, 0.25) # spO2 low/normal
-threshold_bp <- quantile(patients$final_bp, c(0.25,0.75)) # bp low/normal/high
-threshold_platelets <- quantile(patients$final_platelets, 0.5) # platelets low/high
-threshold_lactate <- quantile(patients$final_lactate, c(0.125,0.75)) # lactate very low/normal/high
+threshold_pulse <- quantile(patients$final_pulse_n, c(0.25,0.75)) # pulse low/normal/high
+threshold_temp <- quantile(patients$final_temp_n, 0.75) # temp normal/high
+threshold_SpO2 <- quantile(patients$final_SpO2_n, 0.25) # spO2 low/normal
+threshold_bp <- quantile(patients$final_bp_n, c(0.25,0.75)) # bp low/normal/high
+threshold_platelets <- quantile(patients$final_platelets_n, 0.5) # platelets low/high
+threshold_lactate <- quantile(patients$final_lactate_n, c(0.125,0.75)) # lactate very low/normal/high
 
 # Create fuzzy scores
 score_pulse <- case_when(
-  patients$final_pulse > threshold_pulse[2] ~ 1,
-  patients$final_pulse > threshold_pulse[1] ~ 0,
-  is.numeric(patients$final_pulse) ~ -1)
+  patients$final_pulse_n > threshold_pulse[2] ~ 1,
+  patients$final_pulse_n > threshold_pulse[1] ~ 0,
+  is.numeric(patients$final_pulse_n) ~ -1)
 
 score_temp <- case_when(
-  patients$final_temp >= threshold_temp ~ 1,
-  is.numeric(patients$final_temp) ~ 0)
+  patients$final_temp_n >= threshold_temp ~ 1,
+  is.numeric(patients$final_temp_n) ~ 0)
 
 score_SpO2 <- case_when(
-  patients$final_SpO2 < threshold_SpO2 ~ -1,
-  is.numeric(patients$final_SpO2) ~ 0)
+  patients$final_SpO2_n < threshold_SpO2 ~ -1,
+  is.numeric(patients$final_SpO2_n) ~ 0)
 
 score_bp <- case_when(
-  patients$final_bp > threshold_bp[2] ~ 1,
-  patients$final_bp > threshold_bp[1] ~ 0,
-  is.numeric(patients$final_bp) ~ -1)
+  patients$final_bp_n > threshold_bp[2] ~ 1,
+  patients$final_bp_n > threshold_bp[1] ~ 0,
+  is.numeric(patients$final_bp_n) ~ -1)
 
 score_platelets <- case_when(
-  patients$final_platelets >= threshold_platelets ~ 1,
-  is.numeric(patients$final_platelets) ~ -1)
+  patients$final_platelets_n >= threshold_platelets ~ 1,
+  is.numeric(patients$final_platelets_n) ~ -1)
 
 score_lactate <- case_when(
-  patients$final_lactate >= threshold_lactate[2] ~ 1,
-  patients$final_lactate > threshold_lactate[1] ~ 0,
-  is.numeric(patients$final_lactate) ~ -2)
+  patients$final_lactate_n >= threshold_lactate[2] ~ 1,
+  patients$final_lactate_n > threshold_lactate[1] ~ 0,
+  is.numeric(patients$final_lactate_n) ~ -2)
 
 # Find absolute cases
 fuzzy_class_1 <- score_pulse >= 0 & score_temp == 0 & 
@@ -410,24 +410,24 @@ for(i in 1:length(marginal_cases))
 
 # Score based on fuzzy class
 coefficients_fialho <- case_when(
-  fuzzy_class == 1 ~ (0.17 * patients$final_pulse) -
-    (0.64 * patients$final_temp) +
-    (0.08 * patients$final_SpO2) -
-    (0.27 * patients$final_bp) -
-    (0.1 * patients$final_platelets) +
-    (1.3 * patients$final_lactate) + 0.54,
-  fuzzy_class == 2 ~ (0.47 * patients$final_pulse) -
-    (0.68 * patients$final_temp) +
-    (0.16 * patients$final_SpO2) +
-    (0.16 * patients$final_bp) +
-    (0.17 * patients$final_platelets) +
-    (0.1 * patients$final_lactate) + 0.06,
-  fuzzy_class == 3 ~ (-1.1 * patients$final_pulse) +
-    (3.2 * patients$final_temp) -
-    (1.0 * patients$final_SpO2) -
-    (1.5 * patients$final_bp) -
-    (1.2 * patients$final_platelets) +
-    (1.1 * patients$final_lactate) + 0.12,
+  fuzzy_class == 1 ~ (0.17 * patients$final_pulse_n) -
+    (0.64 * patients$final_temp_n) +
+    (0.08 * patients$final_SpO2_n) -
+    (0.27 * patients$final_bp_n) -
+    (0.1 * patients$final_platelets_n) +
+    (1.3 * patients$final_lactate_n) + 0.54,
+  fuzzy_class == 2 ~ (0.47 * patients$final_pulse_n) -
+    (0.68 * patients$final_temp_n) +
+    (0.16 * patients$final_SpO2_n) +
+    (0.16 * patients$final_bp_n) +
+    (0.17 * patients$final_platelets_n) +
+    (0.1 * patients$final_lactate_n) + 0.06,
+  fuzzy_class == 3 ~ (-1.1 * patients$final_pulse_n) +
+    (3.2 * patients$final_temp_n) -
+    (1.0 * patients$final_SpO2_n) -
+    (1.5 * patients$final_bp_n) -
+    (1.2 * patients$final_platelets_n) +
+    (1.1 * patients$final_lactate_n) + 0.12,
 )
 
 # Exponentiate those in class 1
@@ -443,7 +443,6 @@ debug_table %>%
 
 # Inverse logit all
 probs_fialho <- inverse_logit(coefficients_fialho)
-
 
 # Discrimination----------
 
