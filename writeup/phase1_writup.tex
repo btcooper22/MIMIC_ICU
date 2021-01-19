@@ -1,0 +1,158 @@
+\documentclass[onecolumn]{article}
+
+%Titling
+    \usepackage[compact]{titlesec}
+    \titlespacing{\section}{0pt}{3ex}{2ex}
+    \titlespacing{\subsection}{0pt}{2ex}{1ex}
+    \titlespacing{\subsubsection}{0pt}{1ex}{0.5ex}
+\titleformat*{\section}{\Large\scshape}
+\titleformat*{\subsection}{\Large}
+\titleformat{\subsubsection}
+  {\normalfont\bfseries}{\thesubsection}{1em}{}
+  
+%Page size
+	\addtolength{\oddsidemargin}{-.875in}
+	\addtolength{\evensidemargin}{-.875in}
+	\addtolength{\textwidth}{1.75in}
+
+	\addtolength{\topmargin}{-.875in}
+	\addtolength{\textheight}{1.75in}
+	
+	\parskip=.1cm
+
+\usepackage{graphicx}
+\graphicspath{ {figures/} }
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{float}
+\usepackage[table]{xcolor}
+\usepackage{multirow}
+\usepackage{tabularx} 
+\usepackage[table]{xcolor}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{textcomp}
+\usepackage{gensymb}
+\usepackage{lineno}
+\usepackage{amsmath}
+\usepackage{blindtext}
+\usepackage{texshade}
+\usepackage{bigdelim}
+\usepackage{textgreek}
+\usepackage{multicol}
+
+
+%Citations
+\usepackage[authoryear]{natbib}
+\setcitestyle{authoryear,open={(},close={)}}
+\renewcommand{\bibname}{References}
+
+\usepackage[allbordercolors = white, linkcolor = blue, citecolor = blue, colorlinks = true]{hyperref}
+\usepackage[nameinlink]{cleveref}
+
+%titling
+\title{Modelling Uncertainty in the Risk of Intensive Care Unit Readmission I: Data Extraction and Modelling}
+\date{\today}
+\author{Ben Cooper}
+
+
+\begin{document}
+\maketitle
+
+\section{Scope and Aims}
+
+This document provides a written overview of the first phase of the project. The aims of this phase were twofold:
+
+\begin{enumerate}
+\item To extract a dataset from the MIMIC-III database of surgical ICU patients, consisting of a clearly defined outcome measure (ICU readmission), and a range of predictors.
+\item To compare the performance of a range of published models for the prediction of ICU readmission risk and identify the best model to take forward. This will form the prediction model at the core of a system for quantifying uncertainty and dealing with missing data.
+\end{enumerate}
+
+\section{Introduction}
+
+\subsection{ICU readmission}
+
+% Brief background on ICU risk stuff
+
+\subsection{Readmission prediction models}
+
+% Overview of structure, strengths and shortcomings of each model
+
+\section{Methods}
+
+% Signpost remaining methods
+
+\subsection{Data Source}
+
+% Overview of MIMIC data
+
+\subsection{Inclusion critera}
+
+% Workflow in extract_patients & preprocess_data
+
+% Flowchart
+
+\subsection{Outcome measure}
+
+% Workflow in define_outcomes
+
+\subsection{Candidate models}
+
+% Outline each model and its predictors
+
+% Overview of exclusion criteria
+
+\subsection{Model comparisons}
+
+% Workflow in compare_scores
+
+\subsection{Recalibration}
+
+% Workflow in recalibrate_models
+
+\subsection{Novel model}
+
+% Workflow for cooper model
+
+% Included variables
+
+\section{Results}
+
+% ROC comparison figure (standard and recalibrated)
+
+% Calibration figure (standard and recalibrated)
+
+% AUROC and HL table (standard and recalibrated)
+%			Standard		Recalibrated
+%	Model	AUC		HL		AUC		HL
+
+\subsection{Descriptive statistics}
+
+% "Table 1" for each model's variables
+
+% Verbal overview of clear trends here
+
+\subsection{Discrimination}
+
+% Overview of discrimination, before and after recalibration
+
+\subsection{Calibration}
+
+% Overview of discrimination, before and after recalibration
+
+\section{Discussion}
+
+\subsection{Model performance}
+
+% Summarise above, make comparisons
+
+\subsection{Next steps}
+
+% Models to be taken forward
+
+\begin{multicols}{2}
+\bibliographystyle{thesis}
+{\small
+\bibliography{ICU refs}}
+
+\end{multicols}
+\end{document}
