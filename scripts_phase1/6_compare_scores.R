@@ -118,7 +118,7 @@ crosstab <- function(varname, .df = patients)
 }
 decile_cut <- function(in_var)
 {
-  quantile(in_var, probs = seq(0, 1, 0.1)) %>% 
+  quantile(in_var, probs = seq(0, 1, 0.25)) %>% 
     round()
 }
 
