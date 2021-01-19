@@ -70,8 +70,8 @@ patients %<>%
 # Filter patients with physiologically implausible values
 patients %<>% 
   mutate(physiologically_implausible = final_temp < 35 |
-           final_temp > 40 | final_SpO2 > 100 | final_bp < 22 |
-           final_bp > 136 | final_platelets > 1043)
+           final_temp > 40 | final_SpO2 > 100 | final_bp < 30 |
+           final_bp > 180 | final_platelets > 1000)
 sum(patients$physiologically_implausible)
 patients %<>% filter(physiologically_implausible == FALSE)
 
