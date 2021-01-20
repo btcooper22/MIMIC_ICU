@@ -168,13 +168,6 @@ This document provides a written overview of the first phase of the project. The
 
 \section{Results}
 
-% ROC comparison figure (standard and recalibrated)------------
-
-% Calibration figure (standard and recalibrated)------------
-
-% AUROC and HL table (standard and recalibrated)-----------
-%			Standard		Recalibrated
-%	Model	AUC		HL		AUC		HL
 
 \subsection{Descriptive statistics}
 
@@ -276,18 +269,56 @@ This document provides a written overview of the first phase of the project. The
 	\label{Table1Fialho}
 \end{table*}
 
-
-
-
 % Verbal overview of clear trends here
 
 \subsection{Discrimination}
 
+% AUROC and HL table (standard and recalibrated)-----------
+%			Standard				Recalibrated
+%	Model	AUC		HL		p 		AUC		HL		p
+
+\begin{table*}[hb]
+\centering
+	\renewcommand{\arraystretch}{1.4}
+		\caption{}% Brief description AUC and X2, explain rc. Bold x2 values shows no sig. dif. between observed and expected readmission
+		\begin{tabular}{lllrr}
+		\hline
+		Model & AUC & $ \chi^{2} $ & $ \mathrm{AUC}_{rc} $ & $ \chi^{2}_{rc} $\\
+		\hline
+		APACHE-II & 0.60 & 296.8 & 0.61 & \textbf{6.29}\\
+		Cooper & --- & --- & 0.70 & \textbf{6.17}\\
+		Fialho & 0.53 & 19010.1 & 0.58 & \textbf{6.70}\\
+		Frost & 0.61 & 402.3 & 0.66 & 17.48\\
+		Hammer & 0.65 & 130 & 0.65 & \textbf{7.57}\\
+		Martin & 0.56 & 273.7 & 0.61 & \textbf{6.06}\\
+		\hline
+		\end{tabular}
+	\label{ModelComparisonTable}
+\end{table*}
+
 % Overview of discrimination, before and after recalibration
+
+% ROC comparison figure (standard and recalibrated)
+\begin{figure}
+\centering
+	\includegraphics[width=\textwidth]{discrimination.png}
+	\caption{}
+	\label{Discrimination}
+\end{figure}
+
 
 \subsection{Calibration}
 
-% Overview of discrimination, before and after recalibration
+% Overview of calibration, before and after recalibration
+%	Above the line == under-prediction,  below == overprediction
+
+% Calibration figure (standard and recalibrated
+\begin{figure}
+\centering
+	\includegraphics[width=\textwidth]{calibration.png}
+	\caption{}
+	\label{Discrimination}
+\end{figure}
 
 \subsection{Variables retained in novel model}
 
