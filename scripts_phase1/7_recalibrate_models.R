@@ -33,7 +33,6 @@ patients %<>%
   mutate(admission_source = fct_relevel(admission_source, "OT"))
 
 
-
 # Create categorised versions of continous variables----------
 
 # Factorise variables
