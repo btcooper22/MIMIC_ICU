@@ -85,11 +85,60 @@ This document provides a written overview of the first phase of the project. The
 
 % Overview of MIMIC data
 
-\subsection{Inclusion critera}
+\subsection{Inclusion criteria}
 
 % Workflow in extract_patients & preprocess_data
 
-% Flowchart
+% Flowchart------------
+% Total patients (n = 46520)
+
+% Admitted under/transferred to a surgical service (n = 17216)
+
+% Underwent surgical procedure (n = 7716)
+
+% x Removed invalid surgery types or those with <20 patients
+%	Endocrine (14)
+%	Eye and ocular adnexa (1)
+%	Female genital system (13)
+%	Maternity care and delivery (4)
+%	Invalid codes (80)
+
+% x Removed those whose surgery was after their last ICU stay (n = 178)
+
+% ICU stay following/including surgical procedure (n = 7426)
+
+% x Removed those who died during same hospital admission (n = 567)
+
+% x Removed those with absent hospital data
+%	Chart data (18)
+%	Lab data (4)
+%	Input/output data (47)
+
+% x Removed those missing data for predictors (n = 252, multiple may apply)
+%	Respiratory rate (21)
+%	Functional mobility (180)
+%	APACHE-II score (91)
+
+
+% x Removed those missing data for the 24h before discharge for predictors (n = 1070, multiple may apply)
+%	Serum glucose (123)
+%	Serum haemoglobin (157)
+%	Mean arterial pressure (1)
+%	Lactic acid (925)
+%	Platelet count(137)
+%	Oxygen saturation (3)
+%	Heart rate (1)
+%	Temperature (9)
+
+% x Removed those with physiologically implausible measurements (n = 184, multiple may apply)
+%	Temperature < 35 (17)
+%	Temperature > 40 (42)
+%	Oxygen saturation > 100 (3)
+% 	Mean arterial pressure < 30 (49)
+% 	Mean arterial pressure > 180 (63)
+%	Platelet count > 1000 k/ul (10)
+
+% Final sample (n = 5286) 
 
 \subsection{Outcome measure}
 
@@ -98,6 +147,8 @@ This document provides a written overview of the first phase of the project. The
 \subsection{Candidate models}
 
 % Outline each model and its predictors
+
+% Overview of APACHE-II system
 
 % Overview of exclusion criteria
 
@@ -117,17 +168,116 @@ This document provides a written overview of the first phase of the project. The
 
 \section{Results}
 
-% ROC comparison figure (standard and recalibrated)
+% ROC comparison figure (standard and recalibrated)------------
 
-% Calibration figure (standard and recalibrated)
+% Calibration figure (standard and recalibrated)------------
 
-% AUROC and HL table (standard and recalibrated)
+% AUROC and HL table (standard and recalibrated)-----------
 %			Standard		Recalibrated
 %	Model	AUC		HL		AUC		HL
 
 \subsection{Descriptive statistics}
 
 % "Table 1" for each model's variables
+
+\begin{table*}[hb]
+\centering
+	\renewcommand{\arraystretch}{1.4}
+		\caption{}% APACHE-II on admission, hyperglycemia, anaemia and ambulation in 24h, fluid balacne over stay
+	\begin{tabular}{lp{2.5cm}p{2cm}}
+		\hline
+		Variable & No Readmission & Readmitted to ICU\\
+		\hline
+		N & 4944 (93.5\%)  &      342 (6.5\%)\\
+		Sex &&\\
+		\quad Male & 3121 (63.1\%)   &    207 (60.5\%)\\
+		\quad Female & 1823 (36.9\%)  &     135 (39.5\%)\\
+		General surgery & 1167 (23.6\%)   &    136 (39.8\%)\\
+		Cardiac surgery & 2423 (49\%)     &   93 (27.2\%)\\
+		Hyperglycaemia & 475 (9.6\%)    &    35 (10.2\%)\\
+		Severe anaemia & 35 (0.7\%)      &    1 (0.3\%)\\
+		APACHE-II > 20 &  2397 (48.5\%)  &       164 (48\%)\\
+		Positive fluid&&\\
+		balance >5L & 768 (15.5\%)  &      95 (27.8\%)\\
+		No ambulation & 3882 (78.5\%)   &    298 (87.1\%)\\
+		ICU stay >5 days & 1244 (25.2\%)   &    124 (36.3\%)\\
+		\hline
+	\end{tabular}
+	\label{Table1Hammer}
+\end{table*}
+
+\begin{table*}[hb]
+\centering
+	\renewcommand{\arraystretch}{1.4}
+		\caption{}% Cont. vars presented +- sd, apache at discharge
+	\begin{tabular}{lp{2.5cm}p{2cm}}
+		\hline
+		Variable & No Readmission & Readmitted to ICU\\
+		\hline
+		N & 4944 (93.5\%)  &      342 (6.5\%)\\
+		Age & 64.2 $\pm$ 14.5 & 63.5 $\pm$ 14.5\\
+		Sex &&\\
+		\quad Male & 3121 (63.1\%)   &    207 (60.5\%)\\
+		\quad Female & 1823 (36.9\%)  &     135 (39.5\%)\\
+		Elective admission & 1980 (40\%)  &     104 (30.4\%)\\
+		Admission source &&\\
+		\quad Operating theatre &2246 (45.4\%)    &   120 (35.1\%)\\
+		\quad Emergency room &769 (15.6\%)  &      91 (26.6\%)\\
+		\quad Other hospital &976 (19.7\%)    &    69 (20.2\%)\\
+		\quad Ward &953 (19.3\%)   &     62 (18.1\%)\\
+		APACHE-II score & 10.4 $ \pm $ 4.70 & 12.0 $ \pm $ 4.87\\
+		ICU stay >7 days & 864 (17.5\%)   &     98 (28.7\%)\\
+		Discharged after hours & 2874 (58.1\%)    &   223 (65.2\%)\\
+		Acute renal failure & 788 (15.9\%)   &    125 (36.5\%)\\
+		\hline
+	\end{tabular}
+	\label{Table1Frost}
+\end{table*}
+
+
+\begin{table*}[hb]
+\centering
+	\renewcommand{\arraystretch}{1.4}
+		\caption{}% Cont. vars presented +- sd, give units. BUN & glucose mg/dl, chloride in mmol\L, hx = history
+	\begin{tabular}{lp{2.5cm}p{2cm}}
+		\hline
+		Variable & No Readmission & Readmitted to ICU\\
+		\hline
+		N & 4944 (93.5\%)  &      342 (6.5\%)\\
+		Age & 64.2 $\pm$ 14.5 & 63.5 $\pm$ 14.5\\
+		Respiratory rate & 18.4 $ \pm $ 3.89 & 19.2 $ \pm $ 3.91\\
+		Blood urea nitrogen & 22.8 $ \pm $ 16.3 & 27.8 $ \pm $ 20.9\\
+		Serum glucose & 129 $ \pm $ 29.0 & 126 $ \pm $ 29.2\\
+		Serum chloride & 105 $ \pm $ 4.4& 105 $\pm$ 4.7 \\
+		Hx atrial fibrillation&1565 (31.7\%)    &   129 (37.7\%)\\
+		Hx renal insufficiency &261 (5.3\%)    &     31 (9.1\%)\\
+		\hline
+	\end{tabular}
+	\label{Table1Martin}
+\end{table*}
+
+\begin{table*}[hb]
+\centering
+	\renewcommand{\arraystretch}{1.4}
+		\caption{}% Cont. vars presented +- sd, give units. Temp = deg c, HR = bpm, spo2 = %, mean arterial pressure = mmHg (estimated), platelets = k/ul, lactate = mmol/L. All mean over final 24h before discharge
+	\begin{tabular}{lp{2.5cm}p{2cm}}
+		\hline
+		Variable & No Readmission & Readmitted to ICU\\
+		\hline
+		N & 4944 (93.5\%)  &      342 (6.5\%)\\
+		Heart rate & 83.9 $\pm$ 12.2 & 84.8 $\pm$ 13.4\\
+		Temperature & 36.8 $\pm$ 0.51 &  36.8 $\pm$ 0.55\\
+		Oxygen saturation & 96.8 $\pm$ 1.64 & 96.8 $\pm$ 1.69\\
+		Mean arterial pressure & 81.2 $\pm$ 14.6 & 85.0 $\pm$ 16.0\\
+		Platelets & 221 $\pm$ 131 & 241 $\pm$ 154\\
+		Lactic acid & 1.68 $\pm$ 0.82 & 1.58 $\pm$ 0.82\\
+		\hline
+	\end{tabular}
+	\label{Table1Fialho}
+\end{table*}
+
+
+
 
 % Verbal overview of clear trends here
 
@@ -138,6 +288,8 @@ This document provides a written overview of the first phase of the project. The
 \subsection{Calibration}
 
 % Overview of discrimination, before and after recalibration
+
+\subsection{Variables retained in novel model}
 
 \section{Discussion}
 
