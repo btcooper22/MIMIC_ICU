@@ -147,5 +147,85 @@ discrimination_standard %>%
                       name = "")
 
 # Save
-ggsave("writeup/figures/calibration.png")
+ggsave("writeup/figures/discrimination.png", 
+       width = 14, height = 8)
 
+# Calibration plots-------
+
+firstup <- function(x) {
+  substr(x, 1, 1) <- toupper(substr(x, 1, 1))
+  x
+}
+
+# Generate standard calibration
+run_lines("scripts_phase1/6_compare_scores.R", 1:539)
+calibration_standard <- rbind(cal_hammer %>% select(-decile_hammer), 
+                              cal_martin %>% select(-decile_martin),
+                              cal_frost %>% select(-decile_frost), 
+                              cal_apache %>% select(-decile_apache),
+                              cal_fialho %>% select(-decile_fialho)) %>% 
+  mutate(type = "Standard")
+
+# Generate recalibration
+run_lines("scripts_phase1/7_recalibrate_models.R", 1:250)
+calibration_recalibrated <- rbind(cal_hammer %>% select(-decile_hammer), 
+                              cal_martin %>% select(-decile_martin),
+                              cal_frost %>% select(-decile_frost), 
+                              cal_apache %>% select(-decile_apache),
+                              cal_fialho %>% select(-decile_fialho),
+                              cal_cooper %>% select(-decile_cooper)) %>% 
+  mutate(type = "Recalibrated")
+
+# Combine and clean
+calibration_plot <- calibration_standard %>% 
+  rbind(calibration_recalibrated) %>% 
+  # Convert model names to upper case
+  mutate(model = firstup(model)) %>% 
+  mutate(model = ifelse(model == "Apache", "APACHE-II", model)) %>% 
+  # Create combined model-type variable
+  mutate(model_type = paste(model, type, sep = ": ")) %>% 
+  # Reorder variable
+  mutate(model_type = ifelse(model_type == "Cooper: Recalibrated",
+                "Cooper", model_type)) %>% 
+  mutate(model_type = fct_relevel(model_type, "APACHE-II: Standard",
+                                  "APACHE-II: Recalibrated",
+                                  "Cooper",
+                                  "Fialho: Standard",
+                                  "Fialho: Recalibrated",
+                                  "Frost: Standard",
+                                  "Frost: Recalibrated",
+                                  "Hammer: Standard",
+                                  "Hammer: Recalibrated",
+                                  "Martin: Standard",
+                                  "Martin: Recalibrated",
+                                  ))
+  
+# Plot
+calibration_plot %>% 
+  ggplot(aes(predicted, observed ,
+             colour = model_type))+
+  geom_abline(slope = 1, intercept = 0,
+              size = 1)+
+  geom_path(size = 1)+
+  geom_pointrange(aes(ymin = observed - error ,
+                      ymax = observed + error,
+                      y = observed,
+                      x = predicted,
+                      colour = model_type)) +
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  labs(x = "Predicted readmission",
+       y = "Observed readmission")+
+  facet_wrap(~model, scales = "free")+
+  scale_colour_manual(values = c("#1f78b4", "#a6cee3", "#b15928",
+                                 "#e31a1c", "#fb9a99",
+                                 "#ff7f00", "#fdbf6f",
+                                 "#6a3d9a", "#cab2d6",
+                                 "#33a02c", "#b2df8a"),
+                      name = "")
+
+# Save
+ggsave("writeup/figures/calibration.png", 
+       width = 14, height = 8)
+
+# Model performance table---------

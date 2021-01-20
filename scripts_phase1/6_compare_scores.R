@@ -562,15 +562,15 @@ rbind(cal_hammer %>% select(-decile_hammer),
 
 
 # Calculate hosmer-lemeshow chi-squared
-hoslem.test(patients$readmission == "Readmitted to ICU",
+hoslem_hammer <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_hammer, g = 10)
-hoslem.test(patients$readmission == "Readmitted to ICU",
+hoslem_martin <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_martin, g = 10)
-hoslem.test(patients$readmission == "Readmitted to ICU",
+hoslem_frost <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_frost, g = 10)
-hoslem.test(patients$readmission == "Readmitted to ICU",
+hoslem_hammer <- hoslem.test(patients$readmission == "Readmitted to ICU",
             patients$apache_II_discharge / 200, g = 10)
-hoslem.test(patients$readmission == "Readmitted to ICU",
+hoslem_hammer <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_fialho, g = 10)
 
 # Calculate brier scores

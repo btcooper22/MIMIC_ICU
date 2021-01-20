@@ -275,24 +275,24 @@ rbind(cal_hammer %>% select(-decile_hammer),
 
 
 # Calculate hosmer-lemeshow chi-squared
-hoslem_hammer <- hoslem.test(patients_validate$readmission,
+hoslem_rc_hammer <- hoslem.test(patients_validate$readmission,
                              hammer_rc_probs, g = 10)
-hoslem_martin <- hoslem.test(patients_validate$readmission,
+hoslem_rc_martin <- hoslem.test(patients_validate$readmission,
                              martin_rc_probs, g = 10)
-hoslem_frost <- hoslem.test(patients_validate$readmission,
+hoslem_rc_frost <- hoslem.test(patients_validate$readmission,
                             frost_rc_probs, g = 10)
-hoslem_apache <- hoslem.test(patients_validate$readmission,
+hoslem_rc_apache <- hoslem.test(patients_validate$readmission,
                              apache_rc_probs, g = 10)
-hoslem_cooper <- hoslem.test(patients_validate$readmission,
+hoslem_rc_cooper <- hoslem.test(patients_validate$readmission,
                              cooper_rc_probs, g = 10)
-hoslem_fialho <- hoslem.test(patients_validate$readmission,
+hoslem_rc_fialho <- hoslem.test(patients_validate$readmission,
                              fialho_rc_probs, g = 10)
-hoslem_hammer
-hoslem_martin
-hoslem_frost
-hoslem_apache
-hoslem_cooper
-hoslem_fialho
+hoslem_rc_hammer
+hoslem_rc_martin
+hoslem_rc_frost
+hoslem_rc_apache
+hoslem_rc_cooper
+hoslem_rc_fialho
 
 # Calculate brier scores
 brier_df <- rbind(
