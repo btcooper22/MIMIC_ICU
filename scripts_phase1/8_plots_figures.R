@@ -229,3 +229,44 @@ ggsave("writeup/figures/calibration.png",
        width = 14, height = 8)
 
 # Model performance table---------
+require(kableExtra)
+
+# Load hosmer-lemeshow tests
+run_lines("scripts_phase1/6_compare_scores.R", 565:575)
+run_lines("scripts_phase1/7_recalibrate_models.R", 278:289)
+
+model_table <- data.frame(
+  Model = c("APACHE-II", "Cooper", "Fialho",
+            "Frost", "Hammer", "Martin"),
+  AUC = c(
+    auc_apache@y.values[[1]] %>% round(2),
+    "---",
+    auc_fialho@y.values[[1]] %>% round(2),
+    auc_frost@y.values[[1]] %>% round(2),
+    auc_hammer@y.values[[1]] %>% round(2),
+    auc_martin@y.values[[1]] %>% round(2)
+  ),
+  chisqr = c(hoslem_apache$statistic %>% round(1),
+             "---",
+             hoslem_fialho$statistic %>% round(1),
+             hoslem_frost$statistic %>% round(1),
+             hoslem_hammer$statistic %>% round(1),
+             hoslem_martin$statistic %>% round(1)),
+  AUC_rc = c(
+    auc_rc_apache@y.values[[1]] %>% round(2),
+    auc_rc_cooper@y.values[[1]] %>% round(2),
+    auc_rc_fialho@y.values[[1]] %>% round(2),
+    auc_rc_frost@y.values[[1]] %>% round(2),
+    auc_rc_hammer@y.values[[1]] %>% round(2),
+    auc_rc_martin@y.values[[1]] %>% round(2)
+  ),
+  chisqr_rc = c(hoslem_rc_apache$statistic %>% round(2),
+             hoslem_rc_cooper$statistic %>% round(2),
+             hoslem_rc_fialho$statistic %>% round(2),
+             hoslem_rc_frost$statistic %>% round(2),
+             hoslem_rc_hammer$statistic %>% round(2),
+             hoslem_rc_martin$statistic %>% round(2))
+)
+
+model_table %>% 
+  kable("latex", booktabs = TRUE)

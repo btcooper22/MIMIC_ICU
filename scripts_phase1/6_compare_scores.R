@@ -568,9 +568,9 @@ hoslem_martin <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_martin, g = 10)
 hoslem_frost <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_frost, g = 10)
-hoslem_hammer <- hoslem.test(patients$readmission == "Readmitted to ICU",
+hoslem_apache <- hoslem.test(patients$readmission == "Readmitted to ICU",
             patients$apache_II_discharge / 200, g = 10)
-hoslem_hammer <- hoslem.test(patients$readmission == "Readmitted to ICU",
+hoslem_fialho <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_fialho, g = 10)
 
 # Calculate brier scores
