@@ -40,6 +40,12 @@
 \usepackage{textgreek}
 \usepackage{multicol}
 
+% tikz setup
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows}
+\newcommand*{\h}{\hspace{5pt}}% for indentation
+\newcommand*{\hh}{\h\h}% double indentation
+
 
 %Citations
 \usepackage[authoryear]{natbib}
@@ -90,55 +96,96 @@ This document provides a written overview of the first phase of the project. The
 % Workflow in extract_patients & preprocess_data
 
 % Flowchart------------
-% Total patients (n = 46520)
-
-% Admitted under/transferred to a surgical service (n = 17216)
-
-% Underwent surgical procedure (n = 7716)
-
-% x Removed invalid surgery types or those with <20 patients
-%	Endocrine (14)
-%	Eye and ocular adnexa (1)
-%	Female genital system (13)
-%	Maternity care and delivery (4)
-%	Invalid codes (80)
-
-% x Removed those whose surgery was after their last ICU stay (n = 178)
-
-% ICU stay following/including surgical procedure (n = 7426)
-
-% x Removed those who died during same hospital admission (n = 567)
-
-% x Removed those with absent hospital data
-%	Chart data (18)
-%	Lab data (4)
-%	Input/output data (47)
-
-% x Removed those missing data for predictors (n = 252, multiple may apply)
-%	Respiratory rate (21)
-%	Functional mobility (180)
-%	APACHE-II score (91)
-
-
-% x Removed those missing data for the 24h before discharge for predictors (n = 1070, multiple may apply)
-%	Serum glucose (123)
-%	Serum haemoglobin (157)
-%	Mean arterial pressure (1)
-%	Lactic acid (925)
-%	Platelet count(137)
-%	Oxygen saturation (3)
-%	Heart rate (1)
-%	Temperature (9)
-
-% x Removed those with physiologically implausible measurements (n = 184, multiple may apply)
-%	Temperature < 35 (17)
-%	Temperature > 40 (42)
-%	Oxygen saturation > 100 (3)
-% 	Mean arterial pressure < 30 (49)
-% 	Mean arterial pressure > 180 (63)
-%	Platelet count > 1000 k/ul (10)
-
-% Final sample (n = 5286) 
+\begin{figure}
+\centering
+  \caption{Flowchart of participants' progress through
+    the phases of the trial}
+  % setting the typeface to sans serif and the font size to small
+  % the scope local to the environment
+  \sffamily
+  \footnotesize
+  \begin{tikzpicture}[auto,
+    block_center/.style ={rectangle, draw=black, thick, fill=white,
+      text width=10em, text centered,
+      minimum height=4em},
+    block_left/.style ={rectangle, draw=black, thick, fill=white,
+      text width=20em, text ragged, minimum height=4em, inner sep=6pt},
+      line/.style ={draw, thick, -latex', shorten >=0pt},
+          block_noborder/.style ={rectangle, draw=none, thick, fill=none,
+      text width=-4em, text centered, minimum height=1em}]
+    % outlining the flowchart using the PGF/TikZ matrix funtion
+    \matrix [column sep=5mm,row sep=3mm] {
+      % row 1
+      & \node [block_center] (full) {Patients in MIMIC-III database (n=46,520)};\\
+      % row 2
+      &\node [block_center] (service) {Admitted under or transferred to a sugical service (n=17,216)}; \\
+      % row 3
+      &\node [block_center] (procedure) {Underwent surgical procedure (n=7,716)};       
+      & \node [block_left] (invalidprocedure) {Removed invalid surgery types or those with <20 patients (n = 112): \\
+        \h Endocrine (14)\\
+        \h Eye and ocular adnexa (1)\\
+        \h Female genital system (13)\\
+        \h Maternity care and delivery (4)\\
+        \h Invalid or missing procedure codes (80)
+        }; \\
+      % row 4
+        &\node [block_center] (icuprocedure) {ICU stay following or including surgical procedure (n=7,426)};       
+      & \node [block_left] (procedure_after_icu) {Removed patients whose surgery was after their last ICU stay (n=178)}; \\
+      % row 5  
+       \node [block_left] (mortality) {Removed patients who died during same \mbox{hospital} admission (n=567)}; &
+       \node [block_noborder] (hidden_r5) {};&
+      \node [block_left] (absent_charts) {Removed patients with absent hospital data (n=69): \\
+        \h Chart data (18)\\
+        \h Input/output data (47)\\
+        \h Lab data (4)
+        }; \\  
+              % row 6  
+       \node [block_left] (missing_predictors) {Removed patients missing data for predictors (n=252, multiple may apply):\\
+		\h Functional mobility (180)\\
+		\h APACHE-II score (91)\\
+		 \h Respiratory rate (21)}; &
+       \node [block_noborder] (hidden_r6) {};&
+      \node [block_left] (missing_24h) {Removed those missing data for the 24h before discharge for predictors (n=1,070, multiple may apply): \\
+		\h Lactic acid (925)\\
+		\h Serum haemoglobin (157)\\
+		\h Platelet count(137)\\
+		\h Serum glucose (123)\\
+		\h Temperature (9)\\
+		\h Oxygen saturation (3)\\
+		\h Heart rate (1)\\
+		\h Mean arterial pressure (1)
+        }; \\  
+        % row 7  
+       &
+       \node [block_noborder] (hidden_r7) {};&
+      \node [block_left] (implausible) {Removed those with physiologically implausible measurements (n=184, multiple may apply): \\
+		\h Mean arterial pressure > 180 mmHg (63)\\
+	 	\h Mean arterial pressure < 30 mmHg (49)\\
+		\h Temperature > 40 $^\circ$C (42)\\
+		\h Temperature < 35 $^\circ$C (17)\\
+		\h Platelet count > 1000 K/$\micro$L (10)\\
+		\h Oxygen saturation > 100 \% (3)
+        }; \\  
+        % row 8  
+       &
+       \node [block_center] (final) {Final sample (n=5,286)};& \\  
+      };
+    % end matrix
+    % connecting nodes with paths
+    \begin{scope}[every path/.style=line]
+      \path (full)   -- (service);
+      \path (service) -- (procedure);
+      \path (procedure) -- (icuprocedure);
+      \path (icuprocedure) -- (procedure_after_icu);
+      \path (hidden_r5) -- (absent_charts);
+      \path (hidden_r5) -- (mortality);
+      \path (icuprocedure) -- (final);
+      \path (hidden_r6) -- (missing_predictors);
+      \path (hidden_r6) -- (missing_24h);
+      \path (hidden_r7) -- (implausible);
+    \end{scope}
+  \end{tikzpicture}
+\end{figure}
 
 \subsection{Outcome measure}
 
@@ -303,7 +350,7 @@ This document provides a written overview of the first phase of the project. The
 \centering
 	\includegraphics[width=\textwidth]{discrimination.png}
 	\caption{}
-	\label{Discrimination}
+	\label{DiscriminationFig}
 \end{figure}
 
 
@@ -317,7 +364,7 @@ This document provides a written overview of the first phase of the project. The
 \centering
 	\includegraphics[width=\textwidth]{calibration.png}
 	\caption{}
-	\label{Discrimination}
+	\label{CalibrationFig}
 \end{figure}
 
 \subsection{Variables retained in novel model}
