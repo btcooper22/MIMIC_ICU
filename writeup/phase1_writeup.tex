@@ -7,7 +7,7 @@
     \titlespacing{\subsubsection}{0pt}{1ex}{0.5ex}
 \titleformat*{\section}{\Large\scshape}
 \titleformat*{\subsection}{\Large}
-\titleformat{\subsubsection}
+\titleformat{\subsubsection}[runin]
   {\normalfont\bfseries}{\thesubsection}{1em}{}
   
 %Page size
@@ -19,6 +19,15 @@
 	\addtolength{\textheight}{1.75in}
 	
 	\parskip=.1cm
+	
+%Indented paragraph
+\setlength{\parindent}{0pt}
+\newenvironment{indentpar}[1]
+  {\begin{list}{}
+          {\setlength{\rightmargin}{#1}}
+          \item[]
+  }
+  {\end{list}}
 
 \usepackage{graphicx}
 \graphicspath{ {figures/} }
@@ -82,7 +91,7 @@ This document provides a written overview of the first phase of the project. The
 \subsection{Readmission prediction models}
 
 % Overview of structure, strengths and shortcomings of each model
-This report will investigate five models for ICU risk prediction. I will give a brief overview of all five here. Further details on their predictors, statistical approaches and validations are given in \Cref{CandidateModels}.
+This report will investigate five models for ICU risk prediction. I will give a brief overview of all five here. Further details on their predictors, statistical approaches and validations are given in \Cref{CandidateModels}. Henceforth, all models will be referred to by the name of the first author, with the exception of the APACHE-II system.
 % APACHE-II
 The first `model' is the APACHE-II scoring system devised by \cite{Knaus1985}. `Model' is used in inverted commas, as this model was not designed for predicting ICU readmission risk, but instead is a general system to score the severity of a patient's condition using 12 routine physiological variables, age, and medical history. Increasing APACHE-II score has been shown to correlate well with increasing risk of in-hospital mortality for ICU patients. 
 % Frost
@@ -118,7 +127,6 @@ An overview of inclusion and exclusion criteria is shown in \Cref{Flowchart}. In
 % Flowchart------------
 \begin{figure}
 \centering
-\label{Flowchart}
   \caption{Flowchart of inclusion and exclusion criteria for patients in the dataset, alongside sample sizes at each step.}
   % setting the typeface to sans serif and the font size to small
   % the scope local to the environment
@@ -204,76 +212,43 @@ An overview of inclusion and exclusion criteria is shown in \Cref{Flowchart}. In
       \path (hidden_r6) -- (implausible);
       \path (hidden_r6) -- (missing_24h);
       \path (hidden_r7) -- (mortality);
-    \end{scope}
-   
+    \end{scope}  
   \end{tikzpicture}
+  \label{Flowchart}
 \end{figure}
 
 \subsection{Outcome measure}
 
 % Workflow in define_outcomes
-
+The `readmission' outcome measure is defined as patients readmitted to the ICU within the same hospitalisation event. Thus, patients discharged fully from the hospital and then readmitted are excluded, even if they were then readmitted to ICU. This is the same outcome measure used by the Frost and Hammer models, whilst the Martin and Fialho models use any readmission within 72 h of discharge.
 % All models but martin use within same hosp (martin == 72h)
 
 \subsection{Candidate models}
 \label{CandidateModels}
 
-% Outline each model and its predictors and AUC/calibration
+Here, I will give an overview of each model, as well as the model performance metrics given in the paper deriving each model (with the exception of APACHE-II). In general, the performance of binary prediction models can be measured in two separate but related metrics using an unseen validation dataset. Discrimination is usually measured as the area under the Receiver Operating Characteristic curve (called AUROC or AUC). It measures the model's ability, when presented with two patients, one of whom was readmitted and one of whom was not, to give a greater probability of readmission to the patient who was readmitted. Its values range from 0.5, indicating a model no better than guessing, to 1, indicating perfect discrimination. Crudely, discrimination can be classified as poor (0.5--0.6), moderate (0.6--0.7), good (0.7--0.8), very good (0.8--0.9) and excellent (>0.9).
+
+Calibration measures the agreement between a model's predicted readmission, and observed readmission. This is usually performed by splitting patients into deciles based on assigned readmission probability, then comparing observed to expected readmission rates within each decile. This goodness-of-fit can then be formally assessed using a Hosmer-Lemeshow Chi-squared ($ \chi^{2} $) test, with a well-calibrated model showing no significant differences between observed and expected readmission.
+
+For each model I also present a cross-tabulation of the model's predictors with readmission status from the MIMIC-III dataset, to demonstrate the expected relationship between each predictor and readmission.
 
 % Overview of APACHE-II system
+\subsubsection*{APACHE-II.}
+
+The APACHE-II system was not designed to specifically predict ICU readmission, but rather to assess the severity of a patient's condition. Nonetheless, it has shown to be an informative predictor of ICU readmission \citep{Campbell2008}, and as such is used in both the Hammer and Frost models. This makes it a good `baseline' predictive model to compare others too. It comprises a scoring system across 12 variables: Core temperature, mean arterial pressure, heart rate, respiratory rate, oxygenation (arterial partial pressure if fraction of inspired oxygen < 0.5, else arterial-alveolar gradient), arterial pH, serum sodium, serum potassium, serum creatinine, haematocrit, white blood cell count and Glasgow coma score. Serum bicarbonate levels are also used if arterial blood gas measurements are not present.
+
+Each variable scores 0 if in a `normal' range, with increasingly higher scores for abnormally low or high values. The worst value for each variable in the preceding 24 h is used to determine the score. Additional points are then given for increasing age, emergency admissions and the presence of certain comorbidities. The resulting score falls between 0 and 71, with higher values indicating a more severe condition.
 
 
-\subsection{Model comparisons}
+% Outline each model and its predictors and AUC/calibration
+\subsubsection*{Frost.} 
 
-% Workflow in compare_scores
+The Frost model is based on a logistic regression model, and includes the following variables (\Cref{Table1Frost}): Age, sex, elective admission (yes/no), admission source (Operating theatre/recovery ward, emergency department, other hospital or general ward), APACHE-II score at discharge, ICU stay duration > 7 days (yes/no), discharge outside the hours of 08:00--16:00, and acute renal failure during ICU stay (yes/no). Each variable carries a number of points, the sum of which is used to determine readmission risk. Unfortunately, the coefficients linking variables to score, and total score to readmission risk are not presented, and must be inferred from the nomogram. In most cases, variables map clearly onto discrete score values. However, the mapping between total score and readmission is neither linear, nor fully exponential. This relationship has been approximated in my workflow, but may result in poor calibration. The authors report moderate discrimination (AUC = 0.66), and do not quantitatively report calibration, only describing it as `good'.
 
-\subsection{Recalibration}
-
-% Workflow in recalibrate_models
-
-\subsection{Novel model}
-
-% Workflow for cooper model
-
-% Included variables
-
-\section{Results}
-
-
-\subsection{Descriptive statistics}
-
-% "Table 1" for each model's variables
-
-\begin{table*}[hb]
+\begin{table*}[h]
 \centering
 	\renewcommand{\arraystretch}{1.4}
-		\caption{}% APACHE-II on admission, hyperglycemia, anaemia and ambulation in 24h, fluid balacne over stay
-	\begin{tabular}{lp{2.5cm}p{2cm}}
-		\hline
-		Variable & No Readmission & Readmitted to ICU\\
-		\hline
-		N & 4944 (93.5\%)  &      342 (6.5\%)\\
-		Sex &&\\
-		\quad Male & 3121 (63.1\%)   &    207 (60.5\%)\\
-		\quad Female & 1823 (36.9\%)  &     135 (39.5\%)\\
-		General surgery & 1167 (23.6\%)   &    136 (39.8\%)\\
-		Cardiac surgery & 2423 (49\%)     &   93 (27.2\%)\\
-		Hyperglycaemia & 475 (9.6\%)    &    35 (10.2\%)\\
-		Severe anaemia & 35 (0.7\%)      &    1 (0.3\%)\\
-		APACHE-II > 20 &  2397 (48.5\%)  &       164 (48\%)\\
-		Positive fluid&&\\
-		balance >5L & 768 (15.5\%)  &      95 (27.8\%)\\
-		No ambulation & 3882 (78.5\%)   &    298 (87.1\%)\\
-		ICU stay >5 days & 1244 (25.2\%)   &    124 (36.3\%)\\
-		\hline
-	\end{tabular}
-	\label{Table1Hammer}
-\end{table*}
-
-\begin{table*}[hb]
-\centering
-	\renewcommand{\arraystretch}{1.4}
-		\caption{}% Cont. vars presented +- sd, apache at discharge
+		\caption{Cross-tabulation of variables in the Frost model with ICU readmission status in the MIMIC-III dataset. Continuous variables are presented as means $\pm$ standard deviation. The APACHE-II is measured at or close to discharge.}
 	\begin{tabular}{lp{2.5cm}p{2cm}}
 		\hline
 		Variable & No Readmission & Readmitted to ICU\\
@@ -298,11 +273,48 @@ An overview of inclusion and exclusion criteria is shown in \Cref{Flowchart}. In
 	\label{Table1Frost}
 \end{table*}
 
+\subsubsection*{Fialho.}
 
-\begin{table*}[hb]
+The Fialho model was built using MIMIC-II, the predecessor of the MIMIC-III database. It was initially trained using a wide range of physiological variables measured in the 24 h before ICU discharge. Sequential forward selection was used to produce a final model with the following variables (\Cref{Table1Fialho}): Mean heart rate, mean temperature, mean oxygen saturation, mean non-invasive arterial pressure, mean platelet count and mean lactic acid.
+
+Unlike the other models discussed here, the Fialho model is based on fuzzy logic, rather than a classical logistic regression model. This takes the form of, in this case, three logistic regression-like models. Which model to use for a given individual depends on the fuzzy rules, for example:
+
+\begin{indentpar}{1cm}
+\textbf{If} mean heart rate is normal/high \textbf{and} mean temperature is normal \textbf{and} mean oxygen saturation is normal \textbf{and} mean non-invasive blood pressure (mean) is normal/high \textbf{and} mean platelets is high \textbf{and} mean lactic acid is very low, \textbf{then} y1 = 0.17 $\times$ mean heart rate - 0.64 $\times$ mean temperature + 0.08 $\times$ mean oxygen saturation - 0.27 $\times$ mean non-invasive blood pressure (mean) - 0.1 $\times$ mean platelets + 1.3 $\times$ mean lactic acid + 0.54
+\end{indentpar}
+
+As the name `fuzzy rules' implies, these rules are not clearly defined by the system, which makes them very hard to implement, let alone validate, in any other setting. My approach here was to find which of the three `fuzzy classes' an individual best fits, based on using quantiles to determine `high'/`low' etc. The Fialho model reports good discrimination (AUC = 0.76) and moderate calibration (Hosmer-Lemeshow $ \chi^{2} $ \textit{p}-value = 0.06, where \textit{p} < 0.05 indicates significant differences between observed and expected readmission).
+
+\begin{table*}[h]
 \centering
 	\renewcommand{\arraystretch}{1.4}
-		\caption{}% Cont. vars presented +- sd, give units. BUN & glucose mg/dl, chloride in mmol\L, hx = history
+		\caption{Cross-tabulation of variables in the Fialho model with ICU readmission status in the MIMIC-III dataset. Continuous variables are presented as means $\pm$ standard deviation. Mean arterial pressure is estimated from non-invasive systolic and diastolic blood pressure measurements. All variables represent the mean value over the final 24 h before discharge from ICU.}
+	\begin{tabular}{lp{2.5cm}p{2cm}}
+		\hline
+		Variable & No Readmission & Readmitted to ICU\\
+		\hline
+		N & 4944 (93.5\%)  &      342 (6.5\%)\\
+		Heart rate (bpm) & 83.9 $\pm$ 12.2 & 84.8 $\pm$ 13.4\\
+		Temperature ($^\circ$C) & 36.8 $\pm$ 0.51 &  36.8 $\pm$ 0.55\\
+		Oxygen saturation (\%) & 96.8 $\pm$ 1.64 & 96.8 $\pm$ 1.69\\
+		Mean arterial pressure (mmHg) & 81.2 $\pm$ 14.6 & 85.0 $\pm$ 16.0\\
+		Platelets (K/$\micro$L) & 221 $\pm$ 131 & 241 $\pm$ 154\\
+		Lactic acid (mmol/L) & 1.68 $\pm$ 0.82 & 1.58 $\pm$ 0.82\\
+		\hline
+	\end{tabular}
+	\label{Table1Fialho}
+\end{table*}
+
+\subsubsection*{Martin.}
+
+Whilst the Martin model presents a nomogram to aid implementation by clinicians, it is based on a logistic regression model, and full coefficients are also presented. The model was built using 3,109 surgical ICU patients in a single centre over 5 years. Its predictors comprise 7 common demographic and physiological variables (\Cref{Table1Martin}): Age, respiratory rate, blood urea nitrogen concentration, serum glucose, serum chloride, history of atrial fibrillation (yes/no) and history of renal insufficiency (yes/no). 
+
+The Martin model was built with any readmission to ICU within 72 h of discharge as the outcome measure. It used the least absolute shrinkage and selection operator (lasso) approach to regression, which aims to reduce very small coefficents to zero, thus performing automated feature selection. The authors report good discrimination (AUC = 0.71), and whilst they claim in the methods that `...the model's goodness of fit of was assessed using the Hosmer-Lemeshow test', no calibration results are reported statistically or visually.
+
+\begin{table*}[h]
+\centering
+	\renewcommand{\arraystretch}{1.4}
+		\caption{Cross-tabulation of variables in the Martin model with ICU readmission status in the MIMIC-III dataset. Continuous variables are presented as means $\pm$ standard deviation.}
 	\begin{tabular}{lp{2.5cm}p{2cm}}
 		\hline
 		Variable & No Readmission & Readmitted to ICU\\
@@ -310,35 +322,63 @@ An overview of inclusion and exclusion criteria is shown in \Cref{Flowchart}. In
 		N & 4944 (93.5\%)  &      342 (6.5\%)\\
 		Age & 64.2 $\pm$ 14.5 & 63.5 $\pm$ 14.5\\
 		Respiratory rate & 18.4 $ \pm $ 3.89 & 19.2 $ \pm $ 3.91\\
-		Blood urea nitrogen & 22.8 $ \pm $ 16.3 & 27.8 $ \pm $ 20.9\\
-		Serum glucose & 129 $ \pm $ 29.0 & 126 $ \pm $ 29.2\\
-		Serum chloride & 105 $ \pm $ 4.4& 105 $\pm$ 4.7 \\
-		Hx atrial fibrillation&1565 (31.7\%)    &   129 (37.7\%)\\
-		Hx renal insufficiency &261 (5.3\%)    &     31 (9.1\%)\\
+		Blood urea nitrogen (mg/dl) & 22.8 $ \pm $ 16.3 & 27.8 $ \pm $ 20.9\\
+		Serum glucose (mg/dl) & 129 $ \pm $ 29.0 & 126 $ \pm $ 29.2\\
+		Serum chloride (mmol/L) & 105 $ \pm $ 4.4& 105 $\pm$ 4.7 \\
+		History of atrial fibrillation&1565 (31.7\%)    &   129 (37.7\%)\\
+		History of renal insufficiency &261 (5.3\%)    &     31 (9.1\%)\\
 		\hline
 	\end{tabular}
 	\label{Table1Martin}
 \end{table*}
 
-\begin{table*}[hb]
+\subsubsection*{Hammer.}
+
+The Hammer model is a logistic regression model with the specific goal of including modifiable predictors, to increase the model's usability as a clinical tool. It was built using 7,126 patients from the same medical centre that the MIMIC-III database comes from, though the data collection dates do not overlap. To further aid clinical usage, the model contains only binary yes/no variables (\Cref{Table1Hammer}): Sex, general surgical procedure, cardiac surgical procedure, APACHE-II score of >20 on admission, ICU stay of >5 days and, within the last 24 h, hyperglycaemia, severe anaemia and no ambulation. The paper presents the results as a nomogram, but almost all model coefficients can be found in the supplementary information, with the exception of the intercept, which was estimated using the nomogram.
+
+% AUC, HL and comparisons to frost & martin
+The authors report good discrimination (AUC = 0.78) and good calibration using a Brier score. Additionally, the authors implemented the Frost and Martin models within the same dataset, and report that their model shows superior discrimination, though the AUC values for the other models are not reported.
+
+\begin{table*}[h]
 \centering
 	\renewcommand{\arraystretch}{1.4}
-		\caption{}% Cont. vars presented +- sd, give units. Temp = deg c, HR = bpm, spo2 = %, mean arterial pressure = mmHg (estimated), platelets = k/ul, lactate = mmol/L. All mean over final 24h before discharge
+		\caption{Cross-tabulation of variables in the Hammer model with ICU readmission status in the MIMIC-III dataset. APACHE-II score is calculated upon admission, hyperglycaemia, anaemia and ambulation are measured during the last 24 h, and positive fluid balance is over the whole ICU stay.}
 	\begin{tabular}{lp{2.5cm}p{2cm}}
 		\hline
 		Variable & No Readmission & Readmitted to ICU\\
 		\hline
 		N & 4944 (93.5\%)  &      342 (6.5\%)\\
-		Heart rate & 83.9 $\pm$ 12.2 & 84.8 $\pm$ 13.4\\
-		Temperature & 36.8 $\pm$ 0.51 &  36.8 $\pm$ 0.55\\
-		Oxygen saturation & 96.8 $\pm$ 1.64 & 96.8 $\pm$ 1.69\\
-		Mean arterial pressure & 81.2 $\pm$ 14.6 & 85.0 $\pm$ 16.0\\
-		Platelets & 221 $\pm$ 131 & 241 $\pm$ 154\\
-		Lactic acid & 1.68 $\pm$ 0.82 & 1.58 $\pm$ 0.82\\
+		Sex &&\\
+		\quad Male & 3121 (63.1\%)   &    207 (60.5\%)\\
+		\quad Female & 1823 (36.9\%)  &     135 (39.5\%)\\
+		General surgery & 1167 (23.6\%)   &    136 (39.8\%)\\
+		Cardiac surgery & 2423 (49\%)     &   93 (27.2\%)\\
+		Hyperglycaemia (>180 mg/dl) & 475 (9.6\%)    &    35 (10.2\%)\\
+		Severe anaemia (<7 g/dl) & 35 (0.7\%)      &    1 (0.3\%)\\
+		APACHE-II > 20 &  2397 (48.5\%)  &       164 (48\%)\\
+		Positive fluid balance >5L & 768 (15.5\%)  &      95 (27.8\%)\\
+		No ambulation & 3882 (78.5\%)   &    298 (87.1\%)\\
+		ICU stay >5 days & 1244 (25.2\%)   &    124 (36.3\%)\\
 		\hline
 	\end{tabular}
-	\label{Table1Fialho}
+	\label{Table1Hammer}
 \end{table*}
+
+\subsection{Model comparisons}
+
+% Workflow in compare_scores
+
+\subsection{Recalibration}
+
+% Workflow in recalibrate_models
+
+\subsection{Novel model}
+
+% Workflow for cooper model
+
+% Included variables
+
+\section{Results}
 
 % Verbal overview of clear trends here
 
@@ -398,6 +438,7 @@ An overview of inclusion and exclusion criteria is shown in \Cref{Flowchart}. In
 \subsection{Model performance}
 
 % Summarise above, make comparisons
+%	Hammer pretty good - underpredict, look at readmission in their dataset vs mine
 
 \subsection{Next steps}
 
