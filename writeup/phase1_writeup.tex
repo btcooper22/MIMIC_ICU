@@ -64,7 +64,12 @@
 \begin{document}
 \maketitle
 
-\section{Scope and Aims}
+\section{Introduction}
+
+% Brief background on ICU risk stuff
+Unplanned readmission to an intensive care unit (ICU) during the same hospital admission is a relatively common event, affecting between 1.3\% and 13.7\% of all ICU patients \citep{Elliott2014}. Not only do readmissions to ICU represent a substantial strain on hospital resources, but also readmitted patients tend to have worse prognoses, increased length of ICU stay, and greater risks of morbidity and mortality \citep{MarkaziMoghaddam2020}. Despite this, the precise factors contributing to ICU readmission risk remain unclear. Several models for risk prediction have been developed which tend to use very different variable sets, and no model has been widely externally validated. Accordingly, this project does not aim to develop or validate a novel model for ICU readmission, but to tackle an issue that affects the implementation and interpretation of all risk prediction models - how to deal with missing or incomplete data in the predictor variables \citep{Steyerberg2008}.
+
+\subsection{Scope and Aims of Phase I}
 
 This document provides a written overview of the first phase of the project. The aims of this phase were twofold:
 
@@ -73,15 +78,23 @@ This document provides a written overview of the first phase of the project. The
 \item To compare the performance of a range of published models for the prediction of ICU readmission risk and identify the best model to take forward. This will form the prediction model at the core of a system for quantifying uncertainty and dealing with missing data.
 \end{enumerate}
 
-\section{Introduction}
-
-\subsection{ICU readmission}
-
-% Brief background on ICU risk stuff
 
 \subsection{Readmission prediction models}
 
 % Overview of structure, strengths and shortcomings of each model
+This report will investigate five models for ICU risk prediction. I will give a brief overview of all five here. Further details on their predictors, statistical approaches and validations are given in \Cref{CandidateModels}.
+% APACHE-II
+The first `model' is the APACHE-II scoring system devised by \cite{Knaus1985}. `Model' is used in inverted commas, as this model was not designed for predicting ICU readmission risk, but instead is a general system to score the severity of a patient's condition using 12 routine physiological variables, age, and medical history. Increasing APACHE-II score has been shown to correlate well with increasing risk of in-hospital mortality for ICU patients. 
+% Frost
+\cite{Frost2010} used a logistic regression model to develop a nomogram for predicting ICU readmission risk based on 14,952 patients in a single hospital in Australia. Unfortunately, as they do not present the coefficients from their model directly, only in the form of the nomogram, several of these coefficients can only be approximated, which may hinder external validation of the model.
+
+% Fialho
+\cite{Fialho2012} developed a model using data mining and fuzzy logic approaches with the MIMIC-II database, precursor to the MIMIC-III used here. Their model focusses on the values of physiological variables during the 24 h before discharge. The fuzzy rules provide a significant barrier to external validation, however.
+% Martin
+\cite{Martin2018} also developed their model into a nomogram, but unlike Frost, also provided coefficients and a precise formula to generate risk estimates. Their model used 3,109 patients in a single academic centre, and narrowed an initial 179 candidate variables down to 7 variables, covering demographics, physiological measurements and medical history.
+% Hammer focussed on modifiable variables
+Finally, \cite{Hammer2020} developed the `RISC' score (Readmission to the
+Intensive care unit in Surgical Critical care patients, henceforth simply called `Hammer' for consistency with other models) using logistic regression. Their model aimed to include a number of modifiable variables to aid its use as a clinical tool.
 
 \section{Methods}
 
@@ -132,19 +145,26 @@ This document provides a written overview of the first phase of the project. The
         &\node [block_center] (icuprocedure) {ICU stay following or including surgical procedure (n=7,426)};       
       & \node [block_left] (procedure_after_icu) {Removed patients whose surgery was after their last ICU stay (n=178)}; \\
       % row 5  
-       \node [block_left] (mortality) {Removed patients who died during same \mbox{hospital} admission (n=567)}; &
+        \node [block_left] (missing_predictors) {Removed patients missing data for predictors (n=252, multiple may apply):\\
+		\h Functional mobility (180)\\
+		\h APACHE-II score (91)\\
+		 \h Respiratory rate (21)}; &
        \node [block_noborder] (hidden_r5) {};&
       \node [block_left] (absent_charts) {Removed patients with absent hospital data (n=69): \\
         \h Chart data (18)\\
         \h Input/output data (47)\\
         \h Lab data (4)
         }; \\  
-              % row 6  
-       \node [block_left] (missing_predictors) {Removed patients missing data for predictors (n=252, multiple may apply):\\
-		\h Functional mobility (180)\\
-		\h APACHE-II score (91)\\
-		 \h Respiratory rate (21)}; &
-       \node [block_noborder] (hidden_r6) {};&
+        % row 6 
+        \node [block_left] (implausible) {Removed those with physiologically implausible measurements (n=184, multiple may apply): \\
+		\h Mean arterial pressure > 180 mmHg (63)\\
+	 	\h Mean arterial pressure < 30 mmHg (49)\\
+		\h Temperature > 40 $^\circ$C (42)\\
+		\h Temperature < 35 $^\circ$C (17)\\
+		\h Platelet count > 1000 K/$\micro$L (10)\\
+		\h Oxygen saturation > 100 \% (3)
+        };   &
+           \node [block_noborder] (hidden_r6) {};&
       \node [block_left] (missing_24h) {Removed those missing data for the 24h before discharge for predictors (n=1,070, multiple may apply): \\
 		\h Lactic acid (925)\\
 		\h Serum haemoglobin (157)\\
@@ -158,32 +178,27 @@ This document provides a written overview of the first phase of the project. The
         % row 7  
        &
        \node [block_noborder] (hidden_r7) {};&
-      \node [block_left] (implausible) {Removed those with physiologically implausible measurements (n=184, multiple may apply): \\
-		\h Mean arterial pressure > 180 mmHg (63)\\
-	 	\h Mean arterial pressure < 30 mmHg (49)\\
-		\h Temperature > 40 $^\circ$C (42)\\
-		\h Temperature < 35 $^\circ$C (17)\\
-		\h Platelet count > 1000 K/$\micro$L (10)\\
-		\h Oxygen saturation > 100 \% (3)
-        }; \\  
+       \node [block_left] (mortality) {Removed patients who died during same \mbox{hospital} admission (n=567)}; \\
         % row 8  
        &
        \node [block_center] (final) {Final sample (n=5,286)};& \\  
       };
     % end matrix
     % connecting nodes with paths
-    \begin{scope}[every path/.style=line]
+     \begin{scope}[every path/.style=line]
       \path (full)   -- (service);
       \path (service) -- (procedure);
       \path (procedure) -- (icuprocedure);
+      \path (procedure) -- (invalidprocedure);
       \path (icuprocedure) -- (procedure_after_icu);
       \path (hidden_r5) -- (absent_charts);
-      \path (hidden_r5) -- (mortality);
+      \path (hidden_r5) -- (missing_predictors);
       \path (icuprocedure) -- (final);
-      \path (hidden_r6) -- (missing_predictors);
+      \path (hidden_r6) -- (implausible);
       \path (hidden_r6) -- (missing_24h);
-      \path (hidden_r7) -- (implausible);
+      \path (hidden_r7) -- (mortality);
     \end{scope}
+   
   \end{tikzpicture}
 \end{figure}
 
@@ -191,9 +206,12 @@ This document provides a written overview of the first phase of the project. The
 
 % Workflow in define_outcomes
 
-\subsection{Candidate models}
+% All models but martin use within same hosp (martin == 72h)
 
-% Outline each model and its predictors
+\subsection{Candidate models}
+\label{CandidateModels}
+
+% Outline each model and its predictors and AUC/calibration
 
 % Overview of APACHE-II system
 
@@ -382,7 +400,7 @@ This document provides a written overview of the first phase of the project. The
 \begin{multicols}{2}
 \bibliographystyle{thesis}
 {\small
-\bibliography{ICU refs}}
+\bibliography{ICU_refs}}
 
 \end{multicols}
 \end{document}
