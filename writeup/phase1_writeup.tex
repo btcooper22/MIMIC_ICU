@@ -365,34 +365,51 @@ The authors report good discrimination (AUC = 0.78) and good calibration using a
 \end{table*}
 
 \subsection{Model comparisons}
+\label{comparisonSection}
 
 % Workflow in compare_scores
+All five model scores were calculated for all 5,286 patients in the final dataset. For predicted readmission for each model, discrimination was plotted as a ROC curve, and the area under the curve (AUC) was calculated. Calibration was calculated for each model by splitting the dataset into deciles based on the predicted probabilities for a given model. Observed vs expected readmission was then plotted for each decile, and calibration was assessed by the Hosmer-Lemeshow $ \chi^{2} $ test.
 
 \subsection{Recalibration}
 
 % Workflow in recalibrate_models
+To assess whether models could perform better when tuned to the data at hand, I performed model recalibration. This involved splitting the dataset 50/50 into a `training' set and a `validation' set, with an equal number of readmitted patients in each split. Using the training set, logistic regression models were trained for each of the five models, using the same variables as in the score calculation (with the exception of the Hammer model, in which `anaemia' was discounted due to having only 1 patient with severe anaemia who was subsequently readmitted. 
+
+Additionally, continuous predictor variables which showed a visually curved relationship with readmission risk (that is, both abnormally high or abnormally low values carried greater risk than normal values) were categorised into `Low', `Normal' and `High' categories (\Cref{CategorisationTable}). For the recalibrated models, discrimination and calibration were calculated as described in \Cref{comparisonSection} using predictions on patients in the validation set.
+
+\begin{table*}
+\centering
+	\renewcommand{\arraystretch}{1.4}
+		\caption{Categorisation cutoff thresholds for continuous variables. Variables were categorised as `Normal' where they fell between the `High' and `Low' values.}
+		\begin{tabular}{llll}
+		\hline
+		Variable & `High' & `Low'\\
+		\hline
+		Serum chloride (mmol/L) & >107 & <98\\
+		Blood urea nitrogen (mg/dl) & >20 & <7\\
+		Heart rate (bpm) & >100 & <60\\
+		Platelet count (K/$ \micro $L) & >450 & <150\\
+		\hline
+		\end{tabular}
+	\label{CategorisationTable}
+\end{table*}
+
 
 \subsection{Novel model}
 
 % Workflow for cooper model
-
-% Included variables
+A novel logistic regression model also was fitted to the training data using the `lasso' method, which selects variables by shrinking coefficients which contribute little to the model towards zero. This model was trained using all the variables from all the other models.
 
 \section{Results}
 
-% Verbal overview of clear trends here
+Comparisons of discrimination among models are shown visually in \Cref{DiscriminationFig}, and comparisons of calibration in \Cref{CalibrationFig}. A summary of calibration and discrimination of all models, both before and after recalibration, can be found in \Cref{ModelComparisonTable}.
 
-\subsection{Discrimination}
 
-% AUROC and HL table (standard and recalibrated)-----------
-%			Standard				Recalibrated
-%	Model	AUC		HL		p 		AUC		HL		p
-
-\begin{table*}[hb]
+\begin{table*}
 \centering
 	\renewcommand{\arraystretch}{1.4}
 		\caption{}% Brief description AUC and X2, explain rc. Bold x2 values shows no sig. dif. between observed and expected readmission
-		\begin{tabular}{lllrr}
+		\begin{tabular}{lllll}
 		\hline
 		Model & AUC & $ \chi^{2} $ & $ \mathrm{AUC}_{rc} $ & $ \chi^{2}_{rc} $\\
 		\hline
@@ -407,9 +424,7 @@ The authors report good discrimination (AUC = 0.78) and good calibration using a
 	\label{ModelComparisonTable}
 \end{table*}
 
-% Overview of discrimination, before and after recalibration
 
-% ROC comparison figure (standard and recalibrated)
 \begin{figure}
 \centering
 	\includegraphics[width=\textwidth]{discrimination.png}
@@ -418,12 +433,6 @@ The authors report good discrimination (AUC = 0.78) and good calibration using a
 \end{figure}
 
 
-\subsection{Calibration}
-
-% Overview of calibration, before and after recalibration
-%	Above the line == under-prediction,  below == overprediction
-
-% Calibration figure (standard and recalibrated
 \begin{figure}
 \centering
 	\includegraphics[width=\textwidth]{calibration.png}
@@ -431,7 +440,18 @@ The authors report good discrimination (AUC = 0.78) and good calibration using a
 	\label{CalibrationFig}
 \end{figure}
 
-\subsection{Variables retained in novel model}
+\subsection{APACHE-II score}
+
+\subsection{Fialho model}
+
+\subsection{Frost model}
+
+\subsection{Martin model}
+
+\subsection{Hammer model}
+
+\subsection{Novel `Cooper' model}
+
 
 \section{Discussion}
 
