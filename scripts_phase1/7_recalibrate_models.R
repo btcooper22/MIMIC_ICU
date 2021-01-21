@@ -333,12 +333,12 @@ optimality <- data.frame(
                      auc_rc_apache@y.values[[1]],
                      auc_rc_cooper@y.values[[1]],
                      auc_rc_fialho@y.values[[1]]),
-  calibration = c(hoslem_hammer$statistic,
-                  hoslem_martin$statistic,
-                  hoslem_frost$statistic,
-                  hoslem_apache$statistic,
-                  hoslem_cooper$statistic,
-                  hoslem_fialho$statistic)
+  calibration = c(hoslem_rc_hammer$statistic,
+                  hoslem_rc_martin$statistic,
+                  hoslem_rc_frost$statistic,
+                  hoslem_rc_apache$statistic,
+                  hoslem_rc_cooper$statistic,
+                  hoslem_rc_fialho$statistic)
 ) %>% 
   mutate(discrim_dist = (scale(discrimination) - max(scale(discrimination)))^2,
          calib_dist = (scale(calibration) - min(scale(calibration)))^2) %>% 

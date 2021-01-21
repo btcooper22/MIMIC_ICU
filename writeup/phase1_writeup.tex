@@ -404,11 +404,10 @@ A novel logistic regression model also was fitted to the training data using the
 
 Comparisons of discrimination among models are shown visually in \Cref{DiscriminationFig}, and comparisons of calibration in \Cref{CalibrationFig}. A summary of calibration and discrimination of all models, both before and after recalibration, can be found in \Cref{ModelComparisonTable}.
 
-
-\begin{table*}
+\begin{table*}[hb]
 \centering
 	\renewcommand{\arraystretch}{1.4}
-		\caption{}% Brief description AUC and X2, explain rc. Bold x2 values shows no sig. dif. between observed and expected readmission
+		\caption{Comparisons of model predictive performance. AUC measures discrimination (between 0.5 and 1.0, greater is better), and $\chi^{2}$ measures calibration (lower is better). Measures with $_{rc}$ indicate those on recalibrated models (that is, re-implemented with the data at hand).}% Brief description AUC and X2, explain rc. Bold x2 values shows no sig. dif. between observed and expected readmission
 		\begin{tabular}{lllll}
 		\hline
 		Model & AUC & $ \chi^{2} $ & $ \mathrm{AUC}_{rc} $ & $ \chi^{2}_{rc} $\\
@@ -425,44 +424,74 @@ Comparisons of discrimination among models are shown visually in \Cref{Discrimin
 \end{table*}
 
 
-\begin{figure}
+\begin{figure}[t]
 \centering
 	\includegraphics[width=\textwidth]{discrimination.png}
-	\caption{}
+	\caption{Comparison of model discrimination as Reciever Operating Characteristic (ROC) curves. The diagonal dashed line represents an area under the curve of 0.5, that is, a model that essentially guesses between readmission and not at random. The more convex a given curve is away from this diagonal, the greater its discrimination.}
 	\label{DiscriminationFig}
 \end{figure}
 
 
-\begin{figure}
+\begin{figure}[t]
 \centering
 	\includegraphics[width=\textwidth]{calibration.png}
-	\caption{}
+	\caption{Comparison of model calibration. For each model, the data is split into deciles based on the model's predicted readmission probabilities, then observed and predicted readmission are compared within each decile. The diagonal black line shows ideal, perfect calibration. Deciles above the line therefore represent the model under-predicting readmission, and deciles below the line represent over-prediction. Where applicable, lighter coloured lines within a panel show calibration for recalibrated models.}
 	\label{CalibrationFig}
 \end{figure}
 
 \subsection{APACHE-II score}
 
+Considering it was not designed as a model for ICU readmission risk, the APACHE-II is relatively well calibrated, slightly but consistently under-predicting readmission risk (\Cref{CalibrationFig}, blue lines). It shows moderate discrimination (AUC = 0.60), which slightly increases to 0.61 upon recalibration. 
+
 \subsection{Fialho model}
+
+Difficulty in implementing the fuzzy rules has clearly manifested in the predictions of this model. It is abysmally calibrated, drastically over-predicting readmission risk across all deciles (\Cref{CalibrationFig}, red lines). It also shows poor discrimination, little better then guessing and considerably worse than the APACHE-II score (AUC = 0.53). This rises to 0.58 upon recalibration and categorisation of certain variables, but still the worst of the five models.
 
 \subsection{Frost model}
 
+The Frost model generally out-performs the APACHE-II score in terms of discrimination (AUC = 0.61, \Cref{DiscriminationFig}, orange line). However, it is poorly calibrated, tending to under-predict readmission in lower-risk patients and over-predict readmission in higher-risk patients. Interestingly, this calibration issue is not solved, but in fact inverted by recalibration (\Cref{CalibrationFig}, orange line), making the Frost model the only one of the five to still show a significant difference between predicted and observed readmission after recalibration. However, recalibration does give it the greatest discrimination of all the published models, though with AUC = 0.66, this is still largely in the `moderate' range.
+
 \subsection{Martin model}
+
+The Martin model shows poor discrimination (AUC = 0.56, \Cref{DiscriminationFig}, green line), only just out-performing the Fialho model, and significantly under-performing compared to the APACHE-II score. It is, however, better calibrated even before recalibration than either of those models (\Cref{CalibrationFig}, green lines), showing under-prediction at low risk categories, but being well-calibrated for higher-risk patients. It rises to an `acceptable' discrimination level (AUC = 0.61) after recalibration, though still essentially equal to the APACHE-II score.
 
 \subsection{Hammer model}
 
+The Hammer model clearly shows the best discrimination of any model before recalibration, with an AUC of 0.65 (\Cref{DiscriminationFig}, purple line), and while it under-predicts readmission across all risk categories (\Cref{CalibrationFig}, purple lines), it still remains the best-calibrated before recalibration too. Interestingly, recalibration has essentially no effect on the discriminatory power of the Hammer model, and whilst it is `well-calibrated' according to the p-value of the Hosmer-Lemeshow test, it is the worst-calibrated of the `well-calibrated' models.
+
 \subsection{Novel `Cooper' model}
 
+\subsubsection*{Variables retained.}
+
+The `Cooper' model retained the following variables following lasso shrinkage: 4 from the Hammer model (General surgery, cardiac surgery, ambulation, and fluid balance), 3 from the Frost model (Admission source, acute renal failure, APACHE-II at discharge), 3 from the Martin model (Blood urea nitrogen, history of atrial fibrillation, history of renal insufficiency) and 2 from the Fialho model (High heart rate, mean arterial pressure)
+
+\subsubsection*{Performance.}
+
+As would likely be expected for the model with access to the greatest number of clinical features, the bespoke `Cooper' model shows better discrimination (\Cref{DiscriminationFig}, brown line) and calibration (\Cref{CalibrationFig}, brown line) than any of the recalibrated published models, though with an AUC of 0.70 it is only on the edge of the `good discrimination' category . The predictive power of the Cooper may partly be a result of its increased number of final predictors compared to the other models, though it still follows the rule of thumb of 20 events (i.e, readmissions) per variable \citep{Austin2017}.
 
 \section{Discussion}
 
 \subsection{Model performance}
 
+Even given recalibration, no models get into the `good' discrimination range, nor do they approach the discrimination values reported in the derivation papers. The specific factors underlying ICU readmission are known in the literature to not be fully understood, thus it is perhaps not surprising that external validation of these models is only moderately successful. 
+
 % Summarise above, make comparisons
 %	Hammer pretty good - underpredict, look at readmission in their dataset vs mine
+%		Fairly insensitive to recalibration - good thing?
+%	Frost not bad vs hammer after recalibration, but still poorly calibrated
+%		Issues with implementation from nomogram?
+Of the published models tested, the Fialho model is objectively the worst, even after calibration. This is likely due to its `fuzzy rules' making implementation within a different data set near impossible. Perhaps surprisingly, the performance of the Martin model was also poor, being scarcely better than the APACHE-II score even after recalibration, especially considering that several of its variables (blood urea nitrogen, history of atrial fibrillation and history of renal insufficiency) do appear to correlate well with readmission.
 
-\subsection{Next steps}
+Both the Hammer and Frost models perform better than the APACHE-II baseline. Whilst the Hammer model as-published is the best calibrated and shows the best discrimination, it still consistently under-predicts readmission risk. This may reflect the fact that the global readmission rate in the dataset used to derive it was 2.4\%, compared to 6.5\% in my dataset. Recalibration did not influence discrimination of the hammer model, but did correct for this over-prediction. 
+
+The Frost model showed inferior performance compared to the Hammer model as-published, but showed slightly greater discrimination after recalibration. However, the Frost model was poorly-calibrated even after recalibration. This may reflect the difficulty in implementing some steps of scoring based off the nomogram.
+
+It should be noted that all models contained at least some predictors which were found to influence readmission risk in this dataset, but the specific combinations given did not yield high predictive power. However, even a model novel comprised of these `predictive' variables did not yield calibration or discrimination much better than the best published models. This further suggests that the prediction of ICU readmission is in some ways just a `difficult' problem, for which the risk factors are far from fully established.
+
+\subsection{Conclusions and Next Steps}
 
 % Models to be taken forward
+The first goal of this first phase was to extract a predictor-rich dataset from the MIMIC-III database, along with a binary outcome measure representing ICU readmission, which has been achieved. The second goal was to identify an ICU readmission risk prediction model to take forward to the next phase - trialling novel methods for dealing with missing data. Though its performance is less than ideal, I believe the Hammer model is suitable for this role. Whilst the variables as parametrised by the model are all binary, a number of them (including those underlying the APACHE-II score, included in the model) are derived from continuous variables. This mix of categorical and continuous predictors will make it a good test bed for investigating how to handle different kinds of missing value.
 
 \begin{multicols}{2}
 \bibliographystyle{thesis}
