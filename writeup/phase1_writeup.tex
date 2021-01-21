@@ -98,21 +98,28 @@ Intensive care unit in Surgical Critical care patients, henceforth simply called
 
 \section{Methods}
 
-% Signpost remaining methods
-
 \subsection{Data Source}
 
 % Overview of MIMIC data
+This work uses the open-access MIMIC-III critical care database \citep{Johnson2016}, which comprises ICU stay information for 61,532 adult patients at the Beth Israel Deaconess Medical Centre between June 2001 and October 2012. The database includes information such as demographics, vital sign measurements made at the bedside ($\sim$1 data point per hour), laboratory test results, procedures, medications, caregiver notes, imaging reports, and mortality (both in and out of hospital).
 
 \subsection{Inclusion criteria}
 
 % Workflow in extract_patients & preprocess_data
+An overview of inclusion and exclusion criteria is shown in \Cref{Flowchart}. In brief, we initially include all patients admitted under or transferred to a surgical service, and who underwent a surgical procedure either during or prior to an ICU stay. We exclude patients with invalid surgical procedure codes, or procedure types with <20 patients in the dataset. We also exclude patients whose surgical procedure took place after their last ICU stay, or who died during the same hospital admission as their ICU stay. Finally, we exclude patients with data in any of the following categories:
+
+\begin{itemize}
+\item Missing entire hospital record
+\item Missing assessment data for predictors
+\item Missing measurement data for predictors within 24 h prior to ICU discharge
+\item Physiologically impossible or implausible measurements
+\end{itemize}
 
 % Flowchart------------
 \begin{figure}
 \centering
-  \caption{Flowchart of participants' progress through
-    the phases of the trial}
+\label{Flowchart}
+  \caption{Flowchart of inclusion and exclusion criteria for patients in the dataset, alongside sample sizes at each step.}
   % setting the typeface to sans serif and the font size to small
   % the scope local to the environment
   \sffamily
@@ -150,7 +157,7 @@ Intensive care unit in Surgical Critical care patients, henceforth simply called
 		\h APACHE-II score (91)\\
 		 \h Respiratory rate (21)}; &
        \node [block_noborder] (hidden_r5) {};&
-      \node [block_left] (absent_charts) {Removed patients with absent hospital data (n=69): \\
+      \node [block_left] (absent_charts) {Removed patients with absent hospital records (n=69): \\
         \h Chart data (18)\\
         \h Input/output data (47)\\
         \h Lab data (4)
@@ -215,7 +222,6 @@ Intensive care unit in Surgical Critical care patients, henceforth simply called
 
 % Overview of APACHE-II system
 
-% Overview of exclusion criteria
 
 \subsection{Model comparisons}
 
