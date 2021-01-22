@@ -17,6 +17,7 @@ validate_df <- results %>% filter(type == "validate")
 hammer_frequentist <- glm(readmission ~ sex + general_surgery + cardiac_surgery + hyperglycemia +
                             high_apache + fluid_balance_5L + ambulation + los_5,
                           data = train_df, family = "binomial")
+write_rds(hammer_frequentist, "models/hammer_frequentist.rds")
 
 # Vector of acceptable features
 feature_id <- c(9:10, 12, 14, 16:25, 27:35, 51, 74)
@@ -64,14 +65,13 @@ scale_df <- train_df %>%
 
 cooper_bayes <- brm(formula(paste("readmission ~", formu,
                                   sep = " ")),
-                    data = train_df, 
-                    prior = set_prior(horseshoe(df = 1, par_ratio = 1)),
+                    data = scale_df, 
+                    prior = set_prior(horseshoe(df = 3, par_ratio = 1)),
                     family = bernoulli(link = "logit"),
                     warmup = 500,
                     iter = 6250,
                     chains = 8,
-                    cores = 8,
-                    control = list(adapt_delta = 0.95))
+                    cores = 8)
 
 # Compare: Hammer----------
 
