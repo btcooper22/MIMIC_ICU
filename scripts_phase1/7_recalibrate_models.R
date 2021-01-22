@@ -361,3 +361,9 @@ optimality %>%
   labs(x = "Discrimination (AUROC)",
        y = expression(paste("Calibration (", chi^2, ")")))
 
+# Re-write data
+rbind(patients_train, 
+      patients_validate %>% 
+        mutate(type = "validate")) %>% 
+write_csv("data/patients_recalibrated.csv")
+
