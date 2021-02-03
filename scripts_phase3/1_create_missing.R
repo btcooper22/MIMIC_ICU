@@ -5,6 +5,8 @@ require(readr)
 require(tibble)
 require(ggplot2)
 require(ROCR)
+require(foreach)
+require(stringr)
 
 source("functions/inverse_logit.R")
 source("functions/calibration.R")
@@ -21,11 +23,14 @@ full_data <- read_csv("data/final_patients.csv") %>%
 
 # Binarise readmission
 full_data %<>% 
-  mutate(readmission = readmission == "Readmitted to ICU")
-
+  mutate(readmission = readmission == "Readmitted to ICU") %>% 
+  # Remove cases where score comes from bicarbonate
+  filter(!is.na(apache_respiratory_discharge)) %>% 
+  select(-apache_bicarbonate_discharge)
+  
 # Confirm no missing values
 table(full_data$readmission, useNA = "ifany")
-summary(full_data$apache_II_discharge)
+summary(full_data)
 
 # Create and assess APACHE model------
 # Create model and predict
@@ -77,7 +82,47 @@ cal %>%
        y = "Observed readmission")
 
 # Simulate MCAR (missing completely at random)---------
+# Set n
+N <- 1
 
-# Basic methods -> Mean, MICE, KNN MissForest
+# Set splits
+splits <- c(0.01, 0.05, seq(0.1, 0.8, 0.1))
+
+# Pull APACHE matrix
+apache_matrix <- full_data[,7:20]
+
+# Outer loop over N
+foreach(n = 1:N) %do%
+  {
+    # Inner loop for splits
+    foreach(s = 1:length(splits)) %do%
+      {
+        # Define shape
+        shape <- nrow(apache_matrix) * ncol(apache_matrix)
+        
+        # Draw randomisation array
+        rand_array <- rbinom(shape, 1, splits[s]) %>% 
+          as.logical()
+        
+        # Reshape array
+        NA_array <- matrix(rand_array, 
+               nrow(apache_matrix),
+               ncol(apache_matrix))
+        
+        # Remove values
+        data_out <- apache_matrix
+        data_out[NA_array] <- NA
+        
+        # Write to file
+        filename <- paste("data/MCAR/S", str_pad(splits[s], 4, "right", 0),
+                          "_N", str_pad(n,3,"left",0), ".csv", sep = "")
+        write.csv(data_out, filename,
+                  row.names = FALSE)
+      }
+  }
+
+# Basic methods -> Assume 0, Mean, hot-deck
+
+# Intermediate methods -> MICE, KNN, MissForest
 
 # Complex methods from competiton
