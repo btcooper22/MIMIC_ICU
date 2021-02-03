@@ -2,6 +2,10 @@
 require(tidyverse)
 require(magrittr)
 
+# Initialise renv
+# require(renv)
+# renv::init()
+
 # Load MIMIC dataset
 source("functions/mimic_load.R")
 
