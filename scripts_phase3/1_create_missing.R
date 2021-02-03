@@ -7,6 +7,8 @@ require(ggplot2)
 require(ROCR)
 require(foreach)
 require(stringr)
+require(doParallel)
+require(tools)
 
 source("functions/inverse_logit.R")
 source("functions/calibration.R")
@@ -83,7 +85,7 @@ cal %>%
 
 # Simulate MCAR (missing completely at random)---------
 # Set n
-N <- 1
+N <- 100
 
 # Set splits
 splits <- c(0.01, 0.05, seq(0.1, 0.8, 0.1))
@@ -91,8 +93,16 @@ splits <- c(0.01, 0.05, seq(0.1, 0.8, 0.1))
 # Pull APACHE matrix
 apache_matrix <- full_data[,7:20]
 
+# Set up parallel
+ptm <- proc.time()
+psnice(value = 19)
+registerDoParallel(ifelse(detectCores() <= 16,
+                          detectCores() - 1,
+                          16)
+)
+
 # Outer loop over N
-foreach(n = 1:N) %do%
+foreach(n = 1:N, .packages = c("foreach", "stringr")) %dopar%
   {
     # Inner loop for splits
     foreach(s = 1:length(splits)) %do%
@@ -120,6 +130,9 @@ foreach(n = 1:N) %do%
                   row.names = FALSE)
       }
   }
+stopImplicitCluster()
+proc.time() - ptm # 17s par, 112 seq
+
 
 # Basic methods -> Assume 0, Mean, hot-deck
 
