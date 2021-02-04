@@ -134,4 +134,5 @@ output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr",
 stopImplicitCluster()
 proc.time() - ptm # 32s 
 
-write_rds(output, "data/impute/average.RDS")
+write_rds(output, "data/impute/average.RDS",
+          compress = "gz")
