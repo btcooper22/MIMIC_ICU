@@ -92,7 +92,8 @@ N <- 100
 splits <- c(0.01, 0.05, seq(0.1, 0.8, 0.1))
 
 # Pull APACHE matrix
-apache_matrix <- full_data[,7:20]
+apache_matrix <- full_data[,c(7:17,19)]
+apache_additional <- full_data[,c(18,20)]
 
 # Set up parallel
 ptm <- proc.time()
@@ -123,6 +124,9 @@ foreach(n = 1:N, .packages = c("foreach", "stringr")) %dopar%
         # Remove values
         data_out <- apache_matrix
         data_out[NA_array] <- NA
+        
+        # Reattach non-NA'd values
+        data_out <- cbind(data_out, apache_additional)
         
         # Write to file
         filename <- paste("data/MCAR/S", str_pad(splits[s], 4, "right", 0),
