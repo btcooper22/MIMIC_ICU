@@ -34,6 +34,9 @@ full_data %<>%
 table(full_data$readmission, useNA = "ifany")
 summary(full_data)
 
+# Write
+write_csv(full_data,"data/impute/complete_cases.csv")
+
 # Create and assess APACHE model------
 # Create model and predict
 apache_model <- glm(readmission ~ apache_II_discharge,
