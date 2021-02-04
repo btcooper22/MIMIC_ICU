@@ -3,7 +3,7 @@ make_pool <- function(pooling_variables, target, pool_df)
   # Debug
   # pool_df <- present_variable
   # target <- NA_variable[i,]
-  # pooling_variables <- pooling_vars[[1]]
+  # pooling_variables <- pooling_vars[[9]]
   
   # Extract pooling values
   pooling_values <- target %>% 
@@ -38,14 +38,25 @@ make_pool <- function(pooling_variables, target, pool_df)
     }
   
   # Select closest
-  closest_rows <- dist_matrix %>% 
-    as_tibble() %>% 
-    mutate(dist = rowSums(dist_matrix),
-           row_id = 1:nrow(dist_matrix)) %>% 
-    slice_min(dist) %>% 
-    select(row_id) %>% 
-    deframe()
-  
+  if(is.matrix(dist_matrix))
+  {
+    closest_rows <- dist_matrix %>% 
+      as_tibble() %>% 
+      mutate(dist = rowSums(dist_matrix),
+             row_id = 1:nrow(dist_matrix)) %>% 
+      slice_min(dist) %>% 
+      select(row_id) %>% 
+      deframe() 
+  }else
+  {
+    closest_rows <- dist_matrix %>% 
+      as_tibble() %>% 
+      mutate(row_id = 1:length(dist_matrix)) %>% 
+      slice_min(value) %>% 
+      select(row_id) %>% 
+      deframe() 
+  }
+
   # Output pool
   pool_df[closest_rows,]
 }
