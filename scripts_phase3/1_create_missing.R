@@ -38,6 +38,7 @@ summary(full_data)
 # Create model and predict
 apache_model <- glm(readmission ~ apache_II_discharge,
                     data = full_data, family = "binomial")
+write_rds(apache_model, "models/apache_model.RDS")
 probs <- predict(apache_model, newdata = full_data) %>% inverse_logit()
 
 # Assess ROC
