@@ -10,20 +10,7 @@ require(tools)
 require(tidyr)
 
 # Load data-------
-full_data <- read_csv("data/final_patients.csv") %>% 
-  select(matches("_discharge$")) %>% 
-  select(matches("^apache_")) %>% 
-  cbind(read_csv("data/final_patients.csv") %>% 
-          select(row_id, subject_id,
-                 adm_id, readmission,
-                 age),.)
-
-# Binarise readmission
-full_data %<>% 
-  mutate(readmission = readmission == "Readmitted to ICU") %>% 
-  # Remove cases where score comes from bicarbonate
-  filter(!is.na(apache_respiratory_discharge)) %>% 
-  select(-apache_bicarbonate_discharge)
+full_data <- read_csv("data/impute/complete_cases.csv") 
 
 # Generate external mean and median
 external_averages <- full_data %>% 
