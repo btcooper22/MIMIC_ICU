@@ -11,4 +11,6 @@ filename_metadata <- function(filename_in)
   n <- metadata[,2] %>% 
     substr(2,4) %>% 
     as.numeric()
+  
+  return(c(n, split))
 }
