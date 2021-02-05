@@ -68,10 +68,20 @@ files <- dir("data/MCAR/", full.names = TRUE)
 ptm <- proc.time()
 parallel_setup(8)
 
-output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr",
-                                                     "stringr", "tibble",
-                                                     "magrittr", "forcats")) %dopar%
+output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr","stringr",
+                                         "tibble","magrittr", "forcats",
+                                         "foreach", "readr")) %dopar%
   {
+    # Extract metadata
+    metadata <- filename_metadata(files[f])
+    
+    # Create filename
+    filename <- paste("data/impute/hotdeck/hotdeck_S",
+                      str_pad(metadata[2], 4, "right", 0),"_N",
+                      str_pad(metadata[1],3,"left",0), ".RDS", sep = "")
+    
+    if(!file.exists(filename))
+    {
     # Load file
     mcar_df <- read.csv(files[f]) %>% 
     # Join pooling data
@@ -181,22 +191,25 @@ output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr",
         probs
       }
     
-    # Extract metadata
-    metadata <- filename_metadata(files[f])
-    
     # Create output
     output <- list(pooling = pooling_vars,
          probs = full_imputed)
     
-    # Create filename
-    filename <- paste("data/impute/hotdeck/hotdeck_S",
-                      str_pad(metadata[2], 4, "right", 0),"_N",
-                      str_pad(metadata[1],3,"left",0), ".RDS", sep = "")
-    
     # Write to file
     write_rds(output, filename,
               compress = "gz")
+    }else
+    {
+      output <- read_rds(filename)
+    }
     
+    # Output
+    output$N <- metadata[1]
+    output$split <- metadata[2]
+    output
   }
 stopImplicitCluster()
-proc.time() - ptm()
+proc.time() - ptm
+
+# Compile all
+
