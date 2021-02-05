@@ -5,7 +5,7 @@ filename_metadata <- function(filename_in)
     str_split("_", simplify = TRUE)
   
   split <- metadata[,1] %>% 
-    substr(2,4) %>% 
+    substr(2,5) %>% 
     as.numeric()
   
   n <- metadata[,2] %>% 
