@@ -79,11 +79,11 @@ hoslem_full <- hoslem.test(full_data$readmission,
 
 # Tabulate
 results <- data.frame(method = "full_dataset",
-                      split = NA,
-                      AUROC = auc@y.values[[1]],
-                      AUROC_error = 0,
-                      chisq = hoslem_full$statistic,
-                      chisq_error = 0)
+                      split = 0,
+                      discrimination = auc@y.values[[1]],
+                      discrimination_error = 0,
+                      calibration = hoslem_full$statistic,
+                      calibration_error = 0)
 
 # Mean imputation-----
 results_mean <- read_rds("data/impute/average.RDS")
@@ -158,7 +158,7 @@ summary_mean %>%
   geom_path()+
   geom_hline(linetype = "dashed",
              colour =  "red",
-             yintercept = results$AUROC)+
+             yintercept = results$discrimination)+
   facet_wrap(~method)+
   theme_classic(20)
 
@@ -172,7 +172,7 @@ summary_mean %>%
   geom_path()+
   geom_hline(linetype = "dashed",
              colour =  "red",
-             yintercept = results$chisq)+
+             yintercept = results$calibration)+
   facet_wrap(~method)+
   theme_classic(20)
 
@@ -253,7 +253,7 @@ summary_exclusion %>%
   geom_path()+
   geom_hline(linetype = "dashed",
              colour =  "red",
-             yintercept = results$AUROC)+
+             yintercept = results$discrimination)+
   facet_wrap(~method)+
   theme_classic(20)
 
@@ -267,7 +267,7 @@ summary_exclusion %>%
   geom_path()+
   geom_hline(linetype = "dashed",
              colour =  "red",
-             yintercept = results$chisq)+
+             yintercept = results$calibration)+
   facet_wrap(~method)+
   theme_classic(20)
 
@@ -423,7 +423,7 @@ summary_hotdeck %>%
   theme_classic(20)
 
 # Plot calibration
-  summary_hotdeck %>% 
+summary_hotdeck %>% 
     filter(method == "admit.chronic.age") %>% 
   ggplot(aes(x = split,
              y = calibration))+
@@ -437,3 +437,66 @@ summary_hotdeck %>%
   facet_wrap(~method)+
   theme_classic(20)
   
+# Compare methods---------
+
+# Combine
+comparison_df <- rbind(
+  results, summary_exclusion,
+  summary_mean %>% filter(method != "median"),
+  summary_hotdeck %>% filter(method == "admit.chronic.age") %>% 
+    mutate(method = "hotdeck")
+)
+
+# Discrimination
+discrim_plot <- comparison_df %>% 
+  filter(method != "exclude") %>% 
+  ggplot(aes(x = split,
+             y = discrimination))+
+  # geom_ribbon(aes(ymin = discrimination - discrimination_error,
+  #                 ymax = discrimination + discrimination_error,
+  #                 fill = method), alpha = 0.1)+
+  geom_path(aes(colour = method), size = 1)+
+  geom_hline(linetype = "dashed",
+             colour =  "black",
+             yintercept = results$discrimination)+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
+                      name = "")+
+  scale_fill_manual(values = brewer.pal(8,"Set1")[-6],
+                      name = "")
+
+# Calibration
+calib_plot <- comparison_df %>% 
+  filter(method != "exclude") %>% 
+  ggplot(aes(x = split,
+             y = calibration))+
+  geom_path(aes(colour = method), size = 1)+
+  geom_hline(linetype = "dashed",
+             colour =  "black",
+             yintercept = results$calibration)+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
+                      name = "")+
+  scale_fill_manual(values = brewer.pal(8,"Set1")[-6],
+                    name = "")+
+  scale_y_reverse()
+
+# Assess optimality
+opt_plot <- comparison_df %>% 
+  filter(method != "exclude") %>% 
+  ggplot(aes(x = discrimination,
+             y = calibration,
+             colour = method))+
+  geom_point(size = 4)+
+  geom_path()+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
+                      name = "")+
+  scale_fill_manual(values = brewer.pal(8,"Set1")[-6],
+                    name = "")+
+  scale_y_reverse()
+
+plot_grid(discrim_plot, calib_plot, opt_plot, nrow = 1)
