@@ -11,6 +11,7 @@ require(tidyr)
 require(ROCR)
 require(ggplot2)
 require(ResourceSelection)
+require(cowplot)
 
 # Functions
 source("functions/inverse_logit.R")
@@ -77,9 +78,100 @@ hoslem_full <- hoslem.test(full_data$readmission,
 
 # Tabulate
 results <- data.frame(method = "full_dataset",
+                      split = NA,
                       AUROC = auc@y.values[[1]],
                       AUROC_error = 0,
                       chisq = hoslem_full$statistic,
-                      p = hoslem_full$p.value)
+                      chisq_error = 0)
 
 # Mean imputation-----
+results_mean <- read_rds("data/impute/average.RDS")
+
+# Extraction function
+#x <- results_mean[[1]]
+extraction_mean <- function(x)
+{
+  # Load packages
+  require(magrittr)
+  require(ROCR)
+  require(ResourceSelection)
+  
+  # Calculate discrimination
+  auc_zero <- prediction(x["zero_probs"] %>% inverse_logit(),
+                     full_data$readmission) %>% 
+    performance(measure = "auc")
+  auc_mean <- prediction(x["int_mean_probs"] %>% inverse_logit(),
+                         full_data$readmission) %>% 
+    performance(measure = "auc")
+  auc_median <- prediction(x["int_median_probs"] %>% inverse_logit(),
+                         full_data$readmission) %>% 
+    performance(measure = "auc")
+  
+  # Calculate calibration
+  cal_zero <- hoslem.test(full_data$readmission,
+                          x["zero_probs"][,1] %>% inverse_logit(), 10)
+  cal_mean <- hoslem.test(full_data$readmission,
+                          x["int_mean_probs"][,1] %>% inverse_logit(), 10)
+  cal_median <- hoslem.test(full_data$readmission,
+                            x["int_median_probs"][,1] %>% inverse_logit(), 10)
+  
+  # Output
+  output <- data.frame(method = c("assume_zero", "mean", "median"),
+                       split = x["split"][1,1], n = x["n"][1,1],
+                       AUC = c(auc_zero@y.values[[1]],
+                               auc_mean@y.values[[1]],
+                               auc_median@y.values[[1]]),
+                       hoslem = c(cal_zero$statistic,
+                                 cal_mean$statistic,
+                                 cal_median$statistic))
+  return(output)
+}
+
+# Run extraction
+psnice(value = 19)
+cl <- makeCluster(ifelse(detectCores() <= 12,
+                         detectCores() - 1,
+                         12))
+clusterExport(cl, varlist = c("full_data", "inverse_logit"))
+metrics_mean <- parLapply(cl, 
+                          results_mean,
+                          extraction_mean)
+stopCluster(cl)
+
+# Summarise
+summary_mean <- do.call(rbind.data.frame, metrics_mean) %>% 
+  na.omit() %>% 
+  group_by(method, split) %>% 
+  summarise(discrimination = mean(AUC),
+            discrimination_error = sd(AUC),
+            calibration = mean(hoslem),
+            calibration_error = sd(hoslem))
+
+# Plot discrimination
+summary_mean %>% 
+  ggplot(aes(x = split,
+             y = discrimination))+
+  geom_ribbon(aes(ymin = discrimination - discrimination_error,
+                  ymax = discrimination + discrimination_error),
+              fill = "Gray90")+
+  geom_path()+
+  geom_hline(linetype = "dashed",
+             colour =  "red",
+             yintercept = results$AUROC)+
+  facet_wrap(~method)+
+  theme_classic(20)
+
+# Plot calibration
+summary_mean %>% 
+  ggplot(aes(x = split,
+             y = calibration))+
+  geom_ribbon(aes(ymin = calibration - calibration_error,
+                  ymax = calibration + calibration_error),
+              fill = "Gray90")+
+  geom_path()+
+  geom_hline(linetype = "dashed",
+             colour =  "red",
+             yintercept = results$chisq)+
+  facet_wrap(~method)+
+  theme_classic(20)
+
