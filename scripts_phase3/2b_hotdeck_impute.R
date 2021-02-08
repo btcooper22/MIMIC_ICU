@@ -35,25 +35,13 @@ full_data %<>%
 # Create combinations list
 pooling_vars <- list(
   c("admission_type", "apache_chronic_discharge",
-    "apache_age_discharge", "diagnosis"),
-  c("apache_chronic_discharge",
-    "apache_age_discharge", "diagnosis"),
-  c("admission_type",
-    "apache_age_discharge", "diagnosis"),
-  c("admission_type", "apache_chronic_discharge",
-    "diagnosis"),
-  c("admission_type", "apache_chronic_discharge",
     "apache_age_discharge"),
   c("admission_type", "apache_age_discharge"),
   c("admission_type", "apache_chronic_discharge"),
-  c("admission_type", "diagnosis"),
   c("apache_age_discharge", "apache_chronic_discharge"),
-  c("apache_age_discharge", "diagnosis"),
-  c("apache_chronic_discharge", "diagnosis"),
   "admission_type",
   "apache_age_discharge",
-  "apache_chronic_discharge",
-  "diagnosis"
+  "apache_chronic_discharge"
 )
 
 # Main loop through files-------
@@ -66,7 +54,7 @@ files <- dir("data/MCAR/", full.names = TRUE)
 
 # Set up parallel
 ptm <- proc.time()
-parallel_setup(8)
+parallel_setup(14)
 
 output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr","stringr",
                                          "tibble","magrittr", "forcats",
