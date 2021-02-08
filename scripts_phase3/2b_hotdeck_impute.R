@@ -54,7 +54,7 @@ files <- dir("data/MCAR/", full.names = TRUE)
 
 # Set up parallel
 ptm <- proc.time()
-parallel_setup(14)
+parallel_setup(12)
 
 output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr","stringr",
                                          "tibble","magrittr", "forcats",
@@ -196,8 +196,9 @@ output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr","stringr",
     output$split <- metadata[2]
     output
   }
-stopImplicitCluster()
-proc.time() - ptm
+stopImplicitCluster() 
+proc.time() - ptm # 54 min
 
 # Compile all
-
+write_rds(output, "data/impute/hotdeck.RDS",
+          compress = "gz")
