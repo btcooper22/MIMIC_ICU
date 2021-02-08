@@ -12,6 +12,7 @@ require(ROCR)
 require(ggplot2)
 require(ResourceSelection)
 require(cowplot)
+require(RColorBrewer)
 
 # Functions
 source("functions/inverse_logit.R")
@@ -269,3 +270,170 @@ summary_exclusion %>%
              yintercept = results$chisq)+
   facet_wrap(~method)+
   theme_classic(20)
+
+# Hot-deck imputation--------
+results_hotdeck <- read_rds("data/impute/hotdeck.RDS")
+
+# Extraction function
+#x <- results_hotdeck[[1]]
+extraction_hotdeck <- function(x)
+{
+  # Load packages
+  require(magrittr)
+  require(ROCR)
+  require(ResourceSelection)
+  
+  # List pooling methods
+  pooling_methods <- c("admit.chronic.age",
+                       "admit.age", "admit.chronic",
+                       "age.chronic", "admit",
+                       "age", "chronic")
+  
+  # Calculate discrimination
+  auc_admit.chronic.age <- prediction(x$probs[,1] %>% inverse_logit(),
+                         full_data$readmission) %>% 
+    performance(measure = "auc") #admit.chronic.age
+  
+  auc_admit.age <- prediction(x$probs[,2] %>% inverse_logit(),
+                                      full_data$readmission) %>% 
+    performance(measure = "auc") #admit.age
+  
+  auc_admit.chronic <- prediction(x$probs[,3] %>% inverse_logit(),
+                                      full_data$readmission) %>% 
+    performance(measure = "auc") #admit.chronic
+  
+  auc_age.chronic <- prediction(x$probs[,4] %>% inverse_logit(),
+                                      full_data$readmission) %>% 
+    performance(measure = "auc") #age.chronic
+  
+  auc_admit <- prediction(x$probs[,5] %>% inverse_logit(),
+                                      full_data$readmission) %>% 
+    performance(measure = "auc") #admit
+  
+  auc_age <- prediction(x$probs[,6] %>% inverse_logit(),
+                                      full_data$readmission) %>% 
+    performance(measure = "auc") #age
+  
+  auc_chronic <- prediction(x$probs[,7] %>% inverse_logit(),
+                                      full_data$readmission) %>% 
+    performance(measure = "auc") #chronic
+
+
+  # Calculate calibration
+  cal_admit.chronic.age <- hoslem.test(full_data$readmission,
+                          x$probs[,1] %>% inverse_logit(), 10)
+  
+  cal_admit.age <- hoslem.test(full_data$readmission,
+                                       x$probs[,2] %>% inverse_logit(), 10)
+  
+  cal_admit.chronic <- hoslem.test(full_data$readmission,
+                                       x$probs[,3] %>% inverse_logit(), 10)
+  
+  cal_age.chronic <- hoslem.test(full_data$readmission,
+                                       x$probs[,4] %>% inverse_logit(), 10)
+  
+  cal_admit <- hoslem.test(full_data$readmission,
+                                       x$probs[,5] %>% inverse_logit(), 10)
+  
+  cal_chronic <- hoslem.test(full_data$readmission,
+                                       x$probs[,6] %>% inverse_logit(), 10)
+  
+  cal_age <- hoslem.test(full_data$readmission,
+                                       x$probs[,7] %>% inverse_logit(), 10)
+  
+  # Output
+  output <- data.frame(method = pooling_methods,
+                       split = x$split[1], n = x$N[1],
+                       AUC = c(auc_admit.chronic.age@y.values[[1]],
+                               auc_admit.age@y.values[[1]],
+                               auc_admit.chronic@y.values[[1]],
+                               auc_age.chronic@y.values[[1]],
+                               auc_admit@y.values[[1]],
+                               auc_age@y.values[[1]],
+                               auc_chronic@y.values[[1]]),
+                       hoslem = c(cal_admit.chronic.age$statistic,
+                                  cal_admit.age$statistic,
+                                  cal_admit.chronic$statistic,
+                                  cal_age.chronic$statistic,
+                                  cal_admit$statistic,
+                                  cal_chronic$statistic,
+                                  cal_age$statistic))
+  return(output)
+}
+
+# Run extraction
+psnice(value = 19)
+cl <- makeCluster(ifelse(detectCores() <= 12,
+                         detectCores() - 1,
+                         12))
+clusterExport(cl, varlist = c("full_data", "inverse_logit"))
+metrics_hotdeck <- parLapply(cl, 
+                          results_hotdeck,
+                          extraction_hotdeck)
+stopCluster(cl)
+
+# Summarise
+summary_hotdeck <- do.call(rbind.data.frame, metrics_hotdeck) %>% 
+  na.omit() %>% 
+  group_by(method, split) %>% 
+  summarise(discrimination = mean(AUC),
+            discrimination_error = sd(AUC),
+            calibration = mean(hoslem),
+            calibration_error = sd(hoslem))
+
+# Plot discrimination -> All pooling methods
+summary_hotdeck %>% 
+  ggplot(aes(x = split,
+             y = discrimination))+
+  geom_path(aes(colour = method), size = 1)+
+  geom_hline(linetype = "dashed",
+             colour =  "red",
+             yintercept = results$AUROC)+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
+                      name = "")
+
+# Plot calibration -> All pooling methods
+summary_hotdeck %>% 
+  ggplot(aes(x = split,
+             y = calibration))+
+  geom_path(aes(colour = method), size = 1)+
+  geom_hline(linetype = "dashed",
+             colour =  "red",
+             yintercept = results$chisq)+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
+                      name = "")
+
+# Plot discrimination
+summary_hotdeck %>% 
+  filter(method == "admit.chronic.age") %>% 
+  ggplot(aes(x = split,
+             y = discrimination))+
+  geom_ribbon(aes(ymin = discrimination - discrimination_error,
+                  ymax = discrimination + discrimination_error),
+              fill = "Gray90")+
+  geom_path()+
+  geom_hline(linetype = "dashed",
+             colour =  "red",
+             yintercept = results$AUROC)+
+  facet_wrap(~method)+
+  theme_classic(20)
+
+# Plot calibration
+  summary_hotdeck %>% 
+    filter(method == "admit.chronic.age") %>% 
+  ggplot(aes(x = split,
+             y = calibration))+
+  geom_ribbon(aes(ymin = calibration - calibration_error,
+                  ymax = calibration + calibration_error),
+              fill = "Gray90")+
+  geom_path()+
+  geom_hline(linetype = "dashed",
+             colour =  "red",
+             yintercept = results$chisq)+
+  facet_wrap(~method)+
+  theme_classic(20)
+  
