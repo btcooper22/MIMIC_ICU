@@ -9,6 +9,10 @@ require(doParallel)
 require(tools)
 require(tidyr)
 
+# Functions
+source("functions/parallel_setup.R")
+source("functions/filename_metadata.R")
+
 # Load data-------
 full_data <- read_csv("data/impute/complete_cases.csv") 
 
@@ -22,11 +26,7 @@ files <- dir("data/MCAR/", full.names = TRUE)
 
 # Set up parallel
 ptm <- proc.time()
-psnice(value = 19)
-registerDoParallel(ifelse(detectCores() <= 16,
-                          detectCores() - 1,
-                          16)
-)
+parallel_setup(14)
 
 output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr",
                                                      "stringr", "tibble")) %dopar%
@@ -40,20 +40,11 @@ output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr",
       predict(apache_model, newdata = .)
     
     # Extract metadata
-    metadata <- files[f] %>% 
-      str_split("/", simplify = TRUE) %>% .[,3] %>% 
-      str_split("_", simplify = TRUE)
-    
-    split <- metadata[,1] %>% 
-      substr(2,5) %>% 
-      as.numeric()
-    
-    n <- metadata[,2] %>% 
-      substr(2,4) %>% 
-      as.numeric()
+    metadata <- filename_metadata(files[f])
     
     # Output data frame for list
-    data.frame(split, n, probs)
+    data.frame(split = metadata[2], 
+               n = metadata[1], probs)
   }
 stopImplicitCluster()
 proc.time() - ptm # 9s 
