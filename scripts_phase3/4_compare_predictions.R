@@ -24,6 +24,10 @@ pal <- brewer.pal(9, "Set1")[-6]
 
 # Complete cases------
 
+# Score apache
+full_data %<>% 
+  mutate(apache_II_discharge = calculate_apache_scores(.))
+
 # Create model and predict
 apache_model <- glm(readmission ~ apache_II_discharge,
                     data = full_data, family = "binomial")
@@ -292,7 +296,7 @@ summary_hotdeck %>%
 # Combine
 comparison_df <- rbind(
   results,
-  summary_mean %>% filter(method != "median"),
+  summary_mean %>% filter(method != "mean"),
   summary_hotdeck %>% filter(method == "admit.chronic.age") %>% 
     mutate(method = "hotdeck")
 )
