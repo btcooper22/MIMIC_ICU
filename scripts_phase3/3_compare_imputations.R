@@ -17,11 +17,16 @@ require(RColorBrewer)
 # Functions
 source("functions/inverse_logit.R")
 source("functions/calibration.R")
+source("functions/calculate_apache_score.R")
 
 # Load data
 full_data <- read_csv("data/impute/complete_cases.csv") 
 
 # Complete cases------
+
+# Score apache
+full_data %<>% 
+  mutate(apache_II_discharge = calculate_apache_scores(.))
 
 # Create model and predict
 apache_model <- glm(readmission ~ apache_II_discharge,
