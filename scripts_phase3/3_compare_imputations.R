@@ -181,101 +181,6 @@ summary_mean %>%
   facet_wrap(~method)+
   theme_classic(20)
 
-# Exclusion-------
-results_exclusion <- read_rds("data/impute/exclusion.RDS")
-
-# Extraction function
-x <- results_exclusion[[1]]
-extraction_exclusion <- function(x)
-{
-  # Load packages
-  require(magrittr)
-  require(ROCR)
-  require(ResourceSelection)
-  
-  # Combine and trim data
-  exclude_df <- data.frame(readmission = full_data$readmission,
-                           x["probs"]) %>% 
-    na.omit()
-  
-  # Filter high-exclusion cases
-  if(length(unique(exclude_df$readmission)) == 2)
-  {
-    # Calculate discrimination
-    auc_exclude <- prediction(exclude_df$probs %>% inverse_logit(),
-                              exclude_df$readmission) %>% 
-      performance(measure = "auc")
-    
-    # Calculate calibration
-    cal_exclude <- hoslem.test(exclude_df$readmission,
-                               exclude_df$probs %>% inverse_logit(), 10)
-    
-    # Output
-    output <- data.frame(method = "exclude",
-                         split = x["split"][1,1], n = x["n"][1,1],
-                         AUC = auc_exclude@y.values[[1]],
-                         hoslem = cal_exclude$statistic)
-  }else
-  {
-    # Output
-    output <- data.frame(method = "exclude",
-                         split = x["split"][1,1], n = x["n"][1,1],
-                         AUC = NA,
-                         hoslem = NA)
-  }
-  
-  
-  return(output)
-}
-
-# Run extraction
-psnice(value = 19)
-cl <- makeCluster(ifelse(detectCores() <= 12,
-                         detectCores() - 1,
-                         12))
-clusterExport(cl, varlist = c("full_data", "inverse_logit"))
-metrics_exclusion <- parLapply(cl, 
-                               results_exclusion,
-                               extraction_exclusion)
-stopCluster(cl)
-
-# Summarise
-summary_exclusion <- do.call(rbind.data.frame, metrics_exclusion) %>% 
-  na.omit() %>% 
-  group_by(method, split) %>% 
-  summarise(discrimination = mean(AUC),
-            discrimination_error = sd(AUC),
-            calibration = mean(hoslem),
-            calibration_error = sd(hoslem))
-
-# Plot discrimination
-summary_exclusion %>% 
-  ggplot(aes(x = split,
-             y = discrimination))+
-  geom_ribbon(aes(ymin = discrimination - discrimination_error,
-                  ymax = discrimination + discrimination_error),
-              fill = "Gray90")+
-  geom_path()+
-  geom_hline(linetype = "dashed",
-             colour =  "red",
-             yintercept = results$discrimination)+
-  facet_wrap(~method)+
-  theme_classic(20)
-
-# Plot calibration
-summary_exclusion %>% 
-  ggplot(aes(x = split,
-             y = calibration))+
-  geom_ribbon(aes(ymin = calibration - calibration_error,
-                  ymax = calibration + calibration_error),
-              fill = "Gray90")+
-  geom_path()+
-  geom_hline(linetype = "dashed",
-             colour =  "red",
-             yintercept = results$calibration)+
-  facet_wrap(~method)+
-  theme_classic(20)
-
 # Hot-deck imputation--------
 results_hotdeck <- read_rds("data/impute/hotdeck.RDS")
 
@@ -393,7 +298,7 @@ summary_hotdeck %>%
   geom_path(aes(colour = method), size = 1)+
   geom_hline(linetype = "dashed",
              colour =  "red",
-             yintercept = results$AUROC)+
+             yintercept = results$discrimination)+
   theme_classic(20)+
   theme(legend.position = "top")+
   scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
@@ -406,7 +311,7 @@ summary_hotdeck %>%
   geom_path(aes(colour = method), size = 1)+
   geom_hline(linetype = "dashed",
              colour =  "red",
-             yintercept = results$chisq)+
+             yintercept = results$calibration)+
   theme_classic(20)+
   theme(legend.position = "top")+
   scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
@@ -423,8 +328,7 @@ summary_hotdeck %>%
   geom_path()+
   geom_hline(linetype = "dashed",
              colour =  "red",
-             yintercept = results$AUROC)+
-  facet_wrap(~method)+
+             yintercept = results$discrimination)+
   theme_classic(20)
 
 # Plot calibration
@@ -438,15 +342,14 @@ summary_hotdeck %>%
   geom_path()+
   geom_hline(linetype = "dashed",
              colour =  "red",
-             yintercept = results$chisq)+
-  facet_wrap(~method)+
+             yintercept = results$calibration)+
   theme_classic(20)
 
 # Compare methods---------
 
 # Combine
 comparison_df <- rbind(
-  results, summary_exclusion,
+  results,
   summary_mean %>% filter(method != "median"),
   summary_hotdeck %>% filter(method == "admit.chronic.age") %>% 
     mutate(method = "hotdeck")
@@ -454,7 +357,6 @@ comparison_df <- rbind(
 
 # Discrimination
 discrim_plot <- comparison_df %>% 
-  filter(method != "exclude") %>% 
   ggplot(aes(x = split,
              y = discrimination))+
   # geom_ribbon(aes(ymin = discrimination - discrimination_error,
@@ -473,7 +375,6 @@ discrim_plot <- comparison_df %>%
 
 # Calibration
 calib_plot <- comparison_df %>% 
-  filter(method != "exclude") %>% 
   ggplot(aes(x = split,
              y = calibration))+
   geom_path(aes(colour = method), size = 1)+
@@ -490,7 +391,6 @@ calib_plot <- comparison_df %>%
 
 # Assess optimality
 opt_plot <- comparison_df %>% 
-  filter(method != "exclude") %>% 
   ggplot(aes(x = discrimination,
              y = calibration,
              colour = method))+
