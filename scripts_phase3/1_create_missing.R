@@ -21,7 +21,7 @@ full_data <- read_csv("data/final_patients.csv") %>%
   cbind(read_csv("data/final_patients.csv") %>% 
           select(row_id, subject_id,
                  adm_id, readmission,
-                 age),.)
+                 age, acute_renal_failure),.)
 
 # Binarise readmission
 full_data %<>% 
@@ -57,11 +57,11 @@ write_csv(full_data,"data/impute/complete_cases.csv")
 N <- 100
 
 # Set splits
-splits <- c(0.01, 0.05, seq(0.1, 0.8, 0.1))
+splits <- c(0.01, 0.05, 1:10 / 12) %>% round(2)
 
 # Pull APACHE matrix
-apache_matrix <- full_data[,c(7:17,19)]
-apache_additional <- full_data[,c(18,20)]
+apache_matrix <- full_data[,c(8:18,20)]
+apache_additional <- full_data[,c(6,19,21)]
 
 # Set up parallel
 ptm <- proc.time()
