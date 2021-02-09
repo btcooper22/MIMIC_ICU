@@ -21,6 +21,7 @@ source("functions/calculate_apache_score.R")
 
 # Load data
 full_data <- read_csv("data/impute/complete_cases.csv") 
+pal <- brewer.pal(9, "Set1")[-6]
 
 # Complete cases------
 
@@ -88,7 +89,11 @@ results <- data.frame(method = "full_dataset",
                       discrimination = auc@y.values[[1]],
                       discrimination_error = 0,
                       calibration = hoslem_full$statistic,
-                      calibration_error = 0)
+                      calibration_error = 0,
+                      distance = 0,
+                      mean_error = 0,
+                      max = 0,
+                      max_error = 0)
 
 # Mean imputation-----
 results_mean <- read_rds("data/impute/average.RDS")
@@ -121,6 +126,16 @@ extraction_mean <- function(x)
   cal_median <- hoslem.test(full_data$readmission,
                             x["int_median_probs"][,1] %>% inverse_logit(), 10)
   
+  # Extract probabilities
+  zero_probs <- x["zero_probs"][,1] %>% inverse_logit()
+  int_mean_probs <- x["int_mean_probs"][,1] %>% inverse_logit()
+  int_median_probs <- x["int_median_probs"][,1] %>% inverse_logit()
+  
+  # Measure distance
+  zero_dist <- abs(zero_probs - probs)
+  mean_dist <- abs(int_mean_probs - probs)
+  median_dist <- abs(int_median_probs - probs)
+  
   # Output
   output <- data.frame(method = c("assume_zero", "mean", "median"),
                        split = x["split"][1,1], n = x["n"][1,1],
@@ -129,7 +144,13 @@ extraction_mean <- function(x)
                                auc_median@y.values[[1]]),
                        hoslem = c(cal_zero$statistic,
                                   cal_mean$statistic,
-                                  cal_median$statistic))
+                                  cal_median$statistic),
+                       mean_distance = c(mean(zero_dist),
+                                         mean(mean_dist),
+                                         mean(median_dist)),
+                       max_distance = c(quantile(zero_dist, 0.95),
+                                        quantile(mean_dist, 0.95),
+                                        quantile(median_dist, 0.95)))
   return(output)
 }
 
@@ -138,7 +159,8 @@ psnice(value = 19)
 cl <- makeCluster(ifelse(detectCores() <= 12,
                          detectCores() - 1,
                          12))
-clusterExport(cl, varlist = c("full_data", "inverse_logit"))
+clusterExport(cl, varlist = c("full_data", "inverse_logit",
+                              "probs"))
 metrics_mean <- parLapply(cl, 
                           results_mean,
                           extraction_mean)
@@ -151,257 +173,72 @@ summary_mean <- do.call(rbind.data.frame, metrics_mean) %>%
   summarise(discrimination = mean(AUC),
             discrimination_error = sd(AUC),
             calibration = mean(hoslem),
-            calibration_error = sd(hoslem))
+            calibration_error = sd(hoslem),
+            distance = mean(mean_distance * 100),
+            mean_error = sd(mean_distance * 100),
+            max = mean(max_distance * 100),
+            max_error = sd(max_distance * 100))
 
-# Plot discrimination
+# Plot
 summary_mean %>% 
+  pivot_longer(c(3,5,7,9)) %>% 
+  mutate(error = case_when(name == "distance" ~ mean_error,
+                           name == "max" ~ max_error,
+                           name == "calibration" ~ calibration_error,
+                           name == "discrimination" ~ discrimination_error)) %>% 
   ggplot(aes(x = split,
-             y = discrimination))+
-  geom_ribbon(aes(ymin = discrimination - discrimination_error,
-                  ymax = discrimination + discrimination_error),
-              fill = "Gray90")+
-  geom_path()+
-  geom_hline(linetype = "dashed",
-             colour =  "red",
-             yintercept = results$discrimination)+
-  facet_wrap(~method)+
-  theme_classic(20)
-
-# Plot calibration
-summary_mean %>% 
-  ggplot(aes(x = split,
-             y = calibration))+
-  geom_ribbon(aes(ymin = calibration - calibration_error,
-                  ymax = calibration + calibration_error),
-              fill = "Gray90")+
-  geom_path()+
-  geom_hline(linetype = "dashed",
-             colour =  "red",
-             yintercept = results$calibration)+
-  facet_wrap(~method)+
-  theme_classic(20)
-
-# Hot-deck imputation--------
-results_hotdeck <- read_rds("data/impute/hotdeck.RDS")
-
-# Extraction function
-#x <- results_hotdeck[[1]]
-extraction_hotdeck <- function(x)
-{
-  # Load packages
-  require(magrittr)
-  require(ROCR)
-  require(ResourceSelection)
-  
-  # List pooling methods
-  pooling_methods <- c("admit.chronic.age",
-                       "admit.age", "admit.chronic",
-                       "age.chronic", "admit",
-                       "age", "chronic")
-  
-  # Calculate discrimination
-  auc_admit.chronic.age <- prediction(x$probs[,1] %>% inverse_logit(),
-                                      full_data$readmission) %>% 
-    performance(measure = "auc") #admit.chronic.age
-  
-  auc_admit.age <- prediction(x$probs[,2] %>% inverse_logit(),
-                              full_data$readmission) %>% 
-    performance(measure = "auc") #admit.age
-  
-  auc_admit.chronic <- prediction(x$probs[,3] %>% inverse_logit(),
-                                  full_data$readmission) %>% 
-    performance(measure = "auc") #admit.chronic
-  
-  auc_age.chronic <- prediction(x$probs[,4] %>% inverse_logit(),
-                                full_data$readmission) %>% 
-    performance(measure = "auc") #age.chronic
-  
-  auc_admit <- prediction(x$probs[,5] %>% inverse_logit(),
-                          full_data$readmission) %>% 
-    performance(measure = "auc") #admit
-  
-  auc_age <- prediction(x$probs[,6] %>% inverse_logit(),
-                        full_data$readmission) %>% 
-    performance(measure = "auc") #age
-  
-  auc_chronic <- prediction(x$probs[,7] %>% inverse_logit(),
-                            full_data$readmission) %>% 
-    performance(measure = "auc") #chronic
-  
-  
-  # Calculate calibration
-  cal_admit.chronic.age <- hoslem.test(full_data$readmission,
-                                       x$probs[,1] %>% inverse_logit(), 10)
-  
-  cal_admit.age <- hoslem.test(full_data$readmission,
-                               x$probs[,2] %>% inverse_logit(), 10)
-  
-  cal_admit.chronic <- hoslem.test(full_data$readmission,
-                                   x$probs[,3] %>% inverse_logit(), 10)
-  
-  cal_age.chronic <- hoslem.test(full_data$readmission,
-                                 x$probs[,4] %>% inverse_logit(), 10)
-  
-  cal_admit <- hoslem.test(full_data$readmission,
-                           x$probs[,5] %>% inverse_logit(), 10)
-  
-  cal_chronic <- hoslem.test(full_data$readmission,
-                             x$probs[,6] %>% inverse_logit(), 10)
-  
-  cal_age <- hoslem.test(full_data$readmission,
-                         x$probs[,7] %>% inverse_logit(), 10)
-  
-  # Output
-  output <- data.frame(method = pooling_methods,
-                       split = x$split[1], n = x$N[1],
-                       AUC = c(auc_admit.chronic.age@y.values[[1]],
-                               auc_admit.age@y.values[[1]],
-                               auc_admit.chronic@y.values[[1]],
-                               auc_age.chronic@y.values[[1]],
-                               auc_admit@y.values[[1]],
-                               auc_age@y.values[[1]],
-                               auc_chronic@y.values[[1]]),
-                       hoslem = c(cal_admit.chronic.age$statistic,
-                                  cal_admit.age$statistic,
-                                  cal_admit.chronic$statistic,
-                                  cal_age.chronic$statistic,
-                                  cal_admit$statistic,
-                                  cal_chronic$statistic,
-                                  cal_age$statistic))
-  return(output)
-}
-
-# Run extraction
-psnice(value = 19)
-cl <- makeCluster(ifelse(detectCores() <= 12,
-                         detectCores() - 1,
-                         12))
-clusterExport(cl, varlist = c("full_data", "inverse_logit"))
-metrics_hotdeck <- parLapply(cl, 
-                             results_hotdeck,
-                             extraction_hotdeck)
-stopCluster(cl)
-
-# Summarise
-summary_hotdeck <- do.call(rbind.data.frame, metrics_hotdeck) %>% 
-  na.omit() %>% 
-  group_by(method, split) %>% 
-  summarise(discrimination = mean(AUC),
-            discrimination_error = sd(AUC),
-            calibration = mean(hoslem),
-            calibration_error = sd(hoslem))
-
-# Plot discrimination -> All pooling methods
-summary_hotdeck %>% 
-  ggplot(aes(x = split,
-             y = discrimination))+
-  geom_path(aes(colour = method), size = 1)+
-  geom_hline(linetype = "dashed",
-             colour =  "red",
-             yintercept = results$discrimination)+
+             y = value))+
+  geom_ribbon(aes(ymin = value - error,
+                  ymax = value + error,
+                  fill = method), alpha = 0.1)+
+  geom_path(aes(colour = method))+
+  geom_hline(data = results %>% pivot_longer(c(3,5,7,9)),
+             aes(yintercept = value), size = 1,
+             linetype = "dashed")+
   theme_classic(20)+
   theme(legend.position = "top")+
-  scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
-                      name = "")
+  facet_wrap(~name, scales = "free_y")+
+  scale_colour_manual(values = pal,
+                      name = "")+
+  scale_fill_manual(values = pal,
+                    name = "")+
+  labs(x = "Proportion missing")
 
-# Plot calibration -> All pooling methods
-summary_hotdeck %>% 
-  ggplot(aes(x = split,
-             y = calibration))+
-  geom_path(aes(colour = method), size = 1)+
-  geom_hline(linetype = "dashed",
-             colour =  "red",
-             yintercept = results$calibration)+
-  theme_classic(20)+
-  theme(legend.position = "top")+
-  scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
-                      name = "")
 
-# Plot discrimination
-summary_hotdeck %>% 
-  filter(method == "admit.chronic.age") %>% 
-  ggplot(aes(x = split,
-             y = discrimination))+
-  geom_ribbon(aes(ymin = discrimination - discrimination_error,
-                  ymax = discrimination + discrimination_error),
-              fill = "Gray90")+
-  geom_path()+
-  geom_hline(linetype = "dashed",
-             colour =  "red",
-             yintercept = results$discrimination)+
-  theme_classic(20)
-
-# Plot calibration
-summary_hotdeck %>% 
-  filter(method == "admit.chronic.age") %>% 
-  ggplot(aes(x = split,
-             y = calibration))+
-  geom_ribbon(aes(ymin = calibration - calibration_error,
-                  ymax = calibration + calibration_error),
-              fill = "Gray90")+
-  geom_path()+
-  geom_hline(linetype = "dashed",
-             colour =  "red",
-             yintercept = results$calibration)+
-  theme_classic(20)
 
 # Compare methods---------
 
 # Combine
 comparison_df <- rbind(
   results,
-  summary_mean %>% filter(method != "median"),
+  summary_mean %>% filter(method != "mean"),
   summary_hotdeck %>% filter(method == "admit.chronic.age") %>% 
     mutate(method = "hotdeck")
 )
 
-# Discrimination
-discrim_plot <- comparison_df %>% 
+# Plot each dimension
+comparison_df %>% 
+  pivot_longer(c(3,5,7,9)) %>% 
+  mutate(error = case_when(name == "distance" ~ mean_error,
+                           name == "max" ~ max_error,
+                           name == "calibration" ~ calibration_error,
+                           name == "discrimination" ~ discrimination_error)) %>% 
   ggplot(aes(x = split,
-             y = discrimination))+
-  # geom_ribbon(aes(ymin = discrimination - discrimination_error,
-  #                 ymax = discrimination + discrimination_error,
-  #                 fill = method), alpha = 0.1)+
-  geom_path(aes(colour = method), size = 1)+
-  geom_hline(linetype = "dashed",
-             colour =  "black",
-             yintercept = results$discrimination)+
+             y = value))+
+  geom_ribbon(aes(ymin = value - error,
+                  ymax = value + error,
+                  fill = method), alpha = 0.1)+
+  geom_path(aes(colour = method))+
+  geom_hline(data = results %>% pivot_longer(c(3,5,7,9)),
+             aes(yintercept = value), size = 1,
+             linetype = "dashed")+
   theme_classic(20)+
   theme(legend.position = "top")+
-  scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
+  facet_wrap(~name, scales = "free_y")+
+  scale_colour_manual(values = pal,
                       name = "")+
-  scale_fill_manual(values = brewer.pal(8,"Set1")[-6],
-                    name = "")
-
-# Calibration
-calib_plot <- comparison_df %>% 
-  ggplot(aes(x = split,
-             y = calibration))+
-  geom_path(aes(colour = method), size = 1)+
-  geom_hline(linetype = "dashed",
-             colour =  "black",
-             yintercept = results$calibration)+
-  theme_classic(20)+
-  theme(legend.position = "top")+
-  scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
-                      name = "")+
-  scale_fill_manual(values = brewer.pal(8,"Set1")[-6],
+  scale_fill_manual(values = pal,
                     name = "")+
-  scale_y_reverse()
+  labs(x = "Proportion missing")
 
-# Assess optimality
-opt_plot <- comparison_df %>% 
-  ggplot(aes(x = discrimination,
-             y = calibration,
-             colour = method))+
-  geom_point(size = 4)+
-  geom_path()+
-  theme_classic(20)+
-  theme(legend.position = "top")+
-  scale_colour_manual(values = brewer.pal(8,"Set1")[-6],
-                      name = "")+
-  scale_fill_manual(values = brewer.pal(8,"Set1")[-6],
-                    name = "")+
-  scale_y_reverse()
-
-plot_grid(discrim_plot, calib_plot, opt_plot, nrow = 1)
+# Plot multidimensional
