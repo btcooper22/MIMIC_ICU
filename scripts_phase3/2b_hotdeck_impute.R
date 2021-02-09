@@ -14,6 +14,7 @@ require(forcats)
 source("functions/filename_metadata.R")
 source("functions/make_pool.R")
 source("functions/parallel_setup.R")
+source("functions/calculate_apache_score.R")
 
 # Load data
 full_data <- read_csv("data/impute/complete_cases.csv") 
@@ -54,7 +55,7 @@ files <- dir("data/MCAR/", full.names = TRUE)
 
 # Set up parallel
 ptm <- proc.time()
-parallel_setup(12)
+parallel_setup(14)
 
 output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr","stringr",
                                          "tibble","magrittr", "forcats",
@@ -74,14 +75,13 @@ output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr","stringr",
     mcar_df <- read.csv(files[f]) %>% 
     # Join pooling data
     cbind(full_data %>% 
-            select(admission_type,
-                   diagnosis))
+            select(admission_type))
     
     # Find NA columns
     mcar_NA <- mcar_df %>% 
       select_if(function(x) any(is.na(x))) %>% 
       # Add identifying data again
-      cbind(mcar_df[13:16])
+      cbind(mcar_df[,13:16])
     
     # Loop through NA columns
     imputed_NA <- foreach(i = 1:(ncol(mcar_NA)-4)) %do%
@@ -167,12 +167,12 @@ output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr","stringr",
         
         # Attach remaining values
         full_df %<>% as.data.frame() %>% 
-          cbind(mcar_df[,13:14])
-        names(full_df) <- names(mcar_df)[1:14]
+          cbind(mcar_df[,13:15])
+        names(full_df) <- names(mcar_df)[1:15]
         
         # Sum and predict
         probs <-  full_df %>% 
-          mutate(apache_II_discharge = rowSums(full_df)) %>% 
+          mutate(apache_II_discharge = calculate_apache_scores(.)) %>% 
           predict(apache_model, newdata = .)
         
         # Output

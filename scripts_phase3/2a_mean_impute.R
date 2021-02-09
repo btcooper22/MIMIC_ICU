@@ -9,14 +9,18 @@ require(doParallel)
 require(tools)
 require(tidyr)
 
+# Functions
+source("functions/calculate_apache_score.R")
+source("functions/filename_metadata.R")
+
 # Load data-------
 full_data <- read_csv("data/impute/complete_cases.csv") 
 
 # Generate external mean and median
-# external_averages <- full_data %>% 
-#   select(7:20) %>% 
-#   pivot_longer(1:14) %>% 
-#   group_by(name) %>% 
+# external_averages <- full_data %>%
+#   select(7:20) %>%
+#   pivot_longer(1:14) %>%
+#   group_by(name) %>%
 #   summarise(mean = mean(value),
 #             median = median(value))
 
@@ -71,7 +75,6 @@ output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr",
     
     # Assume 0
     zero_df <- mcar_df
-    zero_df[is.na(zero_df)] <- 0
     
     # Internal mean
     int_mean_df <- mcar_df %>% 
@@ -79,59 +82,31 @@ output <- foreach(f = 1:length(files), .packages = c("dplyr", "tidyr",
                                   select(name, mean) %>% 
                                   rename(value = "mean")))
     
-    # External mean
-    # ext_mean_df <- mcar_df %>% 
-    #   replace_na(global_replace(external_averages %>% 
-    #                               select(name, mean) %>% 
-    #                               rename(value = "mean")))
-    
     # Internal median
     int_median_df <- mcar_df %>% 
       replace_na(global_replace(internal_averages %>% 
                                   select(name, median) %>% 
                                   rename(value = "median")))
     
-    # External median
-    # ext_median_df <- mcar_df %>% 
-    #   replace_na(global_replace(external_averages %>% 
-    #                               select(name, median) %>% 
-    #                               rename(value = "median")))
-    
     # Sum and predict
-    zero_df %>% mutate(apache_II_discharge = rowSums(zero_df)) %>% 
+    zero_df %>% mutate(apache_II_discharge = calculate_apache_scores(.)) %>% 
       predict(apache_model, newdata = .) -> zero_probs
     
-    int_mean_df %>% mutate(apache_II_discharge = rowSums(int_mean_df)) %>% 
+    int_mean_df %>% mutate(apache_II_discharge = calculate_apache_scores(.)) %>% 
       predict(apache_model, newdata = .) -> int_mean_probs
-    # 
-    # ext_mean_df %>% mutate(apache_II_discharge = rowSums(ext_mean_df)) %>% 
-    #   predict(apache_model, newdata = .) -> ext_mean_probs
     
-    int_median_df %>% mutate(apache_II_discharge = rowSums(int_median_df)) %>% 
+    int_median_df %>% mutate(apache_II_discharge = calculate_apache_scores(.)) %>% 
       predict(apache_model, newdata = .) -> int_median_probs
-    # 
-    # ext_median_df %>% mutate(apache_II_discharge = rowSums(ext_median_df)) %>% 
-    #   predict(apache_model, newdata = .) -> ext_median_probs
     
     # Extract metadata
-    metadata <- files[f] %>% 
-      str_split("/", simplify = TRUE) %>% .[,3] %>% 
-      str_split("_", simplify = TRUE)
-    
-    split <- metadata[,1] %>% 
-      substr(2,5) %>% 
-      as.numeric()
-    
-    n <- metadata[,2] %>% 
-      substr(2,4) %>% 
-      as.numeric()
+    metadata <- filename_metadata(files[f])
     
     # Output data frame for list
-    data.frame(split, n, zero_probs, int_mean_probs,
+    data.frame(split = metadata[2], n = metadata[1], zero_probs, int_mean_probs,
                int_median_probs)
   }
 stopImplicitCluster()
-proc.time() - ptm # 26s 
+proc.time() - ptm # 30s 
 
 write_rds(output, "data/impute/average.RDS",
           compress = "gz")
