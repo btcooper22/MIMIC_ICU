@@ -474,7 +474,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     high_apache <- apache_II > 20
     
     # Calculate apache score at discharge
-    apache_score_vector_discharge <- apacheII_score_discharge(labs_df = labs, chart_df = charts,
+    apache_score_discharge <- apacheII_score_discharge(labs_df = labs, chart_df = charts,
                                           patient_df = mimic_preproc$stays %>%
                                             filter(subject_id == subj,
                                                    hadm_id == adm),
@@ -482,6 +482,9 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
                                           elect_admit = elective_admission,
                                           prev_diagnoses = history,
                                           arf = acute_renal_failure)
+    apache_score_vector_discharge <- apache_score_discharge$score
+    apache_value_vector_discharge <- apache_score_discharge$value
+    
     # Sum score
     if(is.na(apache_score_vector_discharge["bicarbonate"]))
     {
@@ -572,7 +575,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              apache_temperature = apache_score_vector["temperature"],
              apache_map = apache_score_vector["map"],
              apache_pulse = apache_score_vector["pulse"],
-             apache_respiratory = apache_score_vector["oxygen"],
+             apache_respiratory = apache_score_vector["respiratory"],
              apache_artpH = apache_score_vector["arterialpH"],
              apache_sodium = apache_score_vector["sodium"],
              apache_potassium = apache_score_vector["potassium"],
@@ -585,21 +588,21 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              apache_chronic = apache_score_vector["chronic"],
              apache_bicarbonate = apache_score_vector["bicarbonate"],
              apache_II_discharge,
-             apache_temperature_discharge = apache_score_vector_discharge["temperature"],
-             apache_map_discharge = apache_score_vector_discharge["map"],
-             apache_pulse_discharge = apache_score_vector_discharge["pulse"],
-             apache_respiratory_discharge = apache_score_vector_discharge["oxygen"],
-             apache_artpH_discharge = apache_score_vector_discharge["arterialpH"],
-             apache_sodium_discharge = apache_score_vector_discharge["sodium"],
-             apache_potassium_discharge = apache_score_vector_discharge["potassium"],
-             apache_creatinine_discharge = apache_score_vector_discharge["creatinine"],
-             apache_hematocrit_discharge = apache_score_vector_discharge["haematocrit"],
-             apache_wbc_discharge = apache_score_vector_discharge["whitebloodcount"],
-             apache_gcs_discharge = apache_score_vector_discharge["glasgowcoma"],
-             apache_age_discharge = apache_score_vector_discharge["age"],
-             apache_oxygenation_discharge = apache_score_vector_discharge["oxygen"],
-             apache_chronic_discharge = apache_score_vector_discharge["chronic"],
-             apache_bicarbonate_discharge = apache_score_vector_discharge["bicarbonate"]
+             apache_temperature_discharge = apache_value_vector_discharge["temperature"],
+             apache_map_discharge = apache_value_vector_discharge["map"],
+             apache_pulse_discharge = apache_value_vector_discharge["pulse"],
+             apache_respiratory_discharge = apache_value_vector_discharge["respiratory"],
+             apache_artpH_discharge = apache_value_vector_discharge["arterialpH"],
+             apache_sodium_discharge = apache_value_vector_discharge["sodium"],
+             apache_potassium_discharge = apache_value_vector_discharge["potassium"],
+             apache_creatinine_discharge = apache_value_vector_discharge["creatinine"],
+             apache_hematocrit_discharge = apache_value_vector_discharge["haematocrit"],
+             apache_wbc_discharge = apache_value_vector_discharge["whitebloodcount"],
+             apache_gcs_discharge = apache_value_vector_discharge["glasgowcoma"],
+             apache_age_discharge = apache_value_vector_discharge["age"],
+             apache_oxygenation_discharge = apache_value_vector_discharge["oxygen"],
+             apache_chronic_discharge = apache_value_vector_discharge["chronic"],
+             apache_bicarbonate_discharge = apache_value_vector_discharge["bicarbonate"]
              )
   #row.names(output) <- i
   output

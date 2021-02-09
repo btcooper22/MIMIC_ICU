@@ -465,7 +465,7 @@ apacheII_score_discharge <- function(labs_df, chart_df, patient_df, time_of_disc
     }
   }
   
-  # Return full vector of scores
+  # Return full list of scores and val
   full_scores <- c("temperature" = missing_to_na(temp_score),
                    "map" = missing_to_na(map_score),
                    "pulse" = missing_to_na(pulse_score),
@@ -481,7 +481,26 @@ apacheII_score_discharge <- function(labs_df, chart_df, patient_df, time_of_disc
                    "age" = missing_to_na(age_score),
                    "chronic" = missing_to_na(chronic_score),
                    "bicarbonate" = missing_to_na(bicarbonate_score))
-  return(full_scores)
+  
+  full_values <- c("temperature" = missing_to_na(temp_value),
+                   "map" = missing_to_na(map_value),
+                   "pulse" = missing_to_na(pulse_value),
+                   "respiratory" = missing_to_na(respiratory_value),
+                   "oxygen" = missing_to_na(oxygenation_score),
+                   "arterialpH" = missing_to_na(artpH_value),
+                   "sodium" = missing_to_na(sodium_value),
+                   "potassium" = missing_to_na(potassium_value),
+                   "creatinine" = missing_to_na(creatinine_value),
+                   "haematocrit" = missing_to_na(hematocrit_value),
+                   "whitebloodcount" = missing_to_na(wbc_value),
+                   "glasgowcoma" = missing_to_na(gcs_value),
+                   "age" = missing_to_na(age_score),
+                   "chronic" = missing_to_na(chronic_score),
+                   "bicarbonate" = missing_to_na(bicarbonate_score))
+  return(list(
+    score = full_scores,
+    value = full_values
+  ))
 }
 
 
