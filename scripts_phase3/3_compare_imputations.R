@@ -13,6 +13,7 @@ require(ggplot2)
 require(ResourceSelection)
 require(cowplot)
 require(RColorBrewer)
+require(scales)
 
 # Functions
 source("functions/inverse_logit.R")
@@ -220,21 +221,21 @@ summary_mean %>%
   labs(x = "Proportion missing")
 
 # Plot 4D
-summary_mean %>% 
-  ggplot(aes(x = split,
-             y = dist_4D))+
-  geom_ribbon(aes(ymin = dist_4D - error_4D,
-                  ymax = dist_4D + error_4D,
-                  fill = method), alpha = 0.1)+
-  geom_path(aes(colour = method))+
-  theme_classic(20)+
-  theme(legend.position = "top")+
-  scale_colour_manual(values = pal,
-                      name = "")+
-  scale_fill_manual(values = pal,
-                    name = "")+
-  labs(x = "Proportion missing",
-       y = "4D distance")
+# summary_mean %>% 
+#   ggplot(aes(x = split,
+#              y = dist_4D))+
+#   geom_ribbon(aes(ymin = dist_4D - error_4D,
+#                   ymax = dist_4D + error_4D,
+#                   fill = method), alpha = 0.1)+
+#   geom_path(aes(colour = method))+
+#   theme_classic(20)+
+#   theme(legend.position = "top")+
+#   scale_colour_manual(values = pal,
+#                       name = "")+
+#   scale_fill_manual(values = pal,
+#                     name = "")+
+#   labs(x = "Proportion missing",
+#        y = "4D distance")
 
 # Hot-deck imputation--------
 results_hotdeck <- read_rds("data/impute/hotdeck.RDS")
@@ -456,21 +457,21 @@ summary_hotdeck %>%
   labs(x = "Proportion missing")
 
 # Plot 4D
-summary_hotdeck %>% 
-  ggplot(aes(x = split,
-             y = dist_4D))+
-  geom_ribbon(aes(ymin = dist_4D - error_4D,
-                  ymax = dist_4D + error_4D,
-                  fill = method), alpha = 0.1)+
-  geom_path(aes(colour = method))+
-  theme_classic(20)+
-  theme(legend.position = "top")+
-  scale_colour_manual(values = pal,
-                      name = "")+
-  scale_fill_manual(values = pal,
-                    name = "")+
-  labs(x = "Proportion missing",
-       y = "4D distance")
+# summary_hotdeck %>% 
+#   ggplot(aes(x = split,
+#              y = dist_4D))+
+#   geom_ribbon(aes(ymin = dist_4D - error_4D,
+#                   ymax = dist_4D + error_4D,
+#                   fill = method), alpha = 0.1)+
+#   geom_path(aes(colour = method))+
+#   theme_classic(20)+
+#   theme(legend.position = "top")+
+#   scale_colour_manual(values = pal,
+#                       name = "")+
+#   scale_fill_manual(values = pal,
+#                     name = "")+
+#   labs(x = "Proportion missing",
+#        y = "4D distance")
 
 # Compare methods---------
 
@@ -507,18 +508,26 @@ comparison_df %>%
   labs(x = "Proportion missing")
 
 # Plot multidimensional
-comparison_df %>% 
-  ggplot(aes(x = split,
-             y = dist_4D))+
-  geom_ribbon(aes(ymin = dist_4D - error_4D,
-                  ymax = dist_4D + error_4D,
-                  fill = method), alpha = 0.1)+
-  geom_path(aes(colour = method))+
-  theme_classic(20)+
-  theme(legend.position = "top")+
-  scale_colour_manual(values = pal,
-                      name = "")+
-  scale_fill_manual(values = pal,
-                    name = "")+
-  labs(x = "Proportion missing",
-       y = "4D distance")
+# comparison_df %>% 
+#   ggplot(aes(x = split,
+#              y = dist_4D))+
+#   geom_ribbon(aes(ymin = dist_4D - error_4D,
+#                   ymax = dist_4D + error_4D,
+#                   fill = method), alpha = 0.1)+
+#   geom_path(aes(colour = method))+
+#   theme_classic(20)+
+#   theme(legend.position = "top")+
+#   scale_colour_manual(values = pal,
+#                       name = "")+
+#   scale_fill_manual(values = pal,
+#                     name = "")+
+#   labs(x = "Proportion missing",
+#        y = "4D distance")
+
+# Rescale---------
+# Find max
+
+
+test <- comparison_df %>% 
+  mutate(discrimination = rescale(discrimination,
+                                  from = c(0, max(discrimination))))
