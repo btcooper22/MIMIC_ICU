@@ -14,10 +14,7 @@ make_pool <- function(pooling_variables, target, pool_df)
   dist_matrix <- foreach(p = 1:length(pooling_variables),
           .combine = "cbind") %do%
     {
-      if(pooling_variables[p] == "diagnosis")
-      {
-        pool_dist <- adist(pooling_values[p], pool_df$diagnosis)[1,]
-      }else if(pooling_variables[p] == "admission_type")
+      if(pooling_variables[p] == "admission_type")
       {
         admission_class <- pool_df %>% 
           mutate(admission_type = fct_relevel(admission_type, "ELECTIVE",
