@@ -26,13 +26,28 @@ full_data <- read_csv("data/final_patients.csv") %>%
 # Binarise readmission
 full_data %<>% 
   mutate(readmission = readmission == "Readmitted to ICU") %>% 
-  # Remove cases where score comes from bicarbonate
-  filter(!is.na(apache_respiratory_discharge)) %>% 
-  select(-apache_bicarbonate_discharge)
+  # Map bicarbonate onto oxygenation
+  mutate(apache_oxygenation_discharge = case_when(
+    is.na(apache_oxygenation_discharge) ~ apache_bicarbonate_discharge,
+    !is.na(apache_oxygenation_discharge) ~ apache_oxygenation_discharge)) %>% 
+  select(-apache_bicarbonate_discharge) %>% 
+  # Remove NA
+  na.omit()
   
 # Confirm no missing values
 table(full_data$readmission, useNA = "ifany")
 summary(full_data)
+
+# Remove implausible values
+full_data %<>% 
+  filter(apache_temperature_discharge < 40, 
+         apache_temperature_discharge > 30,
+         apache_map_discharge > 0,
+         apache_map_discharge < 180,
+         apache_pulse_discharge > 0,
+         apache_pulse_discharge < 160,
+         apache_respiratory_discharge > 0,
+         apache_respiratory_discharge <= 60)
 
 # Write
 write_csv(full_data,"data/impute/complete_cases.csv")
