@@ -2,6 +2,7 @@ calculate_apache_scores <- function(apache_df)
 {
   # Debug
   # apache_df <- full_data
+  # apache_df <- mcar_df
   
   # Value extraction
   temp_value <- apache_df$apache_temperature_discharge
@@ -106,13 +107,18 @@ calculate_apache_scores <- function(apache_df)
   )
   
   # Glasgow Coma Scale
+  gcs_value[is.na(gcs_value)] <- 15
   gcs_score <- 15 - gcs_value
+  
+  # Oxygenation
+  oxygenation_score <- apache_df$apache_oxygenation_discharge
+  oxygenation_score[is.na(oxygenation_score)] <- 0
   
   # Sum and output----
   apache_II_score <- temp_score + map_score + pulse_score +
     respiratory_score + sodium_score + potassium_score + creatinine_score +
     hematocrit_score + wbc_score + gcs_score + apache_df$apache_age_discharge +
-    apache_df$apache_oxygenation_discharge + apache_df$apache_chronic_discharge
+    oxygenation_score + apache_df$apache_chronic_discharge
   
   return(apache_II_score)
 }
