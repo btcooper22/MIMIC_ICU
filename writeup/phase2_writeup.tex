@@ -1,0 +1,108 @@
+\documentclass[onecolumn]{article}
+
+%Titling
+    \usepackage[compact]{titlesec}
+    \titlespacing{\section}{0pt}{3ex}{2ex}
+    \titlespacing{\subsection}{0pt}{2ex}{1ex}
+    \titlespacing{\subsubsection}{0pt}{1ex}{0.5ex}
+\titleformat*{\section}{\Large\scshape}
+\titleformat*{\subsection}{\Large}
+\titleformat{\subsubsection}[runin]
+  {\normalfont\bfseries}{\thesubsection}{1em}{}
+  
+%Page size
+	\addtolength{\oddsidemargin}{-.875in}
+	\addtolength{\evensidemargin}{-.875in}
+	\addtolength{\textwidth}{1.75in}
+
+	\addtolength{\topmargin}{-.875in}
+	\addtolength{\textheight}{1.75in}
+	
+	\parskip=.1cm
+	
+%Indented paragraph
+\setlength{\parindent}{0pt}
+\newenvironment{indentpar}[1]
+  {\begin{list}{}
+          {\setlength{\rightmargin}{#1}}
+          \item[]
+  }
+  {\end{list}}
+
+\usepackage{graphicx}
+\graphicspath{ {figures/} }
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{float}
+\usepackage[table]{xcolor}
+\usepackage{multirow}
+\usepackage{tabularx} 
+\usepackage[table]{xcolor}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{textcomp}
+\usepackage{gensymb}
+\usepackage{lineno}
+\usepackage{amsmath}
+\usepackage{blindtext}
+\usepackage{texshade}
+\usepackage{bigdelim}
+\usepackage{textgreek}
+\usepackage{multicol}
+
+% tikz setup
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows}
+\newcommand*{\h}{\hspace{5pt}}% for indentation
+\newcommand*{\hh}{\h\h}% double indentation
+
+
+%Citations
+\usepackage[authoryear]{natbib}
+\setcitestyle{authoryear,open={(},close={)}}
+\renewcommand{\bibname}{References}
+
+\usepackage[allbordercolors = white, linkcolor = blue, citecolor = blue, colorlinks = true]{hyperref}
+\usepackage[nameinlink]{cleveref}
+
+%titling
+\title{Modelling Uncertainty in the Risk of Intensive Care Unit Readmission II: Comparison of Imputation Methods}
+\date{\today}
+\author{Ben Cooper}
+
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+% Overview of the "point"
+
+\section{Methods}
+
+\subsection{Dataset generation}
+
+% Detail randomness method, N and splits
+
+\subsection{Imputation methods}
+
+% Overview of each
+
+\subsection{Hyperparameter profiling}
+
+% Manual by grid search and selection of best peformance, detailed below
+
+\subsection{Comparison}
+
+% Discrim, calib, distance, max and multidim
+
+\section{Results}
+
+% Go through each comparison in turn
+
+\begin{multicols}{2}
+\bibliographystyle{thesis}
+{\small
+\bibliography{ICU_refs}}
+
+\end{multicols}
+\end{document}
