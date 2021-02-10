@@ -473,13 +473,130 @@ summary_hotdeck %>%
 #   labs(x = "Proportion missing",
 #        y = "4D distance")
 
+# PCA imputation----
+results_PCA <- read_rds("data/impute/PCA.RDS")
+
+# Extraction function
+#x <- results_PCA[[1]]
+extraction_PCA <- function(x)
+{
+  # Load packages
+  require(magrittr)
+  require(ROCR)
+  require(ResourceSelection)
+  require(foreach)
+  
+  # List number of components
+  ncomps <- x[[3]]
+  
+  # Calculate discrimination
+  auc_vector <- foreach(i = 1:length(ncomps),
+                        .combine = "c") %do%
+    {
+      # Generate AUC
+      auc_obj <- prediction(x[[4]][,i] %>% inverse_logit(),
+                 full_data$readmission) %>% 
+        performance(measure = "auc")
+      
+      # Return
+      auc_obj@y.values[[1]]
+    }
+
+  # Calculate calibration
+  cal_vector <- foreach(i = 1:length(ncomps),
+                        .combine = "c") %do%
+    {
+      # Perform hosmer-lemeshow test
+      cal_obj <- hoslem.test(full_data$readmission,
+                             x[[4]][,i] %>% inverse_logit(), 10)
+      
+      # Return
+      cal_obj$statistic
+    }
+  
+  # Extract distances
+  distance_frame <- foreach(i = 1:length(ncomps),
+                        .combine = "rbind") %do%
+    {
+      # Extract probability
+      probs_PCA <- x[[4]][,i] %>% inverse_logit()
+      
+      # Measure distance
+      dist_PCA <- abs(probs_PCA - probs)
+      
+      # Return
+      data.frame(mean = mean(dist_PCA),
+                 max = quantile(dist_PCA, 0.95))
+    }
+  
+  
+  # Output
+  output <- data.frame(method = ncomps,
+                       split = x$split, n = x$n,
+                       AUC = auc_vector,
+                       hoslem = cal_vector,
+                       mean_distance = distance_frame$mean,
+                       max_distance = distance_frame$max)
+  return(output)
+}
+
+# Run extraction
+psnice(value = 19)
+cl <- makeCluster(ifelse(detectCores() <= 12,
+                         detectCores() - 1,
+                         14))
+clusterExport(cl, varlist = c("full_data", "inverse_logit",
+                              "probs", "results"))
+metrics_PCA <- parLapply(cl, 
+                             results_PCA,
+                             extraction_PCA)
+stopCluster(cl)
+
+# Summarise
+summary_PCA <- do.call(rbind.data.frame, metrics_PCA) %>% 
+  na.omit() %>% 
+  group_by(method, split) %>% 
+  summarise(discrimination = mean(AUC),
+            discrimination_error = sd(AUC),
+            calibration = mean(hoslem),
+            calibration_error = sd(hoslem),
+            distance = mean(mean_distance * 100),
+            mean_error = sd(mean_distance * 100),
+            max = mean(max_distance * 100),
+            max_error = sd(max_distance * 100)) %>% 
+  mutate(method = as.factor(method))
+
+# Plot  -> All pooling methods
+summary_PCA %>% 
+  pivot_longer(c(3,5,7,9)) %>% 
+  mutate(error = case_when(name == "distance" ~ mean_error,
+                           name == "max" ~ max_error,
+                           name == "calibration" ~ calibration_error,
+                           name == "discrimination" ~ discrimination_error)) %>% 
+  ggplot(aes(x = split,
+             y = value))+
+  # geom_ribbon(aes(ymin = value - error,
+  #                 ymax = value + error,
+  #                 fill = method), alpha = 0.1)+
+  geom_path(aes(colour = method), size = 1)+
+  geom_hline(data = results %>% pivot_longer(c(3,5,7,9)),
+             aes(yintercept = value), size = 1,
+             linetype = "dashed")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  facet_wrap(~name, scales = "free_y")+
+  scale_colour_brewer(palette = "Set3")+
+  labs(x = "Proportion missing")
+
 # Compare methods---------
 
 # Combine
 comparison_df <- rbind(
   summary_mean %>% filter(method != "mean"),
   summary_hotdeck %>% filter(method == "admit.chronic.age") %>% 
-    mutate(method = "hotdeck")
+    mutate(method = "hotdeck"),
+  summary_PCA %>% filter(method == 5) %>% 
+    mutate(method = "PCA")
 )
 
 # Plot each dimension
@@ -561,6 +678,7 @@ rescale_df %<>%
 
 # Plot 
 rescale_df %>%
+  #filter(split < 0.2) %>% 
   ggplot(aes(x = split,
              y = md_dist))+
   geom_path(aes(colour = method),
