@@ -524,10 +524,54 @@ comparison_df %>%
 #   labs(x = "Proportion missing",
 #        y = "4D distance")
 
-# Rescale---------
-# Find max
+# Multidimensional distance---------
+
+# Rescale
+rescale_df <- comparison_df %>%
+  ungroup() %>%
+  mutate(
+    discrimination = rescale(discrimination,
+                             from = c(
+                               results$discrimination,
+                               min(discrimination)
+                             )),
+    calibration = rescale(calibration,
+                          from = c(results$calibration,
+                                   max(calibration))),
+    distance = rescale(distance,
+                       from = c(results$distance,
+                                max(distance))),
+    max = rescale(max,
+                  from = c(results$max,
+                           max(max)))
+  ) 
+
+# Measure distance
+md_dist <- distance_4D(data.frame(discrimination = 0,
+                       calibration = 0,
+                       distance = 0,
+                       max = 0), rescale_df$discrimination,
+            rescale_df$calibration,
+            rescale_df$distance,
+            rescale_df$max)
+
+rescale_df %<>% 
+  mutate(md_dist)
 
 
-test <- comparison_df %>% 
-  mutate(discrimination = rescale(discrimination,
-                                  from = c(0, max(discrimination))))
+# Plot 
+rescale_df %>%
+  ggplot(aes(x = split,
+             y = md_dist))+
+  geom_path(aes(colour = method),
+            size = 1)+
+  geom_point(size = 4, aes(fill = method),
+             colour = "black", shape = 21)+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = pal,
+                      name = "")+
+  scale_fill_manual(values = pal,
+                    name = "")+
+  labs(x = "Proportion missing",
+       y = "Multidimensional distance")
