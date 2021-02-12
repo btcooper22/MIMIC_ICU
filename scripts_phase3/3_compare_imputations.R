@@ -588,6 +588,120 @@ summary_PCA %>%
   scale_colour_brewer(palette = "Set3")+
   labs(x = "Proportion missing")
 
+# MICE imputation----
+results_MICE <- read_rds("data/impute/MICE.RDS")
+
+# Extraction function
+#x <- results_MICE[[1]]
+extraction_MICE <- function(x)
+{
+  # Load packages
+  require(magrittr)
+  require(ROCR)
+  require(ResourceSelection)
+  require(foreach)
+  
+  # List methods
+  methods <- x[[3]]
+  
+  # Calculate discrimination
+  auc_vector <- foreach(i = 1:length(methods),
+                        .combine = "c") %do%
+    {
+      # Generate AUC
+      auc_obj <- prediction(x[[4]][,i] %>% inverse_logit(),
+                            full_data$readmission) %>% 
+        performance(measure = "auc")
+      
+      # Return
+      auc_obj@y.values[[1]]
+    }
+  
+  # Calculate calibration
+  cal_vector <- foreach(i = 1:length(methods),
+                        .combine = "c") %do%
+    {
+      # Perform hosmer-lemeshow test
+      cal_obj <- hoslem.test(full_data$readmission,
+                             x[[4]][,i] %>% inverse_logit(), 10)
+      
+      # Return
+      cal_obj$statistic
+    }
+  
+  # Extract distances
+  distance_frame <- foreach(i = 1:length(methods),
+                            .combine = "rbind") %do%
+    {
+      # Extract probability
+      probs_MICE <- x[[4]][,i] %>% inverse_logit()
+      
+      # Measure distance
+      dist_MICE <- abs(probs_MICE - probs)
+      
+      # Return
+      data.frame(mean = mean(dist_MICE),
+                 max = quantile(dist_MICE, 0.95))
+    }
+  
+  
+  # Output
+  output <- data.frame(method = methods,
+                       split = x$split, n = x$n,
+                       AUC = auc_vector,
+                       hoslem = cal_vector,
+                       mean_distance = distance_frame$mean,
+                       max_distance = distance_frame$max)
+  return(output)
+}
+
+# Run extraction
+psnice(value = 19)
+cl <- makeCluster(ifelse(detectCores() <= 12,
+                         detectCores() - 1,
+                         14))
+clusterExport(cl, varlist = c("full_data", "inverse_logit",
+                              "probs", "results"))
+metrics_MICE <- parLapply(cl, 
+                         results_MICE,
+                         extraction_MICE)
+stopCluster(cl)
+
+# Summarise
+summary_MICE <- do.call(rbind.data.frame, metrics_MICE) %>% 
+  na.omit() %>% 
+  group_by(method, split) %>% 
+  summarise(discrimination = mean(AUC),
+            discrimination_error = sd(AUC),
+            calibration = mean(hoslem),
+            calibration_error = sd(hoslem),
+            distance = mean(mean_distance * 100),
+            mean_error = sd(mean_distance * 100),
+            max = mean(max_distance * 100),
+            max_error = sd(max_distance * 100))
+
+# Plot  -> All pooling methods
+summary_MICE %>% 
+  pivot_longer(c(3,5,7,9)) %>% 
+  mutate(error = case_when(name == "distance" ~ mean_error,
+                           name == "max" ~ max_error,
+                           name == "calibration" ~ calibration_error,
+                           name == "discrimination" ~ discrimination_error)) %>% 
+  ggplot(aes(x = split,
+             y = value))+
+  # geom_ribbon(aes(ymin = value - error,
+  #                 ymax = value + error,
+  #                 fill = method), alpha = 0.1)+
+  geom_path(aes(colour = method), size = 1)+
+  geom_hline(data = results %>% pivot_longer(c(3,5,7,9)),
+             aes(yintercept = value), size = 1,
+             linetype = "dashed")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  facet_wrap(~name, scales = "free_y")+
+  scale_colour_brewer(palette = "Set1")+
+  labs(x = "Proportion missing")
+
 # Compare methods---------
 
 # Combine
@@ -596,7 +710,9 @@ comparison_df <- rbind(
   summary_hotdeck %>% filter(method == "admit.chronic.age") %>% 
     mutate(method = "hotdeck"),
   summary_PCA %>% filter(method == 5) %>% 
-    mutate(method = "PCA")
+    mutate(method = "PCA"),
+  summary_MICE %>% filter(method == "pmm") %>% 
+    mutate(method = "MICE")
 )
 
 # Plot each dimension
@@ -678,7 +794,7 @@ rescale_df %<>%
 
 # Plot 
 rescale_df %>%
-  #filter(split < 0.2) %>% 
+  #filter(split < 0.4) %>% 
   ggplot(aes(x = split,
              y = md_dist))+
   geom_path(aes(colour = method),

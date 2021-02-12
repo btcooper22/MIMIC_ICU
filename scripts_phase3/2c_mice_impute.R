@@ -104,7 +104,7 @@ all_mice <- foreach(f = 1:1200,
     output
   }
 stopImplicitCluster()
-proc.time() - ptm #
+proc.time() - ptm # 2 days!!!
 
 write_rds(all_mice, "data/impute/MICE.RDS",
           compress = "gz")
