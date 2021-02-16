@@ -93,8 +93,7 @@ all_forest <- foreach(f = 1:length(files),
     output
   }
 stopImplicitCluster()
-proc.time() - ptm # 15 parallel iterations of sequential forests =  68 min
-# 15 sequential iterations of parallel forests = 
+proc.time() - ptm # 5 hours
 
 write_rds(all_forest, "data/impute/forest.RDS",
           compress = "gz")
