@@ -57,7 +57,7 @@ write_csv(full_data,"data/impute/complete_cases.csv")
 N <- 100
 
 # Set splits
-splits <- c(0.01, 0.05, 1:10 / 12) %>% round(2)
+splits <- c(0.01, 0.05, 1:7 / 12) %>% round(2)
 
 # Pull APACHE matrix
 apache_matrix <- full_data[,c(8:18,20)]
