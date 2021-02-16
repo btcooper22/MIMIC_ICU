@@ -202,6 +202,7 @@ summary_mean %>%
                            name == "max" ~ max_error,
                            name == "calibration" ~ calibration_error,
                            name == "discrimination" ~ discrimination_error)) %>% 
+  filter(split < 0.6) %>% 
   ggplot(aes(x = split,
              y = value))+
   geom_ribbon(aes(ymin = value - error,
@@ -219,23 +220,6 @@ summary_mean %>%
   scale_fill_manual(values = pal,
                     name = "")+
   labs(x = "Proportion missing")
-
-# Plot 4D
-# summary_mean %>% 
-#   ggplot(aes(x = split,
-#              y = dist_4D))+
-#   geom_ribbon(aes(ymin = dist_4D - error_4D,
-#                   ymax = dist_4D + error_4D,
-#                   fill = method), alpha = 0.1)+
-#   geom_path(aes(colour = method))+
-#   theme_classic(20)+
-#   theme(legend.position = "top")+
-#   scale_colour_manual(values = pal,
-#                       name = "")+
-#   scale_fill_manual(values = pal,
-#                     name = "")+
-#   labs(x = "Proportion missing",
-#        y = "4D distance")
 
 # Hot-deck imputation--------
 results_hotdeck <- read_rds("data/impute/hotdeck.RDS")
@@ -438,6 +422,7 @@ summary_hotdeck %>%
                            name == "max" ~ max_error,
                            name == "calibration" ~ calibration_error,
                            name == "discrimination" ~ discrimination_error)) %>% 
+  filter(split < 0.6) %>% 
   ggplot(aes(x = split,
              y = value))+
   geom_ribbon(aes(ymin = value - error,
@@ -455,23 +440,6 @@ summary_hotdeck %>%
   scale_fill_manual(values = pal,
                     name = "")+
   labs(x = "Proportion missing")
-
-# Plot 4D
-# summary_hotdeck %>% 
-#   ggplot(aes(x = split,
-#              y = dist_4D))+
-#   geom_ribbon(aes(ymin = dist_4D - error_4D,
-#                   ymax = dist_4D + error_4D,
-#                   fill = method), alpha = 0.1)+
-#   geom_path(aes(colour = method))+
-#   theme_classic(20)+
-#   theme(legend.position = "top")+
-#   scale_colour_manual(values = pal,
-#                       name = "")+
-#   scale_fill_manual(values = pal,
-#                     name = "")+
-#   labs(x = "Proportion missing",
-#        y = "4D distance")
 
 # PCA imputation----
 results_PCA <- read_rds("data/impute/PCA.RDS")
@@ -573,6 +541,7 @@ summary_PCA %>%
                            name == "max" ~ max_error,
                            name == "calibration" ~ calibration_error,
                            name == "discrimination" ~ discrimination_error)) %>% 
+  filter(split < 0.6) %>% 
   ggplot(aes(x = split,
              y = value))+
   # geom_ribbon(aes(ymin = value - error,
@@ -687,6 +656,7 @@ summary_MICE %>%
                            name == "max" ~ max_error,
                            name == "calibration" ~ calibration_error,
                            name == "discrimination" ~ discrimination_error)) %>% 
+  filter(split < 0.6) %>% 
   ggplot(aes(x = split,
              y = value))+
   # geom_ribbon(aes(ymin = value - error,
@@ -713,7 +683,7 @@ comparison_df <- rbind(
     mutate(method = "PCA"),
   summary_MICE %>% filter(method == "pmm") %>% 
     mutate(method = "MICE")
-)
+) %>%   filter(split < 0.6)
 
 # Plot each dimension
 comparison_df %>% 
@@ -739,23 +709,6 @@ comparison_df %>%
   scale_fill_manual(values = pal,
                     name = "")+
   labs(x = "Proportion missing")
-
-# Plot multidimensional
-# comparison_df %>% 
-#   ggplot(aes(x = split,
-#              y = dist_4D))+
-#   geom_ribbon(aes(ymin = dist_4D - error_4D,
-#                   ymax = dist_4D + error_4D,
-#                   fill = method), alpha = 0.1)+
-#   geom_path(aes(colour = method))+
-#   theme_classic(20)+
-#   theme(legend.position = "top")+
-#   scale_colour_manual(values = pal,
-#                       name = "")+
-#   scale_fill_manual(values = pal,
-#                     name = "")+
-#   labs(x = "Proportion missing",
-#        y = "4D distance")
 
 # Multidimensional distance---------
 
@@ -794,7 +747,6 @@ rescale_df %<>%
 
 # Plot 
 rescale_df %>%
-  #filter(split < 0.4) %>% 
   ggplot(aes(x = split,
              y = md_dist))+
   geom_path(aes(colour = method),
