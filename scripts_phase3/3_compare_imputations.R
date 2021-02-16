@@ -672,6 +672,76 @@ summary_MICE %>%
   scale_colour_brewer(palette = "Set1")+
   labs(x = "Proportion missing")
 
+# amelia imputation----
+results_amelia <- read_rds("data/impute/amelia.RDS")
+
+# Extraction function
+#x <- results_amelia[[1]]
+extraction_amelia <- function(x)
+{
+  # Load packages
+  require(magrittr)
+  require(ROCR)
+  require(ResourceSelection)
+  
+  # Calculate discrimination
+  auc_obj <- prediction(x[[3]] %>% inverse_logit(),
+                        full_data$readmission) %>%
+    performance(measure = "auc")
+  
+  # Calculate calibration
+  cal_obj <- hoslem.test(full_data$readmission,
+                         x[[3]] %>% inverse_logit(), 10)
+  
+  
+  # Extract distances
+  probs_amelia <- x[[3]] %>% inverse_logit()
+  
+  # Measure distance
+  dist_amelia <- abs(probs_amelia - probs)
+  
+  # Return
+  data.frame(mean = mean(dist_amelia),
+             max = quantile(dist_amelia, 0.95))
+  
+  
+  # Output
+  output <- data.frame(
+    split = x$split,
+    n = x$n,
+    AUC = auc_obj@y.values[[1]],
+    hoslem = cal_obj$statistic,
+    mean_distance = mean(dist_amelia),
+    max_distance = quantile(dist_amelia, 0.95)
+  )
+  return(output)
+}
+
+# Run extraction
+psnice(value = 19)
+cl <- makeCluster(ifelse(detectCores() <= 12,
+                         detectCores() - 1,
+                         14))
+clusterExport(cl, varlist = c("full_data", "inverse_logit",
+                              "probs", "results"))
+metrics_amelia <- parLapply(cl, 
+                          results_amelia,
+                          extraction_amelia)
+stopCluster(cl)
+
+# Summarise
+summary_amelia <- do.call(rbind.data.frame, metrics_amelia) %>% 
+  na.omit() %>% 
+  group_by(split) %>% 
+  summarise(discrimination = mean(AUC),
+            discrimination_error = sd(AUC),
+            calibration = mean(hoslem),
+            calibration_error = sd(hoslem),
+            distance = mean(mean_distance * 100),
+            mean_error = sd(mean_distance * 100),
+            max = mean(max_distance * 100),
+            max_error = sd(max_distance * 100))
+
 # Compare methods---------
 
 # Combine
@@ -682,7 +752,9 @@ comparison_df <- rbind(
   summary_PCA %>% filter(method == 5) %>% 
     mutate(method = "PCA"),
   summary_MICE %>% filter(method == "pmm") %>% 
-    mutate(method = "MICE")
+    mutate(method = "MICE"),
+  summary_amelia %>% 
+    mutate(method = "amelia")
 ) %>%   filter(split < 0.6)
 
 # Plot each dimension
