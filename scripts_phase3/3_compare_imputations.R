@@ -742,6 +742,76 @@ summary_amelia <- do.call(rbind.data.frame, metrics_amelia) %>%
             max = mean(max_distance * 100),
             max_error = sd(max_distance * 100))
 
+# forest imputation----
+results_forest <- read_rds("data/impute/forest.RDS")
+
+# Extraction function
+#x <- results_forest[[1]]
+extraction_forest <- function(x)
+{
+  # Load packages
+  require(magrittr)
+  require(ROCR)
+  require(ResourceSelection)
+  
+  # Calculate discrimination
+  auc_obj <- prediction(x[[4]] %>% inverse_logit(),
+                        full_data$readmission) %>%
+    performance(measure = "auc")
+  
+  # Calculate calibration
+  cal_obj <- hoslem.test(full_data$readmission,
+                         x[[4]] %>% inverse_logit(), 10)
+  
+  
+  # Extract distances
+  probs_forest <- x[[4]] %>% inverse_logit()
+  
+  # Measure distance
+  dist_forest <- abs(probs_forest - probs)
+  
+  # Return
+  data.frame(mean = mean(dist_forest),
+             max = quantile(dist_forest, 0.95))
+  
+  
+  # Output
+  output <- data.frame(
+    split = x$split,
+    n = x$n,
+    AUC = auc_obj@y.values[[1]],
+    hoslem = cal_obj$statistic,
+    mean_distance = mean(dist_forest),
+    max_distance = quantile(dist_forest, 0.95)
+  )
+  return(output)
+}
+
+# Run extraction
+psnice(value = 19)
+cl <- makeCluster(ifelse(detectCores() <= 12,
+                         detectCores() - 1,
+                         14))
+clusterExport(cl, varlist = c("full_data", "inverse_logit",
+                              "probs", "results"))
+metrics_forest <- parLapply(cl, 
+                            results_forest,
+                            extraction_forest)
+stopCluster(cl)
+
+# Summarise
+summary_forest <- do.call(rbind.data.frame, metrics_forest) %>% 
+  na.omit() %>% 
+  group_by(split) %>% 
+  summarise(discrimination = mean(AUC),
+            discrimination_error = sd(AUC),
+            calibration = mean(hoslem),
+            calibration_error = sd(hoslem),
+            distance = mean(mean_distance * 100),
+            mean_error = sd(mean_distance * 100),
+            max = mean(max_distance * 100),
+            max_error = sd(max_distance * 100))
+
 # Compare methods---------
 
 # Combine
@@ -754,7 +824,9 @@ comparison_df <- rbind(
   summary_MICE %>% filter(method == "pmm") %>% 
     mutate(method = "MICE"),
   summary_amelia %>% 
-    mutate(method = "amelia")
+    mutate(method = "amelia"),
+  summary_forest %>% 
+    mutate(method = "RF")
 ) %>%   filter(split < 0.6)
 
 # Plot each dimension
