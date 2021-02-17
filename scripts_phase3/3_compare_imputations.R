@@ -20,6 +20,7 @@ source("functions/inverse_logit.R")
 source("functions/calibration.R")
 source("functions/calculate_apache_score.R")
 source("functions/distance_4D.R")
+source("functions/parallel_setup.R")
 
 # Load data
 full_data <- read_csv("data/impute/complete_cases.csv") 
@@ -812,9 +813,133 @@ summary_forest <- do.call(rbind.data.frame, metrics_forest) %>%
             max = mean(max_distance * 100),
             max_error = sd(max_distance * 100))
 
-# Compare methods---------
+# KNN imputation----
+results_KNN <- read_rds("data/impute/KNN.RDS")
 
-# Combine
+# Extraction function
+#x <- results_KNN[[1]]
+extraction_KNN <- function(x)
+{
+  # List number of K
+  n_k <- x[[3]]
+  
+  if(!is.na(n_k[1]))
+  {
+    # Extract logit matrix
+    logit_matrix <- data.frame(x[[4]])
+    
+    # Calculate discrimination
+    auc_vector <- foreach(i = 1:length(n_k),
+                          .combine = "c") %do%
+      {
+        # Generate AUC
+        auc_obj <- prediction(logit_matrix[,i] %>% inverse_logit(),
+                              full_data$readmission) %>% 
+          performance(measure = "auc")
+        
+        # Return
+        auc_obj@y.values[[1]]
+      }
+    
+    # Calculate calibration
+    cal_vector <- foreach(i = 1:length(n_k),
+                          .combine = "c") %do%
+      {
+        # Perform hosmer-lemeshow test
+        cal_obj <- hoslem.test(full_data$readmission,
+                               logit_matrix[,i] %>% inverse_logit(), 10)
+        
+        # Return
+        cal_obj$statistic
+      }
+    
+    # Extract distances
+    distance_frame <- foreach(i = 1:length(n_k),
+                              .combine = "rbind") %do%
+      {
+        # Extract probability
+        probs_KNN <- logit_matrix[,i] %>% inverse_logit()
+        
+        # Measure distance
+        dist_KNN <- abs(probs_KNN - probs)
+        
+        # Return
+        data.frame(mean = mean(dist_KNN),
+                   max = quantile(dist_KNN, 0.95))
+      }
+    
+    
+    # Output
+    output <- data.frame(K = n_k,
+                         split = x$split, n = x$n,
+                         AUC = auc_vector,
+                         hoslem = cal_vector,
+                         mean_distance = distance_frame$mean,
+                         max_distance = distance_frame$max)
+  } else
+  {
+    # Output
+    output <- data.frame(K = NA,
+                         split = x$split, n = x$n,
+                         AUC = NA,
+                         hoslem = NA,
+                         mean_distance = NA,
+                         max_distance = NA)
+  }
+  
+  return(output)
+}
+
+# Run extraction
+parallel_setup(15)
+metrics_KNN <- foreach(i = 1:length(results_KNN),
+        .combine = "rbind",
+        .packages = c("magrittr", "ROCR",
+                      "ResourceSelection",
+                      "foreach")) %dopar%
+  {
+    extraction_KNN(results_KNN[[i]])
+  }
+stopImplicitCluster()
+
+# Summarise
+summary_KNN <- metrics_KNN %>% 
+  na.omit() %>% 
+  group_by(K, split) %>% 
+  summarise(discrimination = mean(AUC),
+            discrimination_error = sd(AUC),
+            calibration = mean(hoslem),
+            calibration_error = sd(hoslem),
+            distance = mean(mean_distance * 100),
+            mean_error = sd(mean_distance * 100),
+            max = mean(max_distance * 100),
+            max_error = sd(max_distance * 100)) %>% 
+  mutate(K = as.factor(K))
+
+# Plot  -> All K
+summary_KNN %>% 
+  pivot_longer(c(3,5,7,9)) %>% 
+  mutate(error = case_when(name == "distance" ~ mean_error,
+                           name == "max" ~ max_error,
+                           name == "calibration" ~ calibration_error,
+                           name == "discrimination" ~ discrimination_error)) %>% 
+  filter(split < 0.6) %>% 
+  ggplot(aes(x = split,
+             y = value))+
+  # geom_ribbon(aes(ymin = value - error,
+  #                 ymax = value + error,
+  #                 fill = method), alpha = 0.1)+
+  geom_path(aes(colour = K), size = 1)+
+  geom_hline(data = results %>% pivot_longer(c(3,5,7,9)),
+             aes(yintercept = value), size = 1,
+             linetype = "dashed")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  facet_wrap(~name, scales = "free_y")+
+  scale_colour_manual(values = pal)+
+  labs(x = "Proportion missing")
+
+# Combine and write
 comparison_df <- rbind(
   summary_mean %>% filter(method != "mean"),
   summary_hotdeck %>% filter(method == "admit.chronic.age") %>% 
@@ -826,8 +951,15 @@ comparison_df <- rbind(
   summary_amelia %>% 
     mutate(method = "amelia"),
   summary_forest %>% 
-    mutate(method = "RF")
+    mutate(method = "RF"),
+  summary_KNN %>% filter(K == 3) %>% 
+    na.omit() %>% 
+    mutate(method = "KNN"),
 ) %>%   filter(split < 0.6)
+
+write_csv(comparison_df, "data/impute/final_comparison.csv")
+
+
 
 # Plot each dimension
 comparison_df %>% 
