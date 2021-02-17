@@ -89,10 +89,6 @@ all_amelia <- foreach(f = 1:length(files),
 stopImplicitCluster()
 proc.time() - ptm # 
 
-<<<<<<< HEAD
 write_rds(all_amelia, "data/impute/amelia.RDS",
           compress = "gz")
-=======
-write_rds(all_forest, "data/impute/amelia.RDS",
-          compress = "gz")
->>>>>>> 67e6f56f19e23e8fd80eac840a4dc3158da8a737
+
