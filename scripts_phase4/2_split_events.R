@@ -9,7 +9,7 @@ require(tools)
 source("functions/mimic_load.R")
 
 # Load outcomes
-outcomes <- read_csv("data/outcomes.csv")
+outcomes <- read_csv("data/outcomes_mortality.csv")
 
 # chartevents----------
 
@@ -17,7 +17,7 @@ header <- names(read_csv("C:/Users/benco/charts/chartevents_aa", n_max = 1))
 files <- dir("C:/Users/benco/charts/", pattern = "_")
 
 # Make database of hadm_ids in which split
-if(!file.exists("data/chart_database.csv"))
+if(!file.exists("data/chart_database_mortality.csv"))
 {
   # Prepare parallel options
   psnice(value = 19)
@@ -44,18 +44,18 @@ if(!file.exists("data/chart_database.csv"))
       # Add to output
       data.frame(chart_split = files[i], hadm_id = adm_list)
     }
-  write_csv(chart_database, "data/chart_database.csv")
+  write_csv(chart_database, "data/chart_database_mortality.csv")
   stopImplicitCluster()
   gc()
 }else
 {
-  chart_database <- read_csv("data/chart_database.csv")
+  chart_database <- read_csv("data/chart_database_mortality.csv")
 }
 
 # Filter outcomes by missing chart data
 outcomes %<>% 
   filter(outcomes$hadm_id %in% chart_database$hadm_id == TRUE)
-write_csv(outcomes, "data/outcomes.csv")
+write_csv(outcomes, "data/outcomes_mortality.csv")
 
 
 # Prepare parallel options
