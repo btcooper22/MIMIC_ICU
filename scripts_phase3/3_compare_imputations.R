@@ -14,6 +14,7 @@ require(ResourceSelection)
 require(cowplot)
 require(RColorBrewer)
 require(scales)
+require(Metrics)
 
 # Functions
 source("functions/inverse_logit.R")
@@ -111,6 +112,7 @@ extraction_mean <- function(x)
   require(magrittr)
   require(ROCR)
   require(ResourceSelection)
+  require(Metrics)
   
   # Calculate discrimination
   auc_zero <- prediction(x["zero_probs"] %>% inverse_logit(),
@@ -141,13 +143,8 @@ extraction_mean <- function(x)
   mean_dist <- abs(int_mean_probs - probs)
   median_dist <- abs(int_median_probs - probs)
   
-  # Measure 4-dimensional distance
-  zero_4D <- distance_4D(results, auc_zero@y.values[[1]], cal_zero$statistic,
-              mean(zero_dist), quantile(zero_dist, 0.95))
-  mean_4D <- distance_4D(results, auc_mean@y.values[[1]], cal_mean$statistic,
-              mean(mean_dist), quantile(mean_dist, 0.95))
-  median_4D <- distance_4D(results, auc_median@y.values[[1]], cal_median$statistic,
-              mean(median_dist), quantile(median_dist, 0.95))
+  # Measure RMSE
+  rmse(zero_probs, probs)
   
   # Output
   output <- data.frame(method = c("assume_zero", "mean", "median"),
