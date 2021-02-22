@@ -356,8 +356,8 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   
   # Return full vector of values
   full_values <- c("temperature" = missing_to_na(temp_value),
-                   "systolicbp" = missing_to_na(systolic_bp),
-                   "diastolicbp" = missing_to_na(diastolic_bp),
+                   "systolicbp" = missing_to_na(systolic_bp_value),
+                   "diastolicbp" = missing_to_na(diastolic_bp_value),
                    "pulse" = missing_to_na(pulse_value),
                    "respiratory" = missing_to_na(respiratory_value),
                    "arterialpH" = missing_to_na(artpH_value),
