@@ -57,6 +57,12 @@ outcomes %<>%
   filter(outcomes$hadm_id %in% chart_database$hadm_id == TRUE)
 write_csv(outcomes, "data/outcomes_mortality.csv")
 
+# Create filenames
+chartevents_filenames <- data.frame(filename = paste("data/events/chartevents_", outcomes$hadm_id,
+                                                   ".csv", sep = ""), ID = 1:nrow(outcomes)) %>% 
+  mutate(done = file.exists(filename)) %>% 
+  filter(done == FALSE)
+
 
 # Prepare parallel options
 psnice(value = 19)
@@ -67,7 +73,7 @@ registerDoParallel(ifelse(detectCores() <= 10,
 
 # Extract chart events
 print(noquote("Extracting chart events"))
-foreach(i = 1:nrow(outcomes), .packages = c("readr", "dplyr",
+foreach(i = chartevents_filenames$ID, .packages = c("readr", "dplyr",
                                "magrittr", "foreach")) %dopar%
 {
   # Find subject info
@@ -126,8 +132,14 @@ registerDoParallel(ifelse(detectCores() <= 6,
                           6)
 )
 
+# Create filenames
+labevents_filenames <- data.frame(filename = paste("data/events/labevents_", outcomes$hadm_id,
+                  ".csv", sep = ""), ID = 1:nrow(outcomes)) %>% 
+  mutate(done = file.exists(filename)) %>% 
+  filter(done == FALSE)
+
 print(noquote("Extracting lab events"))
-foreach(i = 1:nrow(outcomes), .packages = c("dplyr","magrittr",
+foreach(i = labevents_filenames$ID, .packages = c("dplyr","magrittr",
                                  "readr")) %dopar%
 {
  # Find labevents
@@ -160,8 +172,15 @@ registerDoParallel(ifelse(detectCores() <= 6,
                           6)
 )
 
+# Create filenames
+inputevents_mv_filenames <- data.frame(filename = paste("data/events/inputeventsmv_", outcomes$hadm_id,
+                                                   ".csv", sep = ""), ID = 1:nrow(outcomes)) %>% 
+  mutate(done = file.exists(filename)) %>% 
+  filter(done == FALSE)
+
+
 print(noquote("Extracting metavision input events"))
-foreach(i = 1:nrow(outcomes), .packages = c("dplyr","magrittr",
+foreach(i = inputevents_mv_filenames$ID, .packages = c("dplyr","magrittr",
                                             "readr")) %dopar%
   {
     # Find labevents
@@ -196,8 +215,15 @@ registerDoParallel(ifelse(detectCores() <= 6,
                           6)
 )
 
+# Create filenames
+inputevents_cv_filenames <- data.frame(filename = paste("data/events/inputeventscv_", outcomes$hadm_id,
+                                                        ".csv", sep = ""), ID = 1:nrow(outcomes)) %>% 
+  mutate(done = file.exists(filename)) %>% 
+  filter(done == FALSE)
+
+
 print(noquote("Extracting carevue input events"))
-foreach(i = 1:nrow(outcomes), .packages = c("dplyr","magrittr",
+foreach(i = inputevents_cv_filenames$ID, .packages = c("dplyr","magrittr",
                                             "readr")) %dopar%
   {
     # Find labevents
@@ -232,8 +258,15 @@ registerDoParallel(ifelse(detectCores() <= 12,
                           12)
 )
 
+# Create filenames
+outputevents_filenames <- data.frame(filename = paste("data/events/outputevents_", outcomes$hadm_id,
+                                                        ".csv", sep = ""), ID = 1:nrow(outcomes)) %>% 
+  mutate(done = file.exists(filename)) %>% 
+  filter(done == FALSE)
+
+
 print(noquote("Extracting output events"))
-foreach(i = 1:nrow(outcomes), .packages = c("dplyr","magrittr",
+foreach(i = outputevents_filenames$ID, .packages = c("dplyr","magrittr",
                                             "readr")) %dopar%
   {
     # Find labevents
