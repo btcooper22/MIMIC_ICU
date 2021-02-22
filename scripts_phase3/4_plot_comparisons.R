@@ -130,3 +130,59 @@ rescale_df %>%
                     name = "")+
   labs(x = "Proportion missing",
        y = "Multidimensional distance")
+
+# Plots-----
+
+# MICE, RF, PCA,
+
+comparison_df %>% 
+  pivot_longer(c(3,5,7,9)) %>% 
+  filter(method == "median" |
+           method == "MICE" |
+           method == "RF" |
+           method == "assume_zero") %>% 
+  mutate(error = case_when(name == "distance" ~ mean_error,
+                           name == "max" ~ max_error,
+                           name == "calibration" ~ calibration_error,
+                           name == "discrimination" ~ discrimination_error)) %>% 
+  ggplot(aes(x = split,
+             y = value))+
+  geom_ribbon(aes(ymin = value - error,
+                  ymax = value + error,
+                  fill = method), alpha = 0.1)+
+  geom_path(aes(colour = method), size = 1)+
+  geom_hline(data = results %>% pivot_longer(c(3,5,7,9)),
+             aes(yintercept = value), size = 1,
+             linetype = "dashed")+
+  theme_classic(20)+
+  theme(legend.position = "none")+
+  facet_wrap(~name, scales = "free_y")+
+  scale_colour_manual(values = pal,
+                      name = "")+
+  scale_fill_manual(values = pal,
+                    name = "")+
+  labs(x = "Proportion missing",
+       y = "")# + scale_y_reverse()
+ggsave("writeup/presentation_figs/mice-RF.png",
+       width = 33.8, height = 17, units = "cm")
+
+
+rescale_df %>%
+  filter(method == "median" |
+           method == "MICE" |
+           method == "RF" |
+           method == "assume_zero") %>% 
+  ggplot(aes(x = split,
+             y = md_dist))+
+  geom_path(aes(colour = method),
+            size = 1)+
+  geom_point(size = 4, aes(fill = method),
+             colour = "black", shape = 21)+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = pal,
+                      name = "")+
+  scale_fill_manual(values = pal,
+                    name = "")+
+  labs(x = "Proportion missing",
+       y = "Multidimensional distance")
