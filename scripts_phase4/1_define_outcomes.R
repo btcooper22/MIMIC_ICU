@@ -96,6 +96,6 @@ table(outcomes$mortality_30d)
 # Write
 outcomes %>% 
   ungroup() %>% 
-  select(subject_id, hadm_id,
+  select(subject_id, hadm_id, readmission,
          in_hospital_mortality, mortality_30d) %>% 
   write_csv("data/outcomes_mortality.csv")
