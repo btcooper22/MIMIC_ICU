@@ -84,8 +84,8 @@ any(outcomes$in_unit_mortality & !outcomes$in_hospital_mortality)
 table(outcomes$in_unit_mortality)
 
 # Filter out in-unit mortality
-outcomes %<>% 
-  filter(in_unit_mortality == FALSE)
+# outcomes %<>% 
+#   filter(in_unit_mortality == FALSE)
 
 # How many patients died in hospital?
 table(outcomes$in_hospital_mortality)
