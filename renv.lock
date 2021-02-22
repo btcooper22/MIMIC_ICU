@@ -107,6 +107,13 @@
       "Repository": "CRAN",
       "Hash": "d57ac35220b39c591388ab3a080f9cbe"
     },
+    "Metrics": {
+      "Package": "Metrics",
+      "Version": "0.1.4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "1fdc9b3adfe2e2f8f77c22a59cf322ec"
+    },
     "ModelMetrics": {
       "Package": "ModelMetrics",
       "Version": "1.2.2.2",
