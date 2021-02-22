@@ -19,7 +19,7 @@ source("functions/NA_count.r")
 mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
 
 # Load outcomes
-outcomes <- read_csv("data/outcomes.csv")
+outcomes <- read_csv("data/outcomes_mortality.csv")
 
 # Correct "both" datasources where inaccurate-----------
 
@@ -129,7 +129,7 @@ ptm <- proc.time()
 psnice(value = 19)
 registerDoParallel(ifelse(detectCores() <= 15,
                           detectCores() - 1,
-                          15)
+                          14)
 )
 
 # Run loop
@@ -557,6 +557,8 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              lab_missing,
              rr_time,
              readmission = outcomes$readmission[i],
+             mort_inhosp = outcomes$in_hospital_mortality[i],
+             mort_30 = outcomes$mortality_30d[i],
              # Hammer variables
              sex, general_surgery, cardiac_surgery, high_apache,
              hyperglycemia, anaemia, los_5, age, ambulation,
@@ -615,7 +617,7 @@ proc.time() - ptm # 1481s (~25 min)
 # Write and quality control ------------
 
 # Write to file
-predictors %>% write_csv("data/predictors.csv")
+predictors %>% write_csv("data/predictors_mortality.csv")
 
 # No duplicated patients or admissions
 length(unique(predictors$subject_id)) == nrow(predictors)
