@@ -12,10 +12,12 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   #   filter(subject_id == subj,
   #          hadm_id == adm)
   # event_time <- admit_time
+  # event_time <- discharge_time
   # elect_admit <- elective_admission
   # prev_diagnoses <- history
   # arf <- acute_renal_failure
   # event_type <-  "admission"
+  # event_type <-  "discharge"
   
   # Helper function: Find closest chart measurement to admission
   filter_window <- function(.df, time, type = "chart", event = event_type)
@@ -26,31 +28,53 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
       if(type == "chart")
       {
         .df %>% 
-          mutate(after_admission = difftime(CHARTTIME, time,
+          mutate(window = difftime(CHARTTIME, time,
                                             units = "hours"))  %>% 
-          filter(after_admission < 24) %>% 
-          slice_min(abs(after_admission))
+          filter(window < 24)
       } else
       {
         .df %>% 
-          mutate(after_admission = difftime(charttime, time,
+          mutate(window = difftime(charttime, time,
                                             units = "hours"))  %>% 
-          filter(after_admission < 24) %>% 
-          slice_min(abs(after_admission))
+          filter(window < 24)
+      }
+    }else
+    {
+      if(type == "chart")
+      {
+        .df %>% 
+          mutate(window = difftime(CHARTTIME, time,
+                                            units = "hours"))  %>% 
+          filter(window < 0, window > -24)
+      } else
+      {
+        .df %>% 
+          mutate(window = difftime(charttime, time,
+                                            units = "hours"))  %>% 
+          filter(window < 0, window > -24)
       }
     }
 
   }
   
-  # Average value if multiple "simultaneous" measurements
-  average <- function(val)
+  # Take the worst value inside the window
+  worst_value <- function(val, bad_direction)
   {
-    if(length(val) > 1)
+    if(all(is.na(val)))
     {
-      return(mean(val))
-    }else
+      return(NA)
+    }else 
     {
-      return(val)
+      if(bad_direction == "max")
+      {
+        return(max(val, na.rm = TRUE))
+      }else if(bad_direction == "min")
+      {
+        return(min(val, na.rm = TRUE))
+      } else
+      {
+        return(val[which.max(abs(val - bad_direction))])
+      }
     }
   }
   
@@ -76,18 +100,18 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
                                (VALUENUM - 32) * 5/9,
                                VALUENUM)
            )
-  
+
   # Find closest to ICU admission 
   temp_value <- temp_measurements %>% 
     filter_window(event_time) %>% 
     select(value_degC) %>% deframe()
   
-  temp_value %<>% average()
+  temp_value %<>% worst_value(37.2)
   
   # Calculate mean arterial pressure----------
   
   # Find first systolic BP measurement
-  systolic_bp <- chart_df %>% 
+  systolic_bp_value <- chart_df %>% 
     filter(ITEMID %in% c(6, 51, 455, 6701, 220050, 220179)) %>% 
     # Find closest
     filter_window(event_time) %>% 
@@ -95,13 +119,17 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
     select(VALUENUM) %>% deframe()
   
   # Find first diastolic BP measurement
-  diastolic_bp <- chart_df %>% 
+  diastolic_bp_value <- chart_df %>% 
     filter(ITEMID %in% c(8364, 8368, 8441, 
                          8555, 220051, 220180)) %>% 
     # Find closest
     filter_window(event_time) %>% 
     # Extract sBP
     select(VALUENUM) %>% deframe()
+  
+  # Find worst
+  systolic_bp_value %<>% worst_value("max")
+  diastolic_bp_value %<>% worst_value("max")
   
   # Calculate heart rate---------------
   
@@ -113,7 +141,8 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   pulse_value <- pulse_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  pulse_value %<>% average()
+  pulse_value %<>% worst_value(90)
+  
   # Calculate respiratory rate-----------
   
   # Gather all RR measurements
@@ -126,7 +155,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   respiratory_value <- respiratory_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  respiratory_value %<>% average()
+  respiratory_value %<>% worst_value("max")
   
   # Calculate arterial pH---------
 
@@ -138,12 +167,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   artpH_value <- artpH_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  artpH_value %<>% average()
-  
-  if(length(artpH_value) > 1)
-  {
-    artpH_value <- mean(artpH_value)
-  }
+  artpH_value %<>% worst_value(7.55)
   
   # Calculate serum sodium (mMol/L)------------
 
@@ -155,7 +179,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   sodium_value <- sodium_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  sodium_value %<>% average()
+  sodium_value %<>% worst_value("max")
   
   # Calculate serum potassium (mMol/L)---------
   
@@ -167,7 +191,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   potassium_value <- potassium_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  potassium_value %<>% average()
+  potassium_value %<>% worst_value("max")
   
   # Calculate serum creatinine (mg/dL)------------
   
@@ -179,7 +203,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   creatinine_value <- creatinine_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  creatinine_value %<>% average()
+  creatinine_value %<>% worst_value("max")
   
   # Calculate haematocrit (%)-----------------
   
@@ -191,7 +215,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   hematocrit_value <- hematocrit_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  hematocrit_value %<>% average()
+  hematocrit_value %<>% worst_value("max")
   
   # Calculate white blood count (1000s)---------
   
@@ -203,7 +227,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   wbc_value <- wbc_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  wbc_value %<>% average()
+  wbc_value %<>% worst_value("max")
   
   # Calculate Glasgow coma score---------
   
@@ -223,22 +247,19 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   gcs_motor_value <- gcs_motor_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>%  deframe()
-  gcs_motor_value %<>% average()
+  gcs_motor_value %<>% worst_value("min")
   
   # Find closest verbal measurement
   gcs_verbal_value <- gcs_verbal_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>%  deframe()
-  gcs_verbal_value %<>% average()
+  gcs_verbal_value %<>% worst_value("min")
   
   # Find closest eye measurement
   gcs_eye_value <- gcs_eye_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>%  deframe()
-  gcs_eye_value %<>% average()
-  
-  # Sum and score
-  gcs_value <- gcs_motor_value + gcs_verbal_value + gcs_eye_value
+  gcs_eye_value %<>% worst_value("min")
   
   # Calculate age-----------------
   
@@ -270,7 +291,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   fio2_value <- fio2_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  fio2_value %<>% average()
+  fio2_value %<>% mean(na.rm = TRUE)
   
   # Calculate arterial o2
   pao2_measurements <- chart_df %>% 
@@ -280,7 +301,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   pao2_value <- pao2_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  pao2_value %<>% average()
+  pao2_value %<>% worst_value("min")
   
   # Calculate Pco2
   paco2_measurements <- chart_df %>% 
@@ -290,7 +311,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   paco2_value <- paco2_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  paco2_value %<>% average()
+  paco2_value %<>% worst_value(40)
   
   # Calculate AA gradient
   elev <-  5
@@ -298,6 +319,8 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   ph2o <- 47 * exp((temp_value - 37) / 18.4)
   fio2 <- purrr::map_dbl(fio2_value, ~ dplyr::if_else(.x > 1, .x / 100, .x))
   aa_grad <- (fio2 * (patm - ph2o) - (paco2_value / 0.8)) - pao2_value
+  
+  aa_grad %<>% worst_value("max")
   
   # Gather all bicarbonate measurements
   bicarbonate_measurements <- labs_df %>% 
@@ -307,7 +330,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   bicarbonate_value <- bicarbonate_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  bicarbonate_value %<>% average()
+  bicarbonate_value %<>% worst_value(27)
 
   # Calculate chronic health score----------
   
@@ -353,9 +376,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
                    "arterialoxygen" = missing_to_na(pao2_value),
                    "arterialcarbon" = missing_to_na(paco2_value),
                    "aagradient" = missing_to_na(aa_grad))
-  return(list(
-    value = full_values
-  ))
+  return(full_values)
 }
 
 
