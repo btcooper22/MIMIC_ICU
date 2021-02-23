@@ -10,16 +10,16 @@ value_screen <- function(.df, variable_name,
     pivot_longer(1:2)
   
   # Perform filtering
-    if(return_safe)
-    {
-      filt_df <- pivoted_df %>% 
+  if(return_safe)
+  {
+    filt_df <- pivoted_df %>% 
       filter(value > safe_range[1] &
                value < safe_range[2])
-    }else
-    {
-      filt_df <- pivoted_df %>% 
+  }else
+  {
+    filt_df <- pivoted_df %>% 
       filter(value < safe_range[1] |
                value > safe_range[2])
-    }
-    return(filt_df)
+  }
+  return(filt_df)
 }
