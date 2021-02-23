@@ -6,8 +6,9 @@ value_screen <- function(.df, variable_name,
     select(any_of(c(paste(c("a", "d"), variable_name,
                           sep = "_"),
                     "row_id"))) %>% 
-    na.omit() %>% 
-    pivot_longer(1:2)
+    pivot_longer(1:2) %>% 
+    na.omit()
+  
   
   # Perform filtering
   if(return_safe)
