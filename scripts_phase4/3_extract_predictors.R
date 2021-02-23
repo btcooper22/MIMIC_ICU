@@ -166,7 +166,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   chart_missing <- !file.exists(chartfile)
   
   # APACHE II
-  if(!chart_missing | !lab_missing)
+  if(!chart_missing & !lab_missing)
   {
     # Calculate apache score at admission
     apache_admission <- apacheII_score(labs_df = labs, chart_df = charts,
@@ -239,7 +239,6 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              a_fractioninspiredoxygen = apache_admission["fractioninspiredoxygen"],
              a_arterialoxygen = apache_admission["arterialoxygen"],
              a_arterialcarbon = apache_admission["arterialcarbon"],
-             a_aagradient = apache_admission["aagradient"],
              d_temperature = apache_discharge["temperature"],
              d_systolicbp = apache_discharge["systolicbp"],
              d_diastolicbp = apache_discharge["diastolicbp"],
@@ -259,8 +258,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              d_bicarbonate = apache_discharge["bicarbonate"],
              d_fractioninspiredoxygen = apache_discharge["fractioninspiredoxygen"],
              d_arterialoxygen = apache_discharge["arterialoxygen"],
-             d_arterialcarbon = apache_discharge["arterialcarbon"],
-             d_aagradient = apache_discharge["aagradient"])
+             d_arterialcarbon = apache_discharge["arterialcarbon"])
   #row.names(output) <- i
   output
   #data.frame(i, cols = ncol(output))

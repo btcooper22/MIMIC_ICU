@@ -5,18 +5,19 @@ require(purrr)
 apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
                            elect_admit, prev_diagnoses, arf, event_type)
 {
-  # For debug
+  # # For debug
   # labs_df <- labs
   # chart_df <- charts
   # patient_df <- mimic_preproc$stays %>%
   #   filter(subject_id == subj,
   #          hadm_id == adm)
   # event_time <- admit_time
-  # event_time <- discharge_time
   # elect_admit <- elective_admission
   # prev_diagnoses <- history
   # arf <- acute_renal_failure
   # event_type <-  "admission"
+  
+  # event_time <- discharge_time
   # event_type <-  "discharge"
   
   # Helper function: Find closest chart measurement to admission
@@ -90,6 +91,14 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
     }
   }
   
+  # Filter out implausible values
+  implausability_filter <- function(val, good_range)
+  {
+    val[val < good_range[1]] <- NA
+    val[val > good_range[2]] <- NA
+    return(val)
+  }
+  
   # Calculate temperature---------
   
   # Gather all temperature measurements
@@ -106,7 +115,9 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
     filter_window(event_time) %>% 
     select(value_degC) %>% deframe()
   
-  temp_value %<>% worst_value(37.2)
+  temp_value %<>%
+    implausability_filter(c(30,40)) %>% 
+    worst_value(37.2)
   
   # Calculate mean arterial pressure----------
   
@@ -128,8 +139,13 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
     select(VALUENUM) %>% deframe()
   
   # Find worst
-  systolic_bp_value %<>% worst_value("max")
-  diastolic_bp_value %<>% worst_value("max")
+  systolic_bp_value %<>% 
+    implausability_filter(c(70,220)) %>% 
+    worst_value("max")
+  
+  diastolic_bp_value %<>%
+    implausability_filter(c(40,140)) %>% 
+    worst_value("max")
   
   # Calculate heart rate---------------
   
@@ -141,7 +157,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   pulse_value <- pulse_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  pulse_value %<>% worst_value(90)
+  
+  # Find worst
+  pulse_value %<>%
+    implausability_filter(c(20,200)) %>% 
+    worst_value(90)
   
   # Calculate respiratory rate-----------
   
@@ -155,7 +175,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   respiratory_value <- respiratory_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  respiratory_value %<>% worst_value("max")
+  
+  # Find worst
+  respiratory_value %<>%
+    implausability_filter(c(0,60)) %>% 
+    worst_value("max")
   
   # Calculate arterial pH---------
 
@@ -167,7 +191,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   artpH_value <- artpH_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  artpH_value %<>% worst_value(7.55)
+  
+  # Find worst
+  artpH_value %<>% 
+    implausability_filter(c(7,8)) %>% 
+    worst_value(7.55)
   
   # Calculate serum sodium (mMol/L)------------
 
@@ -179,7 +207,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   sodium_value <- sodium_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  sodium_value %<>% worst_value("max")
+  
+  # Find worst
+  sodium_value %<>% 
+    implausability_filter(c(100,160)) %>% 
+    worst_value(140)
   
   # Calculate serum potassium (mMol/L)---------
   
@@ -191,7 +223,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   potassium_value <- potassium_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  potassium_value %<>% worst_value("max")
+  
+  # Find worst
+  potassium_value %<>%
+    implausability_filter(c(0,8.5)) %>% 
+    worst_value(4.5)
   
   # Calculate serum creatinine (mg/dL)------------
   
@@ -203,7 +239,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   creatinine_value <- creatinine_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  creatinine_value %<>% worst_value("max")
+  
+  # Find worst
+  creatinine_value %<>% 
+    implausability_filter(c(0,6)) %>% 
+    worst_value("max")
   
   # Calculate haematocrit (%)-----------------
   
@@ -215,7 +255,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   hematocrit_value <- hematocrit_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  hematocrit_value %<>% worst_value("max")
+  
+  # Find worst
+  hematocrit_value %<>%
+    implausability_filter(c(15,60)) %>% 
+    worst_value(44)
   
   # Calculate white blood count (1000s)---------
   
@@ -227,7 +271,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   wbc_value <- wbc_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  wbc_value %<>% worst_value("max")
+  
+  # Find worst
+  wbc_value %<>%
+    implausability_filter(c(0,50)) %>% 
+    worst_value("max")
   
   # Calculate Glasgow coma score---------
   
@@ -291,7 +339,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   fio2_value <- fio2_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  fio2_value %<>% mean(na.rm = TRUE)
+  
+  # Find worst
+  fio2_value %<>% 
+    implausability_filter(c(21,100)) %>% 
+    worst_value("max")
   
   # Calculate arterial o2
   pao2_measurements <- chart_df %>% 
@@ -301,7 +353,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   pao2_value <- pao2_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  pao2_value %<>% worst_value("min")
+  
+  # Find worst
+  pao2_value %<>% 
+    implausability_filter(c(20,250)) %>% 
+    worst_value("min")
   
   # Calculate Pco2
   paco2_measurements <- chart_df %>% 
@@ -311,16 +367,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   paco2_value <- paco2_measurements %>% 
     filter_window(event_time) %>% 
     select(VALUENUM) %>% deframe()
-  paco2_value %<>% worst_value(40)
   
-  # Calculate AA gradient
-  elev <-  5
-  patm <- 760 * exp(elev / -7000)
-  ph2o <- 47 * exp((temp_value - 37) / 18.4)
-  fio2 <- purrr::map_dbl(fio2_value, ~ dplyr::if_else(.x > 1, .x / 100, .x))
-  aa_grad <- (fio2 * (patm - ph2o) - (paco2_value / 0.8)) - pao2_value
-  
-  aa_grad %<>% worst_value("max")
+  # Find worst
+  paco2_value %<>%
+    implausability_filter(c(8,200)) %>% 
+    worst_value(40)
   
   # Gather all bicarbonate measurements
   bicarbonate_measurements <- labs_df %>% 
@@ -330,7 +381,11 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   bicarbonate_value <- bicarbonate_measurements %>% 
     filter_window(event_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  bicarbonate_value %<>% worst_value(27)
+  
+  # Find worst
+  bicarbonate_value %<>%
+    implausability_filter(c(0,60)) %>% 
+    worst_value(27)
 
   # Calculate chronic health score----------
   
@@ -374,8 +429,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
                    "bicarbonate" = missing_to_na(bicarbonate_value),
                    "fractioninspiredoxygen" = missing_to_na(fio2_value),
                    "arterialoxygen" = missing_to_na(pao2_value),
-                   "arterialcarbon" = missing_to_na(paco2_value),
-                   "aagradient" = missing_to_na(aa_grad))
+                   "arterialcarbon" = missing_to_na(paco2_value))
   return(full_values)
 }
 
