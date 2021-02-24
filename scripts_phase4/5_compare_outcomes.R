@@ -293,7 +293,9 @@ results_out <-
   mutate(fractioninspiredoxygen = ifelse(is.na(fractioninspiredoxygen), 21, 
                 fractioninspiredoxygen)) %>% 
   select(-subject_id, -type, -readmission, 
-         -mort_inhosp, -mort_30)
+         -mort_inhosp, -mort_30) %>% 
+  relocate(row_id, adm_id, missing_abg, mort_inunit,
+           apache_II)
 
 # Count NA in each column
 results_out %>% 

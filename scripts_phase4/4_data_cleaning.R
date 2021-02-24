@@ -315,7 +315,8 @@ apache_scores <- temperature_scores + map_scores + pulse_score +
 
 # Attach and write
 results %>% 
-  mutate(apache_II = apache_scores) %>% 
+  mutate(apache_II = apache_scores,
+         missing_abg = is.na(oxygenation_score) & is.na(artpH_score)) %>% 
   filter(lab_missing == FALSE) %>% 
   select(-chart_missing, -lab_missing,
          -acute_renal_failure) %>% 
