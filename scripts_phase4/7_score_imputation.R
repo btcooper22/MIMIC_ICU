@@ -13,6 +13,7 @@ require(tidyr)
 require(ROCR)
 require(ResourceSelection)
 require(ggplot2)
+require(ggrepel)
 
 # Load functions
 source("functions/apache_score_mortality.R")
@@ -95,5 +96,23 @@ results_final <- foreach(i = 1:length(results_scored),
                discrim = auc,
                calib = cal %>% unname())
   }
+results_final
+
+# Process names
+names_split <- str_split(results_final$method, "_", simplify = TRUE)
 
 # Quick plot
+results_final %>% 
+  mutate(class = names_split[,1],
+         method = names_split[,2]) %>% 
+  ggplot(aes(x = discrim, y = calib,
+             fill = class))+
+  geom_point(size = 4, shape = 21)+
+  theme_classic(20)+
+  geom_hline(yintercept = 27.339,
+             linetype = "dashed")+
+  geom_vline(xintercept = 0.7191208,
+             linetype = "dashed")+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_fill_brewer(palette = "Set1")+
+  scale_y_reverse()
