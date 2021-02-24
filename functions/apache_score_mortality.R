@@ -145,7 +145,7 @@ apache_score <- function(data_in)
   
   # Glasgow coma scale
   gcs_score <- 15 - (data_in$glasgowcomaeye + data_in$glasgowcomamotor +
-                       data_in$glasgowcomaverbal)
+                       data_in$glasgowcomaverbal) %>% round()
   
   # Age
   age_score <- data_in$age
