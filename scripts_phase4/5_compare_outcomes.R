@@ -314,6 +314,6 @@ table(missing_hist$n)
   
 # Write
 results_out %>% 
-  write_csv("data/apache_real_missing")
+  write_csv("data/apache_real_missing.csv")
 
 
