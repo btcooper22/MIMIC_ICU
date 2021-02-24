@@ -3,6 +3,8 @@ require(readr)
 require(dplyr)
 require(tidyr)
 require(ROCR)
+require(ggplot2)
+require(ResourceSelection)
 
 source("functions/inverse_logit.R")
 
@@ -179,7 +181,7 @@ data.frame(x = performance_admission_mort30@x.values[[1]],
                y = performance_discharge_mortInHospital@y.values[[1]],
                model = "discharge_inhospital"),
     data.frame(x = performance_admission_mortInUnit@x.values[[1]],
-               y = performance_fialho@y.values[[1]],
+               y = performance_admission_mortInUnit@y.values[[1]],
                model = "admission_inunit")
   ) %>% 
   ggplot(aes(x, y, colour = model))+
@@ -190,6 +192,128 @@ data.frame(x = performance_admission_mort30@x.values[[1]],
   labs(x = "1 - Specificity",
        y = "Sensitivity")+
   theme_classic(20)+
-  theme(legend.position = "top")+
   scale_color_brewer(palette = "Set1",
                      name = "")
+
+# Assess calibration-----
+
+# Split data into deciles
+deciles_admission_mort30 <- tibble(
+  mortality = probs_admission_mort30$outcome,
+  probs = probs_admission_mort30$probs,
+  decile = ntile(probs_admission_mort30$probs, 10)
+)
+
+deciles_discharge_mort30 <- tibble(
+  mortality = probs_discharge_mort30$outcome,
+  probs = probs_discharge_mort30$probs,
+  decile = ntile(probs_discharge_mort30$probs, 10)
+)
+
+
+deciles_admission_mortInHospital <- tibble(
+  mortality = probs_admission_mortInHospital$outcome,
+  probs = probs_admission_mortInHospital$probs,
+  decile = ntile(probs_admission_mortInHospital$probs, 10)
+)
+
+
+deciles_discharge_mortInHospital <- tibble(
+  mortality = probs_discharge_mortInHospital$outcome,
+  probs = probs_discharge_mortInHospital$probs,
+  decile = ntile(probs_discharge_mortInHospital$probs, 10)
+)
+
+deciles_admission_mortInUnit <- tibble(
+  mortality = probs_admission_mortInUnit$outcome,
+  probs = probs_admission_mortInUnit$probs,
+  decile = ntile(probs_admission_mortInUnit$probs, 10)
+)
+
+# Create quick calibration function
+calibration <- function(.df)
+{
+  .df %>% 
+    group_by(decile) %>%
+    summarise(N = length(mortality),
+              observed = (sum(mortality) / length(mortality)) * 100,
+              predicted = mean(probs * 100),
+              error = sd(probs * 100))
+}
+
+# Calculate calibration
+calib_admission_mort30 <- calibration(deciles_admission_mort30)
+calib_discharge_mort30 <- calibration(deciles_discharge_mort30)
+calib_admission_mortInHospital <- calibration(deciles_admission_mortInHospital)
+calib_discharge_mortInHospital <- calibration(deciles_discharge_mortInHospital)
+calib_admission_mortInUnit <- calibration(deciles_admission_mortInUnit)
+
+# Plot calibration
+rbind(calib_admission_mort30 %>% mutate(model = "admission_mort30"), 
+      calib_discharge_mort30 %>% mutate(model = "discharge_mort30"),
+      calib_admission_mortInHospital %>% mutate(model = "admission_mortInHospital"),
+      calib_discharge_mortInHospital %>% mutate(model = "discharge_mortInHospital"),
+      calib_admission_mortInUnit %>% mutate(model = "admission_mortInUnit")) %>% 
+  ggplot(aes(predicted, observed ,
+             colour = model))+
+  geom_abline(slope = 1, intercept = 0,
+              size = 1)+
+  geom_path(size = 1)+
+  geom_pointrange(aes(ymin = observed - error ,
+                      ymax = observed + error,
+                      y = observed,
+                      x = predicted,
+                      colour = model)) +
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  labs(x = "Predicted readmission",
+       y = "Observed readmission")+
+  scale_colour_brewer(palette = "Set1",
+                      name = "")+
+  facet_wrap(~model, scales = "free")
+
+# Quantify calibration
+hoslem.test(probs_admission_mort30$outcome,
+            probs_admission_mort30$probs, g = 10)
+hoslem.test(probs_discharge_mort30$outcome,
+            probs_discharge_mort30$probs, g = 10)
+hoslem.test(probs_admission_mortInHospital$outcome,
+            probs_admission_mortInHospital$probs, g = 10)
+hoslem.test(probs_discharge_mortInHospital$outcome,
+            probs_discharge_mortInHospital$probs, g = 10)
+hoslem.test(probs_admission_mortInUnit$outcome,
+            probs_admission_mortInUnit$probs, g = 10)
+
+# Write best data----
+
+# Load data
+results_out <- 
+  read_csv("data/apache_data_full.csv") %>% 
+  filter(type == "admission") %>% 
+  mutate(fractioninspiredoxygen = ifelse(is.na(fractioninspiredoxygen), 21, 
+                fractioninspiredoxygen)) %>% 
+  select(-subject_id, -type, -readmission, 
+         -mort_inhosp, -mort_30)
+
+# Count NA in each column
+results_out %>% 
+  select(-row_id, -adm_id,
+         -mort_inunit, -age,
+         -chronic, -fractioninspiredoxygen) %>% 
+  sapply(function(x) sum(is.na(x)))
+
+# Table of missingness
+missing_hist <- results_out %>% 
+  select(-adm_id, -mort_inunit, -age, -apache_II, 
+         -chronic, -fractioninspiredoxygen) %>% 
+  pivot_longer(2:18) %>% 
+  group_by(row_id) %>% 
+  summarise(n = sum(is.na(value)))
+
+table(missing_hist$n)
+  
+# Write
+results_out %>% 
+  write_csv("data/apache_real_missing")
+
+
