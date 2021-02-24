@@ -318,8 +318,7 @@ results %>%
   mutate(apache_II = apache_scores,
          missing_abg = is.na(oxygenation_score) & is.na(artpH_score)) %>% 
   filter(lab_missing == FALSE) %>% 
-  select(-chart_missing, -lab_missing,
-         -acute_renal_failure) %>% 
+  select(-chart_missing, -lab_missing) %>% 
   relocate(row_id, subject_id,
            adm_id, type, apache_II) %>% 
   write_csv("data/apache_data_full.csv")
