@@ -56,6 +56,6 @@ output <- foreach(i = 1:3) %:%
     df
   }
 
-names(output) <- c("zero", "mean", "median")
+names(output) <- paste("average_", c("zero", "mean", "median"), sep = "")
 
 write_rds(output, "data/impute_mortality/average.RDS")
