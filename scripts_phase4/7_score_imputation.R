@@ -12,13 +12,15 @@ require(tools)
 require(tidyr)
 require(ROCR)
 require(ResourceSelection)
+require(ggplot2)
 
 # Load functions
 source("functions/apache_score_mortality.R")
 source("functions/inverse_logit.R")
 
 # Load data
-results <- read_rds("data/impute_mortality/average.RDS")
+results <- read_rds("data/impute_mortality/average.RDS") %>% 
+  c(read_rds("data/impute_mortality/MICE.RDS"))
 source("functions/data_loader_splitter.R")
 
 # Complete cases----
@@ -49,17 +51,28 @@ hoslem.test(probs_complete$outcome,
 # Generate scores
 results_scored <- foreach(i = 1:length(results)) %do%
   {
+    print(i)
     apache_score(cbind(results[[i]], apache_additional))
   }
 names(results_scored) <- names(results)
 
 # Generate predictions and assess
-foreach(i = 1:length(results_scored),
+results_final <- foreach(i = 1:length(results_scored),
         .combine = "rbind") %do%
   {
     # Extract scores
     scores_df <- results_scored[[i]]
     names(scores_df)[1] <- "apache_II"
+    
+    # Trim to only imputed
+    # scores_df %<>%
+    #   mutate(old_score = apache_additional$apache_II) %>%
+    #   filter(is.na(old_score))
+    
+    # Build model
+    # model_imputed <- glm(mortality ~ apache_II,
+    #                        data = scores_df,
+    #                        family = "binomial")
     
     # Predict
     probs_df <- 
@@ -71,7 +84,7 @@ foreach(i = 1:length(results_scored),
     # Discrimination
     pred <- prediction(probs_df$probs,
                        probs_df$outcome)
-    auc <- performance(pred_complete, measure = "auc")@y.values[[1]]
+    auc <- performance(pred, measure = "auc")@y.values[[1]]
     
     # Calibration
     cal <- hoslem.test(probs_df$outcome,
@@ -82,3 +95,5 @@ foreach(i = 1:length(results_scored),
                discrim = auc,
                calib = cal %>% unname())
   }
+
+# Quick plot
