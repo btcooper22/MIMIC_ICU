@@ -59,6 +59,7 @@ results_scored <- foreach(i = 1:length(results)) %do%
 names(results_scored) <- names(results)
 
 # Generate predictions and assess
+set.seed(386)
 results_final <- foreach(i = 1:length(results_scored),
         .combine = "rbind") %do%
   {
@@ -67,20 +68,30 @@ results_final <- foreach(i = 1:length(results_scored),
     names(scores_df)[1] <- "apache_II"
     
     # Trim to only imputed
-    # scores_df %<>%
-    #   mutate(old_score = apache_additional$apache_II) %>%
-    #   filter(is.na(old_score))
+    scores_df %<>%
+      mutate(old_score = apache_additional$apache_II) %>%
+      filter(is.na(old_score))
+    
+    # Set splits
+    scores_df$ID <- 1:nrow(scores_df)
+    train_df <- scores_df %>% 
+      group_by(mortality) %>% 
+      slice_sample(prop = 0.75) %>% 
+      ungroup()
+      
+    valid_df <- scores_df %>% 
+      filter(ID %in% train_df$ID == FALSE)
     
     # Build model
-    # model_imputed <- glm(mortality ~ apache_II,
-    #                        data = scores_df,
-    #                        family = "binomial")
+    model_imputed <- glm(mortality ~ apache_II,
+                           data = train_df,
+                           family = "binomial")
     
     # Predict
     probs_df <- 
       data.frame(probs = predict(model_mortality, 
-                                 newdata = scores_df),
-                 outcome = scores_df$mortality) %>% 
+                                 newdata = valid_df),
+                 outcome = valid_df$mortality) %>% 
       mutate(probs = inverse_logit(probs))
     
     # Discrimination
@@ -110,10 +121,10 @@ results_final %>%
              fill = class))+
   geom_point(size = 4, shape = 21)+
   theme_classic(20)+
-  geom_hline(yintercept = 27.339,
-             linetype = "dashed")+
-  geom_vline(xintercept = 0.7191208,
-             linetype = "dashed")+
+  # geom_hline(yintercept = 27.339,
+  #            linetype = "dashed")+
+  # geom_vline(xintercept = 0.7191208,
+  #            linetype = "dashed")+
   labs(y = "Calibration", x = "Discrimination")+
   scale_fill_brewer(palette = "Set1")+
   scale_y_reverse()
