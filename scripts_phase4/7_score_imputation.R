@@ -21,7 +21,8 @@ source("functions/inverse_logit.R")
 
 # Load data
 results <- read_rds("data/impute_mortality/average.RDS") %>% 
-  c(read_rds("data/impute_mortality/MICE.RDS"))
+  c(read_rds("data/impute_mortality/MICE.RDS"),
+    read_rds("data/impute_mortality/KNN.RDS"))
 source("functions/data_loader_splitter.R")
 
 # Complete cases----
