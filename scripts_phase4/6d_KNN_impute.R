@@ -56,5 +56,5 @@ all_KNN <- foreach(i = 1:length(imputed_dfs)) %do%
 
 names(all_KNN) <- paste("KNN", k_list, sep = "_")
 
-write_rds(all_KNN, "data/impute/KNN.RDS",
+write_rds(all_KNN, "data/impute_mortality/KNN.RDS",
           compress = "gz")
