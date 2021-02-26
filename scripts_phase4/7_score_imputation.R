@@ -22,7 +22,8 @@ source("functions/inverse_logit.R")
 # Load data
 results <- read_rds("data/impute_mortality/average.RDS") %>% 
   c(read_rds("data/impute_mortality/MICE.RDS"),
-    read_rds("data/impute_mortality/KNN.RDS"))
+    read_rds("data/impute_mortality/KNN.RDS"),
+    read_rds("data/impute_mortality/forest.RDS"))
 source("functions/data_loader_splitter.R")
 
 # Complete cases----
@@ -58,11 +59,20 @@ results_scored <- foreach(i = 1:length(results)) %do%
   }
 names(results_scored) <- names(results)
 
+# Set up parallel
+n_cores <- 15
+cl <- makeCluster(ifelse(detectCores() <= n_cores,
+                          detectCores() - 1,
+                          n_cores))
+registerDoParallel(cl)
+n_boot <- 10000
+
 # Generate predictions and assess
-set.seed(386)
 results_final <- foreach(i = 1:length(results_scored),
         .combine = "rbind") %do%
   {
+    print(i)
+    
     # Extract scores
     scores_df <- results_scored[[i]]
     names(scores_df)[1] <- "apache_II"
@@ -72,42 +82,58 @@ results_final <- foreach(i = 1:length(results_scored),
       mutate(old_score = apache_additional$apache_II) %>%
       filter(is.na(old_score))
     
-    # Set splits
-    scores_df$ID <- 1:nrow(scores_df)
-    train_df <- scores_df %>% 
-      group_by(mortality) %>% 
-      slice_sample(prop = 0.75) %>% 
-      ungroup()
-      
-    valid_df <- scores_df %>% 
-      filter(ID %in% train_df$ID == FALSE)
-    
-    # Build model
-    model_imputed <- glm(mortality ~ apache_II,
-                           data = train_df,
-                           family = "binomial")
-    
-    # Predict
-    probs_df <- 
-      data.frame(probs = predict(model_mortality, 
-                                 newdata = valid_df),
-                 outcome = valid_df$mortality) %>% 
-      mutate(probs = inverse_logit(probs))
-    
-    # Discrimination
-    pred <- prediction(probs_df$probs,
-                       probs_df$outcome)
-    auc <- performance(pred, measure = "auc")@y.values[[1]]
-    
-    # Calibration
-    cal <- hoslem.test(probs_df$outcome,
-                probs_df$probs, g = 10)$statistic
+    # Inner loop for bootstrap assessment
+    results_boot <- foreach(j = 1:n_boot, .combine = "rbind",
+            .packages = c("dplyr", "ROCR",
+                          "ResourceSelection")) %dopar%
+      {
+        # Set splits
+        scores_df$ID <- 1:nrow(scores_df)
+        train_df <- scores_df %>% 
+          group_by(mortality) %>% 
+          slice_sample(prop = 0.75) %>% 
+          ungroup()
+        
+        valid_df <- scores_df %>% 
+          filter(ID %in% train_df$ID == FALSE)
+        
+        # Build model
+        model_imputed <- glm(mortality ~ apache_II,
+                             data = train_df,
+                             family = "binomial")
+        
+        # Predict
+        probs_df <- 
+          data.frame(probs = predict(model_mortality, 
+                                     newdata = valid_df),
+                     outcome = valid_df$mortality) %>% 
+          mutate(probs = inverse_logit(probs))
+        
+        # Discrimination
+        pred <- prediction(probs_df$probs,
+                           probs_df$outcome)
+        auc <- performance(pred, measure = "auc")@y.values[[1]]
+        
+        # Calibration
+        cal <- hoslem.test(probs_df$outcome,
+                           probs_df$probs, g = 10)$statistic
+        
+        # Output
+        data.frame(sample = j,
+                   discrim = auc,
+                   calib = cal %>% unname())
+      }
     
     # Output
-    data.frame(method = names(results_scored)[i],
-               discrim = auc,
-               calib = cal %>% unname())
+    results_boot %>%
+      na.omit() %>% 
+      summarise(discrimination = mean(discrim),
+                discrim_error = sd(discrim),
+                calibration = mean(calib),
+                cal_error = sd(calib)) %>% 
+      mutate(method = names(results_scored)[i])
   }
+stopCluster(cl)
 results_final
 
 # Process names
@@ -117,7 +143,8 @@ names_split <- str_split(results_final$method, "_", simplify = TRUE)
 results_final %>% 
   mutate(class = names_split[,1],
          method = names_split[,2]) %>% 
-  ggplot(aes(x = discrim, y = calib,
+  filter(method != "zero") %>% 
+  ggplot(aes(x = discrimination, y = calibration,
              fill = class))+
   geom_point(size = 4, shape = 21)+
   theme_classic(20)+
@@ -128,3 +155,5 @@ results_final %>%
   labs(y = "Calibration", x = "Discrimination")+
   scale_fill_brewer(palette = "Set1")+
   scale_y_reverse()
+
+# Plot best within each method w/ error
