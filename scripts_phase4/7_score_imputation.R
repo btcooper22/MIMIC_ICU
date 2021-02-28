@@ -134,7 +134,6 @@ results_final <- foreach(i = 1:length(results_scored),
                 cal_error = sd(calib)) %>% 
       mutate(method = names(results_scored)[i])
   }
-stopCluster(cl)
 results_final
 
 # Process names
@@ -186,12 +185,6 @@ best_methods <- rescale_df %>%
   mutate(names = paste(class, method,
                        sep = "_")) %>% 
   select(names) %>% deframe()
-
-# Set up parallel
-cl <- makeCluster(ifelse(detectCores() <= n_cores,
-                         detectCores() - 1,
-                         n_cores))
-registerDoParallel(cl)
 
 # Store bootstrap samples for best method
 bootstrap_samples <- foreach(i = 1:length(best_methods),
@@ -261,6 +254,19 @@ stopCluster(cl)
 means_df <- results_final %>% 
   filter(method %in% best_methods)
 
+# Distributions
+bootstrap_samples %>% 
+  group_by(method) %>% 
+  pivot_longer(2:3) %>% 
+  ggplot(aes(x = value,
+             fill = method))+
+  theme_classic(20)+
+  geom_density()+
+  scale_fill_brewer(palette = "Set1")+
+  theme(legend.position = "none")+
+  facet_wrap(~method * name,
+             scales = "free")
+
 # Plot
 bootstrap_samples %>% 
   ggplot()+
@@ -292,16 +298,5 @@ bootstrap_samples %>%
                  fill = method),
              size = 4, shape = 21)
 
-# Distributions
-bootstrap_samples %>% 
-  group_by(method) %>% 
-  pivot_longer(2:3) %>% 
-  ggplot(aes(x = value,
-             fill = method))+
-  theme_classic(20)+
-  geom_density()+
-  scale_fill_brewer(palette = "Set1")+
-  theme(legend.position = "none")+
-  facet_wrap(~method * name,
-             scales = "free")
+
   
