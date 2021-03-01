@@ -92,7 +92,7 @@ results_final <- foreach(i = 1:length(results_scored),
         scores_df$ID <- 1:nrow(scores_df)
         train_df <- scores_df %>% 
           group_by(mortality) %>% 
-          slice_sample(prop = 0.75) %>% 
+          slice_sample(prop = 0.5) %>% 
           ungroup()
         
         valid_df <- scores_df %>% 
@@ -185,6 +185,7 @@ best_methods <- rescale_df %>%
   mutate(names = paste(class, method,
                        sep = "_")) %>% 
   select(names) %>% deframe()
+best_methods <- c("average_zero",best_methods)
 
 # Store bootstrap samples for best method
 bootstrap_samples <- foreach(i = 1:length(best_methods),
@@ -210,7 +211,7 @@ bootstrap_samples <- foreach(i = 1:length(best_methods),
         scores_df$ID <- 1:nrow(scores_df)
         train_df <- scores_df %>% 
           group_by(mortality) %>% 
-          slice_sample(prop = 0.75) %>% 
+          slice_sample(prop = 0.5) %>% 
           ungroup()
         
         valid_df <- scores_df %>% 
@@ -252,7 +253,8 @@ stopCluster(cl)
 
 # Extract means and error
 means_df <- results_final %>% 
-  filter(method %in% best_methods)
+  filter(method %in% best_methods) %>% 
+  filter(method != "average_zero")
 
 # Distributions
 bootstrap_samples %>% 
@@ -269,6 +271,7 @@ bootstrap_samples %>%
 
 # Plot
 bootstrap_samples %>% 
+  filter(method != "average_zero") %>% 
   ggplot()+
   theme_classic(20)+
   labs(y = "Calibration", x = "Discrimination")+
