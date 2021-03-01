@@ -15,6 +15,9 @@ require(ResourceSelection)
 require(ggplot2)
 require(scales)
 require(car)
+require(RColorBrewer)
+pal <- brewer.pal(9, "Set1")[-6]
+require(bayestestR)
 
 # Load functions
 source("functions/apache_score_mortality.R")
@@ -24,7 +27,9 @@ source("functions/inverse_logit.R")
 results <- read_rds("data/impute_mortality/average.RDS") %>% 
   c(read_rds("data/impute_mortality/MICE.RDS"),
     read_rds("data/impute_mortality/KNN.RDS"),
-    read_rds("data/impute_mortality/forest.RDS"))
+    read_rds("data/impute_mortality/forest.RDS"),
+    read_rds("data/impute_mortality/amelia.RDS"),
+    read_rds("data/impute_mortality/PCA.RDS"))
 source("functions/data_loader_splitter.R")
 
 # Complete cases----
@@ -134,7 +139,8 @@ results_final <- foreach(i = 1:length(results_scored),
                 cal_error = sd(calib)) %>% 
       mutate(method = names(results_scored)[i])
   }
-results_final
+results_final  %>% 
+  write_rds("data/impute_mortality/boot_results.RDS")
 
 # Process names
 names_split <- str_split(results_final$method, "_", simplify = TRUE)
@@ -256,6 +262,10 @@ means_df <- results_final %>%
   filter(method %in% best_methods) %>% 
   filter(method != "average_zero")
 
+bootstrap_samples  %>% 
+  write_rds("data/impute_mortality/boot_samples.RDS",
+            compress = "gz")
+
 # Distributions
 bootstrap_samples %>% 
   group_by(method) %>% 
@@ -275,9 +285,9 @@ bootstrap_samples %>%
   ggplot()+
   theme_classic(20)+
   labs(y = "Calibration", x = "Discrimination")+
-  scale_colour_brewer(palette = "Set1",
+  scale_colour_manual(values = pal,
                       name = "")+
-  scale_fill_brewer(palette = "Set1",
+  scale_fill_manual(values = pal,
                     name = "")+
   scale_y_reverse()+
   theme(legend.position = "top")+
@@ -300,6 +310,14 @@ bootstrap_samples %>%
                  y = calibration,
                  fill = method),
              size = 4, shape = 21)
+
+# HDI
+bootstrap_samples %>% 
+  group_by(method) %>% 
+  summarise(discrimination = hdi(discrim),
+            calibration = hdi(calib))
+
+
 
 
   
