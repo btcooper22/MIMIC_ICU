@@ -388,19 +388,20 @@ bootstrap_samples %>%
   scale_y_reverse()+
   theme(legend.position = "top")+
   stat_ellipse(aes(x = discrim, y = calib,
-                   colour = method), 
-               size = 1, type = "norm")+
-  geom_errorbar(data = means_df,
-                aes(ymin = calibration - cal_error,
-                    y = calibration,
-                    ymax = calibration + cal_error,
-                    x = discrimination,
-                    colour = method))+
-  geom_errorbarh(data = means_df,
-                aes(xmin = discrimination - discrim_error,
-                    y = calibration,
-                    xmax = discrimination + discrim_error,
-                    colour = method))+
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+  # geom_errorbar(data = means_df,
+  #               aes(ymin = calibration - cal_error,
+  #                   y = calibration,
+  #                   ymax = calibration + cal_error,
+  #                   x = discrimination,
+  #                   colour = method))+
+  # geom_errorbarh(data = means_df,
+  #               aes(xmin = discrimination - discrim_error,
+  #                   y = calibration,
+  #                   xmax = discrimination + discrim_error,
+  #                   colour = method))+
   geom_point(data = means_df,
              aes(x = discrimination,
                  y = calibration,
