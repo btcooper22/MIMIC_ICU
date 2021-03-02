@@ -284,7 +284,7 @@ hoslem.test(probs_discharge_mortInHospital$outcome,
 hoslem.test(probs_admission_mortInUnit$outcome,
             probs_admission_mortInUnit$probs, g = 10)
 
-# Write best data----
+# Write in-unit mortality dataset----
 
 # Load data
 results_out <- 
@@ -306,9 +306,10 @@ results_out %>%
 
 # Table of missingness
 missing_hist <- results_out %>% 
+  filter(is.na(apache_II)) %>% 
   select(-adm_id, -mort_inunit, -age, -apache_II, 
          -chronic, -fractioninspiredoxygen) %>% 
-  pivot_longer(2:18) %>% 
+  pivot_longer(3:20) %>% 
   group_by(row_id) %>% 
   summarise(n = sum(is.na(value)))
 
@@ -318,4 +319,38 @@ table(missing_hist$n)
 results_out %>% 
   write_csv("data/apache_real_missing.csv")
 
+# Write 30-day mortality dataset----
 
+# Load data
+results_out <- 
+  read_csv("data/apache_data_full.csv") %>% 
+  filter(type == "discharge",
+         mort_inunit == FALSE) %>% 
+  mutate(fractioninspiredoxygen = ifelse(is.na(fractioninspiredoxygen), 21, 
+                                         fractioninspiredoxygen)) %>% 
+  select(-subject_id, -type, -readmission, 
+         -mort_inhosp, -mort_inunit) %>% 
+  relocate(row_id, adm_id, missing_abg, mort_30,
+           apache_II)
+
+# Count NA in each column
+results_out %>% 
+  select(-row_id, -adm_id,
+         -mort_30, -age,
+         -chronic, -fractioninspiredoxygen) %>% 
+  sapply(function(x) sum(is.na(x)))
+
+# Table of missingness
+missing_hist <- results_out %>% 
+  filter(is.na(apache_II)) %>% 
+  select(-adm_id, -mort_30, -age, -apache_II, 
+         -chronic, -fractioninspiredoxygen) %>% 
+  pivot_longer(3:20) %>% 
+  group_by(row_id) %>% 
+  summarise(n = sum(is.na(value)))
+
+table(missing_hist$n)
+
+# Write
+results_out %>% 
+  write_csv("data/apache_discharge_missing.csv")
