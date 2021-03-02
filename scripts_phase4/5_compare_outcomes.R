@@ -5,6 +5,7 @@ require(tidyr)
 require(ROCR)
 require(ggplot2)
 require(ResourceSelection)
+require(tibble)
 
 source("functions/inverse_logit.R")
 
@@ -351,6 +352,12 @@ missing_hist <- results_out %>%
 
 table(missing_hist$n)
 
+# Find those where all data missing
+all_missing <- missing_hist %>% 
+  filter(n == 17) %>% 
+  select(row_id) %>% deframe()
+
 # Write
 results_out %>% 
+  filter(row_id %in% all_missing == FALSE) %>% 
   write_csv("data/apache_discharge_missing.csv")
