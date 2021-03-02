@@ -1,6 +1,6 @@
 require(purrr)
 
-apache_score <- function(data_in)
+apache_score <- function(data_in, mort_type = "inunit")
 {
   # Temperature
   temperature_scores <- case_when(
@@ -163,6 +163,9 @@ apache_score <- function(data_in)
     respiratory_score + abg_score + sodium_score + potassium_score +
     creatinine_score + wbc_score + gcs_score + age_score + chronic_score
   
+  # Extract mortality
+  mort_varname <- grep("mort", names(data_in), value = TRUE)
+  
   return(data.frame(apache_scores,
-                    mortality = data_in$mort_inunit))
+                    mortality = data_in %>% select(any_of(mort_varname))))
 }
