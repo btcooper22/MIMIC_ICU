@@ -89,7 +89,7 @@ cl <- makeCluster(ifelse(detectCores() <= n_cores,
                           detectCores() - 1,
                           n_cores))
 registerDoParallel(cl)
-n_boot <- 100
+n_boot <- 10000
 
 # Generate predictions and assess
 results_final <- foreach(i = 1:length(results_inunit_scored),
@@ -371,7 +371,7 @@ means_df <- best_methods %>%
   mutate(method = str_split(method, "_", simplify = TRUE)[,1])
 means_df[13:14,2] <- "zero"
 
-
+# Save
 bootstrap_samples  %>% 
   write_rds("data/impute_mortality/boot_samples.RDS",
             compress = "gz")
@@ -410,7 +410,7 @@ bootstrap_samples %>%
 
 # HDI
 bootstrap_samples %>% 
-  group_by(method) %>% 
+  group_by(mortality, method) %>% 
   summarise(discrimination = hdi(discrim)[,2:3],
             calibration = hdi(calib)[,2:3])
 
