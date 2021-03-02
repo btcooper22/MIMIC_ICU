@@ -58,4 +58,4 @@ output <- foreach(i = 1:3) %:%
 
 names(output) <- paste("average_", c("zero", "mean", "median"), sep = "")
 
-write_rds(output, "data/impute_mortality/average.RDS")
+write_rds(output, "data/impute_discharge/average.RDS")

@@ -73,4 +73,4 @@ disentangled_df <- foreach(k = 1:length(imputed_dfs)) %do%
   }
 names(disentangled_df) <- paste("MICE", mice_methods, sep = "_")
 
-write_rds(disentangled_df, "data/impute_mortality/MICE.RDS")
+write_rds(disentangled_df, "data/impute_discharge/MICE.RDS")

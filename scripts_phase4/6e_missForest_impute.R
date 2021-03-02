@@ -35,5 +35,5 @@ imputed_dfs <- foreach(j = 1:length(mtry_range)) %do%
   }
 names(imputed_dfs) <- paste("RF", mtry_range, sep = "_")
 
-write_rds(imputed_dfs, "data/impute_mortality/forest.RDS",
+write_rds(imputed_dfs, "data/impute_discharge/forest.RDS",
           compress = "gz")

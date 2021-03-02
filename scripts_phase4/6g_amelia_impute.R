@@ -29,6 +29,6 @@ names(amelia_output) <- names(apache_scores)
 # Save to file
 all_amelia <- list(amelia_output)
 names(all_amelia) <- c("amelia_100")
-write_rds(all_amelia, "data/impute_mortality/amelia.RDS",
+write_rds(all_amelia, "data/impute_discharge/amelia.RDS",
           compress = "gz")
 

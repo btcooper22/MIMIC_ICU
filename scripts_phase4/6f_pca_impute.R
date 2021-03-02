@@ -28,5 +28,5 @@ imputed_dfs <- foreach(j = 1:length(ncomps)) %do%
     
 names(imputed_dfs) <- paste("PCA", ncomps, sep = "_")
 
-write_rds(imputed_dfs, "data/impute_mortality/PCA.RDS",
+write_rds(imputed_dfs, "data/impute_discharge/PCA.RDS",
           compress = "gz")
