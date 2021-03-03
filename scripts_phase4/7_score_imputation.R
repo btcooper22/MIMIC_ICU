@@ -110,7 +110,7 @@ cl <- makeCluster(ifelse(detectCores() <= n_cores,
                           detectCores() - 1,
                           n_cores))
 registerDoParallel(cl)
-n_boot <- 1000
+n_boot <- 10000
 
 # Generate predictions and assess
 results_final <- foreach(i = 1:length(results_30d_scored),
@@ -126,9 +126,9 @@ results_final <- foreach(i = 1:length(results_30d_scored),
       names(scores_df)[1] <- "apache_II"
       
       # Trim to only imputed
-      # scores_df %<>%
-      #   mutate(old_score = apache_additional_inunit$apache_II) %>%
-      #   filter(is.na(old_score))
+      scores_df %<>%
+        mutate(old_score = apache_additional_inunit$apache_II) %>%
+        filter(is.na(old_score))
       
       # Inner loop for bootstrap assessment
       results_boot_inunit <- foreach(j = 1:n_boot, .combine = "rbind",
@@ -178,9 +178,9 @@ results_final <- foreach(i = 1:length(results_30d_scored),
     names(scores_df)[1] <- "apache_II"
     
     # Trim to only imputed
-    # scores_df %<>%
-    #   mutate(old_score = apache_additional_30d$apache_II) %>%
-    #   filter(is.na(old_score))
+    scores_df %<>%
+      mutate(old_score = apache_additional_30d$apache_II) %>%
+      filter(is.na(old_score))
     
     # Inner loop for bootstrap assessment
     results_boot_30d <- foreach(j = 1:n_boot, .combine = "rbind",
@@ -272,10 +272,11 @@ names_split <- str_split(results_final$method, "_", simplify = TRUE)
 results_final %>% 
   mutate(class = names_split[,1],
          method = names_split[,2]) %>% 
-  filter(method != "zero") %>% 
+  #filter(method != "zero") %>% 
   ggplot(aes(x = discrimination, y = calibration,
              fill = class))+
-  geom_point(size = 4, shape = 21)+
+  geom_point(size = 4, shape = 21,
+             alpha = 0.7)+
   theme_classic(20)+
   # geom_hline(yintercept = 27.339,
   #            linetype = "dashed")+
