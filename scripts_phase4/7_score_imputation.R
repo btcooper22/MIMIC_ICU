@@ -38,6 +38,8 @@ results_30d <- read_rds("data/impute_discharge/average.RDS") %>%
     read_rds("data/impute_discharge/amelia.RDS"),
     read_rds("data/impute_discharge/PCA.RDS"))
 
+results_long <- read_rds("data/impute_discharge/recent.RDS")
+
 # Load data
 apache_df <- read_csv("data/apache_real_missing.csv")
 apache_scores_inunit <- apache_df %>% 
@@ -83,79 +85,102 @@ results_30d_scored <- foreach(i = 1:length(results_30d)) %do%
   }
 names(results_30d_scored) <- names(results_30d)
 
+results_long_scored <- foreach(i = 1:length(results_long)) %do%
+  {
+    print(names(results_long)[i])
+    
+    # Build new missing_abg
+    new_missing_abg <- is.na(results_long[[i]][["arterialpH"]]) &
+             (is.na(results_long[[i]][["arterialoxygen"]]) |
+                is.na(results_long[[i]][["arterialcarbon"]]))
+    
+
+    apache_additional_long <- apache_additional_30d %>% 
+      mutate(missing_abg = new_missing_abg)
+    
+    apache_score(cbind(results_long[[i]], apache_additional_long))
+  }
+names(results_long_scored) <- names(results_long)
+
+results_30d_scored <- c(results_30d_scored, results_long_scored)
+
 # Set up parallel
 n_cores <- 15
 cl <- makeCluster(ifelse(detectCores() <= n_cores,
                           detectCores() - 1,
                           n_cores))
 registerDoParallel(cl)
-n_boot <- 10000
+n_boot <- 1000
 
 # Generate predictions and assess
-results_final <- foreach(i = 1:length(results_inunit_scored),
+results_final <- foreach(i = 1:length(results_30d_scored),
         .combine = "rbind") %do%
   {
-    print(names(results_inunit_scored)[i])
+    print(names(results_30d_scored)[i])
     
-    # Extract scores
-    scores_df <- results_inunit_scored[[i]]
-    names(scores_df)[1] <- "apache_II"
-    
-    # Trim to only imputed
-    scores_df %<>%
-      mutate(old_score = apache_additional_inunit$apache_II) %>%
-      filter(is.na(old_score))
-    
-    # Inner loop for bootstrap assessment
-    results_boot_inunit <- foreach(j = 1:n_boot, .combine = "rbind",
-            .packages = c("dplyr", "ROCR",
-                          "ResourceSelection")) %dopar%
-      {
-        # Set splits
-        scores_df$ID <- 1:nrow(scores_df)
-        train_df <- scores_df %>% 
-          group_by(mort_inunit) %>% 
-          slice_sample(prop = 0.5) %>% 
-          ungroup()
-        
-        valid_df <- scores_df %>% 
-          filter(ID %in% train_df$ID == FALSE)
-        
-        # Build model
-        model_imputed <- glm(mort_inunit ~ apache_II,
-                             data = train_df,
-                             family = "binomial")
-        
-        # Predict
-        probs_df <- 
-          data.frame(probs = predict(model_imputed, 
-                                     newdata = valid_df),
-                     outcome = valid_df$mort_inunit) %>% 
-          mutate(probs = inverse_logit(probs))
-        
-        # Discrimination
-        pred <- prediction(probs_df$probs,
-                           probs_df$outcome)
-        auc <- performance(pred, measure = "auc")@y.values[[1]]
-        
-        # Calibration
-        cal <- hoslem.test(probs_df$outcome,
-                           probs_df$probs, g = 10)$statistic
-        
-        # Output
-        data.frame(sample = j,
-                   discrim = auc,
-                   calib = cal %>% unname())
-      }
-    
+    # Smaller loop to allow longitudinal
+    if(i <= length(results_inunit_scored))
+    {
+      # Extract scores
+      scores_df <- results_inunit_scored[[i]]
+      names(scores_df)[1] <- "apache_II"
+      
+      # Trim to only imputed
+      # scores_df %<>%
+      #   mutate(old_score = apache_additional_inunit$apache_II) %>%
+      #   filter(is.na(old_score))
+      
+      # Inner loop for bootstrap assessment
+      results_boot_inunit <- foreach(j = 1:n_boot, .combine = "rbind",
+                                     .packages = c("dplyr", "ROCR",
+                                                   "ResourceSelection")) %dopar%
+        {
+          # Set splits
+          scores_df$ID <- 1:nrow(scores_df)
+          train_df <- scores_df %>% 
+            group_by(mort_inunit) %>% 
+            slice_sample(prop = 0.5) %>% 
+            ungroup()
+          
+          valid_df <- scores_df %>% 
+            filter(ID %in% train_df$ID == FALSE)
+          
+          # Build model
+          model_imputed <- glm(mort_inunit ~ apache_II,
+                               data = train_df,
+                               family = "binomial")
+          
+          # Predict
+          probs_df <- 
+            data.frame(probs = predict(model_imputed, 
+                                       newdata = valid_df),
+                       outcome = valid_df$mort_inunit) %>% 
+            mutate(probs = inverse_logit(probs))
+          
+          # Discrimination
+          pred <- prediction(probs_df$probs,
+                             probs_df$outcome)
+          auc <- performance(pred, measure = "auc")@y.values[[1]]
+          
+          # Calibration
+          cal <- hoslem.test(probs_df$outcome,
+                             probs_df$probs, g = 10)$statistic
+          
+          # Output
+          data.frame(sample = j,
+                     discrim = auc,
+                     calib = cal %>% unname())
+        }
+    }
+
     # Repeat for 30-day mortality
     scores_df <- results_30d_scored[[i]]
     names(scores_df)[1] <- "apache_II"
     
     # Trim to only imputed
-    scores_df %<>%
-      mutate(old_score = apache_additional_30d$apache_II) %>%
-      filter(is.na(old_score))
+    # scores_df %<>%
+    #   mutate(old_score = apache_additional_30d$apache_II) %>%
+    #   filter(is.na(old_score))
     
     # Inner loop for bootstrap assessment
     results_boot_30d <- foreach(j = 1:n_boot, .combine = "rbind",
@@ -182,7 +207,8 @@ results_final <- foreach(i = 1:length(results_inunit_scored),
           data.frame(probs = predict(model_imputed, 
                                      newdata = valid_df),
                      outcome = valid_df$mort_30) %>% 
-          mutate(probs = inverse_logit(probs))
+          mutate(probs = inverse_logit(probs)) %>% 
+          na.omit()
         
         # Discrimination
         pred <- prediction(probs_df$probs,
@@ -200,24 +226,42 @@ results_final <- foreach(i = 1:length(results_inunit_scored),
       }
     
     # Output
-    results_boot_inunit %>%
-      na.omit() %>% 
-      summarise(discrimination = mean(discrim),
-                discrim_error = sd(discrim),
-                calibration = mean(calib),
-                cal_error = sd(calib)) %>% 
-      mutate(mortality = "inunit") %>% 
-      rbind(
+    if(i <= length(results_inunit_scored))
+    {
+      results_boot_inunit %>%
+        na.omit() %>% 
+        summarise(discrimination = mean(discrim),
+                  discrim_error = sd(discrim),
+                  calibration = mean(calib),
+                  cal_error = sd(calib)) %>% 
+        mutate(mortality = "inunit",
+               still_missing = sum(is.na(results_inunit_scored[[i]][[1]]))) %>% 
+        rbind(
+          results_boot_30d %>%
+            na.omit() %>% 
+            summarise(discrimination = mean(discrim),
+                      discrim_error = sd(discrim),
+                      calibration = mean(calib),
+                      cal_error = sd(calib)) %>% 
+            mutate(mortality = "30-day",
+                   still_missing = sum(is.na(results_30d_scored[[i]][[1]])))
+        ) %>% 
+        mutate(method = names(results_inunit_scored)[i])
+    }else
+    {
         results_boot_30d %>%
           na.omit() %>% 
           summarise(discrimination = mean(discrim),
                     discrim_error = sd(discrim),
                     calibration = mean(calib),
                     cal_error = sd(calib)) %>% 
-          mutate(mortality = "30-day")
-      ) %>% 
-      mutate(method = names(results_inunit_scored)[i])
+          mutate(mortality = "30-day",
+                 still_missing = sum(is.na(results_30d_scored[[i]][[1]]))) %>% 
+        mutate(method = names(results_30d_scored)[i])
+    }
+
   }
+
 results_final  %>% 
   write_rds("data/impute_mortality/boot_results.RDS")
 
@@ -334,7 +378,8 @@ bootstrap_samples <- foreach(i = 1:nrow(best_methods),
           data.frame(probs = predict(model_imputed, 
                                      newdata = valid_df),
                      outcome = valid_df$mortality) %>% 
-          mutate(probs = inverse_logit(probs))
+          mutate(probs = inverse_logit(probs)) %>% 
+          na.omit()
         
         # Discrimination
         pred <- prediction(probs_df$probs,
@@ -369,7 +414,7 @@ names(best_methods)[2] <- "method"
 means_df <- best_methods %>% 
   left_join(results_final) %>% 
   mutate(method = str_split(method, "_", simplify = TRUE)[,1])
-means_df[13:14,2] <- "zero"
+means_df[14:15,2] <- "zero"
 
 # Save
 bootstrap_samples  %>% 
