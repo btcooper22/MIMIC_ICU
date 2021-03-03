@@ -336,4 +336,60 @@ imputed_results <- foreach(i = 1:nrow(apache_scores), .combine = "rbind",
   }
 stopCluster(cl)
 
+# Reformulate----
+
 # Load normal data
+rm(apache_additional, apache_scores)
+source("functions/data_loader_splitter.R")
+apache_df <- cbind(apache_additional, apache_scores)
+
+# Pivot imputed data
+imputed_results %<>% 
+  pivot_longer(4:13, "method")
+
+# Loop through methods
+methods_list <- unique(imputed_results$method)
+
+results <- foreach(i = 1:length(methods_list)) %do%
+  {
+    print(i)
+    # Create subset
+    imputed_subset <- imputed_results %>% 
+      filter(method == methods_list[i])
+    
+    # Identify individuals
+    individuals <- unique(imputed_subset$adm)
+    
+    # Set aside dataset
+    new_df <- apache_df
+    
+    # Loop through individuals
+    for(j in 1:nrow(new_df))
+      {
+      #print(j)
+        # Check if imputation done
+        if(new_df$adm_id[j] %in% individuals)
+        {
+          # Extract individual imputations
+          ind_imp <- imputed_subset %>% 
+            filter(adm == new_df$adm_id[j])
+          
+          # Fill values
+          for(k in 1:nrow(ind_imp))
+          {
+            new_df[j,which(names(new_df) == ind_imp$variable[k])] <- ind_imp$value[k]
+          }
+        }
+    }
+    new_df %>%
+      select(-row_id, -adm_id,
+             -mort_30, -age,
+             -chronic, -fractioninspiredoxygen,
+             -apache_II, -missing_abg, -acute_renal_failure)
+  }
+
+names(results) <- paste("recent", methods_list, sep = "_")
+
+write_rds(results, "data/impute_discharge/recent.RDS",
+          compress = "gz")
+
