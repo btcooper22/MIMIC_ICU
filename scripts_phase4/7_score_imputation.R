@@ -104,6 +104,15 @@ names(results_long_scored) <- names(results_long)
 
 results_30d_scored <- c(results_30d_scored, results_long_scored)
 
+# Generate complete cases models
+full_model_inunit <- glm(mort_inunit ~ apache_II,
+                         data = apache_additional_inunit,
+                         family = "binomial")
+
+full_model_30d <- glm(mort_30 ~ apache_II,
+                         data = apache_additional_30d,
+                         family = "binomial")
+
 # Set up parallel
 n_cores <- 15
 cl <- makeCluster(ifelse(detectCores() <= n_cores,
@@ -136,23 +145,17 @@ results_final <- foreach(i = 1:length(results_30d_scored),
                                                    "ResourceSelection")) %dopar%
         {
           # Set splits
+          set.seed(j)
           scores_df$ID <- 1:nrow(scores_df)
-          train_df <- scores_df %>% 
-            group_by(mort_inunit) %>% 
-            slice_sample(prop = 0.5) %>% 
-            ungroup()
-          
           valid_df <- scores_df %>% 
-            filter(ID %in% train_df$ID == FALSE)
-          
-          # Build model
-          model_imputed <- glm(mort_inunit ~ apache_II,
-                               data = train_df,
-                               family = "binomial")
+            filter(!is.na(apache_II)) %>% 
+            group_by(mort_inunit) %>% 
+            slice_sample(prop = 0.1) %>% 
+            ungroup()
           
           # Predict
           probs_df <- 
-            data.frame(probs = predict(model_imputed, 
+            data.frame(probs = predict(full_model_inunit, 
                                        newdata = valid_df),
                        outcome = valid_df$mort_inunit) %>% 
             mutate(probs = inverse_logit(probs))
@@ -188,23 +191,17 @@ results_final <- foreach(i = 1:length(results_30d_scored),
                                                  "ResourceSelection")) %dopar%
       {
         # Set splits
+        set.seed(j)
         scores_df$ID <- 1:nrow(scores_df)
-        train_df <- scores_df %>% 
+        valid_df <- scores_df %>%
+          filter(!is.na(apache_II)) %>% 
           group_by(mort_30) %>% 
-          slice_sample(prop = 0.5) %>% 
+          slice_sample(prop = 0.1) %>% 
           ungroup()
-        
-        valid_df <- scores_df %>% 
-          filter(ID %in% train_df$ID == FALSE)
-        
-        # Build model
-        model_imputed <- glm(mort_30 ~ apache_II,
-                             data = train_df,
-                             family = "binomial")
         
         # Predict
         probs_df <- 
-          data.frame(probs = predict(model_imputed, 
+          data.frame(probs = predict(full_model_30d, 
                                      newdata = valid_df),
                      outcome = valid_df$mort_30) %>% 
           mutate(probs = inverse_logit(probs)) %>% 
@@ -262,7 +259,7 @@ results_final <- foreach(i = 1:length(results_30d_scored),
 
   }
 
-results_final  %>% 
+results_final  %>%
   write_rds("data/impute_mortality/boot_results.RDS")
 
 # Process names
@@ -341,17 +338,18 @@ bootstrap_samples <- foreach(i = 1:nrow(best_methods),
     }
     names(scores_df)[1:2] <- c("apache_II", "mortality")
     
+    
     # Trim to only imputed
     if(mtype == "30-day")
     {
       scores_df %<>%
-        mutate(old_score = apache_additional_30d$apache_II) %>%
-        filter(is.na(old_score))
+      mutate(old_score = apache_additional_30d$apache_II) %>%
+      filter(is.na(old_score))
     }else
     {
       scores_df %<>%
-        mutate(old_score = apache_additional_inunit$apache_II) %>%
-        filter(is.na(old_score))
+      mutate(old_score = apache_additional_inunit$apache_II) %>%
+      filter(is.na(old_score))
     }
     
     # Inner loop for bootstrap assessment
@@ -361,27 +359,31 @@ bootstrap_samples <- foreach(i = 1:nrow(best_methods),
       {
         # Set splits
         scores_df$ID <- 1:nrow(scores_df)
-        train_df <- scores_df %>% 
+        valid_df <- scores_df %>% 
+          filter(!is.na(apache_II)) %>% 
           group_by(mortality) %>% 
-          slice_sample(prop = 0.5) %>% 
+          slice_sample(prop = 0.1) %>% 
           ungroup()
         
-        valid_df <- scores_df %>% 
-          filter(ID %in% train_df$ID == FALSE)
-        
-        # Build model
-        model_imputed <- glm(mortality ~ apache_II,
-                             data = train_df,
-                             family = "binomial")
-        
         # Predict
-        probs_df <- 
-          data.frame(probs = predict(model_imputed, 
-                                     newdata = valid_df),
-                     outcome = valid_df$mortality) %>% 
-          mutate(probs = inverse_logit(probs)) %>% 
-          na.omit()
-        
+        if(mtype == "30-day")
+        {
+          probs_df <- 
+            data.frame(probs = predict(full_model_30d, 
+                                       newdata = valid_df),
+                       outcome = valid_df$mortality) %>% 
+            mutate(probs = inverse_logit(probs)) %>% 
+            na.omit()
+        }else
+        {
+          probs_df <- 
+            data.frame(probs = predict(full_model_inunit, 
+                                       newdata = valid_df),
+                       outcome = valid_df$mortality) %>% 
+            mutate(probs = inverse_logit(probs)) %>% 
+            na.omit()
+        }
+
         # Discrimination
         pred <- prediction(probs_df$probs,
                            probs_df$outcome)
@@ -403,7 +405,6 @@ bootstrap_samples <- foreach(i = 1:nrow(best_methods),
       mutate(method = best_methods[i,2] %>% deframe(),
              mortality = mtype)
   }
-stopCluster(cl)
 
 bootstrap_samples$method[bootstrap_samples$method == "average_zero"] <- "zero_zero"
 bootstrap_samples %<>% 
@@ -418,7 +419,7 @@ means_df <- best_methods %>%
 means_df[14:15,2] <- "zero"
 
 # Save
-bootstrap_samples  %>% 
+bootstrap_samples  %>%
   write_rds("data/impute_mortality/boot_samples.RDS",
             compress = "gz")
 
@@ -460,6 +461,7 @@ bootstrap_samples %>%
   group_by(mortality, method) %>% 
   summarise(discrimination = hdi(discrim)[,2:3],
             calibration = hdi(calib)[,2:3])
+stopCluster(cl)
 
 
 
