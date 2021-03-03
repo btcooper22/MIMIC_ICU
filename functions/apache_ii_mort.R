@@ -361,7 +361,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, event_time,
   
   # Calculate Pco2
   paco2_measurements <- chart_df %>% 
-    filter(ITEMID %in%  c(779, 220235, 777, 778, 3784, 3835, 3836))
+    filter(ITEMID %in%  c(220235, 777, 778, 3784, 3835, 3836))
   
   # Find closest to ICU admission 
   paco2_value <- paco2_measurements %>% 
