@@ -39,6 +39,17 @@ data_30d %>%
   summarise(sum = sum(is.na(apache_II)),
             mean = mean(is.na(apache_II)) * 100)
 
+# Calculate median APACHE-II
+data_inunit %>% 
+  filter(!is.na(apache_II)) %>% 
+  summarise(median = median(apache_II),
+            sd = sd(apache_II))
+
+data_30d %>% 
+  filter(!is.na(apache_II)) %>% 
+  summarise(median = median(apache_II),
+            sd = sd(apache_II))
+
 # Calibration and discrimination----
 
 # Build models
@@ -141,3 +152,152 @@ plot_cal <- rbind(calib_inunit %>% mutate(model = "In-unit mortality"),
 plot_AUC + plot_cal
 # ggsave("writeup/presentation_figs/auc_cal.png",
 #        width = 33.8, height = 17, units = "cm")
+
+
+# Measure missingness----
+
+# Correct fio2
+data_inunit$fractioninspiredoxygen[is.na(data_inunit$fractioninspiredoxygen)] <- 21
+data_30d$fractioninspiredoxygen[is.na(data_30d$fractioninspiredoxygen)] <- 21
+
+# Create missingness data frames
+missing_inunit <-
+  data.frame(
+    temperature = is.na(data_inunit$temperature),
+    map = is.na(data_inunit$systolicbp) |
+      is.na(data_inunit$diastolicbp),
+    pulse = is.na(data_inunit$pulse),
+    respiratory = is.na(data_inunit$respiratory),
+    sodium = is.na(data_inunit$sodium),
+    potassium = is.na(data_inunit$potassium),
+    creatinine = is.na(data_inunit$creatinine),
+    haematocrit = is.na(data_inunit$haematocrit),
+    whitebloodcount = is.na(data_inunit$whitebloodcount),
+    gcs = is.na(data_inunit$glasgowcomaeye) |
+      is.na(data_inunit$glasgowcomamotor) |
+      is.na(data_inunit$glasgowcomaverbal),
+    arterialpH = is.na(data_inunit$arterialpH) &
+      is.na(data_inunit$bicarbonate),
+    oxygenation = ifelse(
+      data_inunit$fractioninspiredoxygen > 50,
+      is.na(data_inunit$arterialoxygen) |
+        is.na(data_inunit$arterialcarbon),
+      is.na(data_inunit$arterialoxygen)
+    ) &
+      is.na(data_inunit$bicarbonate)
+  )
+
+missing_30d <-
+  data.frame(
+    temperature = is.na(data_30d$temperature),
+    map = is.na(data_30d$systolicbp) |
+      is.na(data_30d$diastolicbp),
+    pulse = is.na(data_30d$pulse),
+    respiratory = is.na(data_30d$respiratory),
+    sodium = is.na(data_30d$sodium),
+    potassium = is.na(data_30d$potassium),
+    creatinine = is.na(data_30d$creatinine),
+    haematocrit = is.na(data_30d$haematocrit),
+    whitebloodcount = is.na(data_30d$whitebloodcount),
+    gcs = is.na(data_30d$glasgowcomaeye) |
+      is.na(data_30d$glasgowcomamotor) |
+      is.na(data_30d$glasgowcomaverbal),
+    arterialpH = is.na(data_30d$arterialpH) &
+      is.na(data_30d$bicarbonate),
+    oxygenation = ifelse(
+      data_30d$fractioninspiredoxygen > 50,
+      is.na(data_30d$arterialoxygen) |
+        is.na(data_30d$arterialcarbon),
+      is.na(data_30d$arterialoxygen)
+    ) &
+      is.na(data_30d$bicarbonate)
+  )
+
+# Frequency of missingess by variable
+miss_table <- colSums(missing_inunit) %>%
+  as.data.frame() %>% 
+  mutate(model = "In-unit mortality") %>% 
+  rbind(
+    colSums(missing_30d) %>% 
+      as.data.frame() %>% 
+      mutate(model = "30-day mortality")) 
+names(miss_table)[1] <- "Freq"
+miss_table$varname <- rep(names(missing_30d), 2)
+  
+plot_miss1 <- miss_table %>% 
+ggplot(aes(x = varname, y = Freq))+
+  geom_bar(aes(fill = model),
+           stat = "identity",
+           position = "dodge",
+           colour = "black") +
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  labs(x = "",
+       y = "Frequency")+
+  scale_fill_manual(values = c("#984ea3", "#ff7f00"),
+                    name = "")
+
+# Number of variables missing
+plot_miss2 <- table(rowSums(missing_inunit)) %>% 
+  as.data.frame() %>% 
+  mutate(model = "In-unit mortality") %>% 
+  rbind(table(rowSums(missing_30d)) %>% 
+          as.data.frame() %>% 
+          mutate(model = "30-day mortality")) %>%
+  filter(Var1 != 0) %>% 
+  ggplot(aes(x = Var1, y = Freq))+
+  geom_bar(aes(fill = model),
+           stat = "identity",
+           position = "dodge",
+           colour = "black") +
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  labs(x = "Number of variables missing",
+       y = "Frequency")+
+  scale_fill_manual(values = c("#984ea3", "#ff7f00"),
+                     name = "")
+
+ggsave("writeup/presentation_figs/misstogram_A.png",
+       plot_miss2, width = 33.8, height = 17, units = "cm")
+
+ggsave("writeup/presentation_figs/misstogram_B.png",
+       plot_miss1, width = 33.8, height = 17, 
+       units = "cm", scale = 1.5)
+
+# Score imputations--------
+
+# Load data
+results <- read_rds("data/impute_mortality/boot_samples.RDS")
+
+# Extract means
+means_df <- results %>% 
+  group_by(method, mortality) %>% 
+  summarise(discrimination = mean(discrim),
+            calibration = mean(calib)) %>% 
+  ungroup()
+
+# Adjust factor levels
+results %>% 
+  mutate(mortality = fct_recode)
+
+results %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  # scale_colour_manual(values = pal,
+  #                     name = "")+
+  # scale_fill_manual(values = pal,
+  #                   name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+  geom_point(data = means_df,
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = method),
+             size = 4, shape = 21)+
+  facet_wrap(~mortality, scales = "free") %>% 
+  coord_cartesian()
