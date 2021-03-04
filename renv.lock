@@ -303,6 +303,13 @@
       "Repository": "CRAN",
       "Hash": "19f9ba83990d6c96441fcb0a10382d54"
     },
+    "bayestestR": {
+      "Package": "bayestestR",
+      "Version": "0.8.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "c5ea7613d9b5a5a0a5272ee6363aebbd"
+    },
     "bigmemory": {
       "Package": "bigmemory",
       "Version": "4.5.36",
@@ -897,6 +904,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "c34d7560557eb0b2e1040fc690534049"
+    },
+    "insight": {
+      "Package": "insight",
+      "Version": "0.13.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "760aa931fbe6866828626d0561250554"
     },
     "ipred": {
       "Package": "ipred",
