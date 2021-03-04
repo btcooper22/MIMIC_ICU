@@ -6,6 +6,8 @@ require(ROCR)
 require(ggplot2)
 require(ResourceSelection)
 require(patchwork)
+require(forcats)
+require(RColorBrewer)
 
 # Functions
 source("functions/inverse_logit.R")
@@ -266,8 +268,20 @@ ggsave("writeup/presentation_figs/misstogram_B.png",
 
 # Score imputations--------
 
+pal <- brewer.pal(9, "Set1")[-6]
+
 # Load data
 results <- read_rds("data/impute_mortality/boot_samples.RDS")
+
+# Adjust factor levels
+results %<>% 
+  mutate(mortality = fct_recode(mortality, `30-day mortality` = "30-day",
+                                `In-unit mortality` = "inunit"),
+         method = fct_recode(method, Amelia = "amelia",
+                             Median = "average",
+                             Recent = "recent",
+                             `Random Forest` = "RF",
+                             `Assume zero` = "zero"))
 
 # Extract means
 means_df <- results %>% 
@@ -276,28 +290,302 @@ means_df <- results %>%
             calibration = mean(calib)) %>% 
   ungroup()
 
-# Adjust factor levels
-results %>% 
-  mutate(mortality = fct_recode)
 
-results %>% 
+# Zero only
+p1 <- results %>% 
+  filter(mortality == "30-day mortality",
+         method == "Assume zero") %>% 
   ggplot()+
   theme_classic(20)+
   labs(y = "Calibration", x = "Discrimination")+
-  # scale_colour_manual(values = pal,
-  #                     name = "")+
-  # scale_fill_manual(values = pal,
-  #                   name = "")+
+  scale_colour_manual(values = c("#999999"),
+                      name = "")+
+  scale_fill_manual(values = c("#999999"),
+                    name = "")+
   scale_y_reverse()+
   theme(legend.position = "top")+
   stat_ellipse(aes(x = discrim, y = calib,
                    colour = method),
                size = 2, type = "norm",
                level = 0.682)+
-  geom_point(data = means_df,
+  geom_point(data = means_df %>% 
+               filter(mortality == "30-day mortality",
+                      method == "Assume zero"),
              aes(x = discrimination,
                  y = calibration,
                  fill = method),
              size = 4, shape = 21)+
-  facet_wrap(~mortality, scales = "free") %>% 
-  coord_cartesian()
+  coord_cartesian(xlim = c(0.675,1),
+                  ylim = c(22, 0))
+
+p2 <- results %>% 
+  filter(mortality == "In-unit mortality",
+         method == "Assume zero") %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("#999999"),
+                      name = "")+
+  scale_fill_manual(values = c("#999999"),
+                    name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+  geom_point(data = means_df %>% 
+               filter(mortality == "In-unit mortality",
+                      method == "Assume zero"),
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = method),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.25,0.83),
+                  ylim = c(30, 0))
+
+p1 + p2
+ggsave("writeup/presentation_figs/ellipse_1.png",
+       width = 33.8, height = 17, units = "cm")
+
+# Zero + average
+p1 <- results %>% 
+  filter(mortality == "30-day mortality",
+         method == "Assume zero" |
+           method == "Median") %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("black","#999999"),
+                      name = "")+
+  scale_fill_manual(values = c("black","#999999"),
+                    name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+  geom_point(data = means_df %>% 
+               filter(mortality == "30-day mortality",
+                      method == "Assume zero" |
+                        method == "Median"),
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = method),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.675,1),
+                  ylim = c(22, 0))
+
+p2 <- results %>% 
+  filter(mortality == "In-unit mortality",
+         method == "Assume zero" |
+           method == "Median") %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("black","#999999"),
+                      name = "")+
+  scale_fill_manual(values = c("black","#999999"),
+                    name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+  geom_point(data = means_df %>% 
+               filter(mortality == "In-unit mortality",
+                      method == "Assume zero"|
+                        method == "Median"),
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = method),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.25,0.83),
+                  ylim = c(30, 0))
+
+p1 + p2
+ggsave("writeup/presentation_figs/ellipse_2.png",
+       width = 33.8, height = 17, units = "cm")
+
+
+# All except recent & mice
+p1 <- results %>% 
+  filter(mortality == "30-day mortality",
+         method %in% c("MICE", "Recent") == FALSE) %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("#ff7f00", "black","#984ea3",
+                                 "#a65628","#4daf4a","#999999"),
+                      name = "")+
+  scale_fill_manual(values = c("#ff7f00", "black","#984ea3",
+                               "#a65628","#4daf4a","#999999"),
+                    name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+  geom_point(data = means_df %>% 
+               filter(mortality == "30-day mortality",
+                      method %in% c("MICE", "Recent") == FALSE),
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = method),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.675,1),
+                  ylim = c(22, 0))
+
+p2 <- results %>% 
+  filter(mortality == "In-unit mortality",
+         method %in% c("MICE", "Recent") == FALSE) %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("#ff7f00", "black","#984ea3",
+                                 "#a65628","#4daf4a","#999999"),
+                      name = "")+
+  scale_fill_manual(values = c("#ff7f00", "black","#984ea3",
+                               "#a65628","#4daf4a","#999999"),
+                    name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+  geom_point(data = means_df %>% 
+               filter(mortality == "In-unit mortality",
+                      method %in% c("MICE", "Recent") == FALSE),
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = method),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.25,0.83),
+                  ylim = c(30, 0))
+
+p1 + p2
+ggsave("writeup/presentation_figs/ellipse_3.png",
+       width = 33.8, height = 17, units = "cm")
+
+
+# Add mice
+p1 <- results %>% 
+  filter(mortality == "30-day mortality",
+         method != "Recent") %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("#ff7f00", "black","#984ea3", "#377eb8",
+                                 "#a65628","#4daf4a","#999999"),
+                      name = "")+
+  scale_fill_manual(values = c("#ff7f00", "black","#984ea3","#377eb8",
+                               "#a65628","#4daf4a","#999999"),
+                    name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+  geom_point(data = means_df %>% 
+               filter(mortality == "30-day mortality",
+                      method != "Recent"),
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = method),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.675,1),
+                  ylim = c(22, 0))
+
+p2 <- results %>% 
+  filter(mortality == "In-unit mortality",
+         method != "Recent") %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("#ff7f00", "black","#984ea3", "#377eb8",
+                                 "#a65628","#4daf4a","#999999"),
+                      name = "")+
+  scale_fill_manual(values = c("#ff7f00", "black","#984ea3","#377eb8",
+                               "#a65628","#4daf4a","#999999"),
+                    name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+  geom_point(data = means_df %>% 
+               filter(mortality == "In-unit mortality",
+                      method != "Recent"),
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = method),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.25,0.83),
+                  ylim = c(30, 0))
+
+p1 + p2
+ggsave("writeup/presentation_figs/ellipse_4.png",
+       width = 33.8, height = 17, units = "cm")
+
+# All
+p1 <- results %>% 
+  filter(mortality == "30-day mortality") %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("#ff7f00", "black","#984ea3","#377eb8",
+                                 "#a65628","#e41a1c","#4daf4a","#999999"),
+                      name = "")+
+  scale_fill_manual(values = c("#ff7f00", "black","#984ea3","#377eb8",
+                               "#a65628","#e41a1c","#4daf4a","#999999"),
+                    name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+  geom_point(data = means_df %>% 
+               filter(mortality == "30-day mortality"),
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = method),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.675,1),
+                  ylim = c(22, 0))
+
+p2 <- results %>% 
+  filter(mortality == "In-unit mortality") %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("#ff7f00", "black","#984ea3","#377eb8",
+                                 "#a65628","#e41a1c","#4daf4a","#999999"),
+                      name = "")+
+  scale_fill_manual(values = c("#ff7f00", "black","#984ea3","#377eb8",
+                               "#a65628","#e41a1c","#4daf4a","#999999"),
+                    name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+  geom_point(data = means_df %>% 
+               filter(mortality == "In-unit mortality"),
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = method),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.25,0.83),
+                  ylim = c(30, 0))
+
+p1 + p2
+ggsave("writeup/presentation_figs/ellipse_4.png",
+       width = 33.8, height = 17, units = "cm")
