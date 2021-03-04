@@ -565,11 +565,11 @@ p2 <- results %>%
   ggplot()+
   theme_classic(20)+
   labs(y = "Calibration", x = "Discrimination")+
-  scale_colour_manual(values = c("#ff7f00", "black","#984ea3","#377eb8",
-                                 "#a65628","#e41a1c","#4daf4a","#999999"),
+  scale_colour_manual(values = c("#ff7f00", "black","#984ea3", "#377eb8",
+                                 "#a65628","#4daf4a","#999999"),
                       name = "")+
   scale_fill_manual(values = c("#ff7f00", "black","#984ea3","#377eb8",
-                               "#a65628","#e41a1c","#4daf4a","#999999"),
+                               "#a65628","#4daf4a","#999999"),
                     name = "")+
   scale_y_reverse()+
   theme(legend.position = "top")+
@@ -587,5 +587,5 @@ p2 <- results %>%
                   ylim = c(30, 0))
 
 p1 + p2
-ggsave("writeup/presentation_figs/ellipse_4.png",
+ggsave("writeup/presentation_figs/ellipse_5.png",
        width = 33.8, height = 17, units = "cm")
