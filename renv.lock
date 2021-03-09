@@ -324,6 +324,13 @@
       "Repository": "CRAN",
       "Hash": "489695009d38d14d926f224dd6267f8e"
     },
+    "bigrquery": {
+      "Package": "bigrquery",
+      "Version": "1.3.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "291310a62466cabbc40fcbc8601e6412"
+    },
     "bit": {
       "Package": "bit",
       "Version": "4.0.4",
@@ -736,6 +743,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "07fd04f71ff5fbf2a69c74e4ec128d65"
+    },
+    "gargle": {
+      "Package": "gargle",
+      "Version": "1.0.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "b15f20d3557a19c3c14bb2d839723591"
     },
     "generics": {
       "Package": "generics",
@@ -1422,6 +1436,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "6367ba8128568cc5ebf8082e440948e4"
+    },
+    "rapidjsonr": {
+      "Package": "rapidjsonr",
+      "Version": "1.2.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "88b9f48c93d17cdb811b54079a6a414f"
     },
     "rappdirs": {
       "Package": "rappdirs",
