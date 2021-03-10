@@ -2,15 +2,19 @@
 require(bigrquery)
 require(DBI)
 require(dplyr)
+require(magrittr)
+require(tibble)
+require(purrr)
+require(readr)
 
 # Find project name
 bq_projects()
 
 # Find datasets
-list_datasets("prd-proj-decovid-358375")
+bq_project_datasets("prd-proj-decovid-358375")
 
 # Find tables
-list_tables("prd-proj-decovid-358375","icnarc_analytics")
+bq_dataset_tables("prd-proj-decovid-358375.icnarc_analytics")
 
 # Set ICNARC table as connection
 con <- dbConnect(
@@ -20,6 +24,53 @@ con <- dbConnect(
 )
 dbListTables(con)
 
-# Read in ICNARC table
-icnarc <- tbl(con, "ICNARC") %>% collect()
-names(icnarc)
+# Read IDs of surgical patients discharged under normal conditions
+surgical_ID <- tbl(con, "ICNARC") %>% 
+  filter(Source_ClassificationOfSurgery == "4. Elective" &
+           AdmissionType == "04. Planned local surgical admission" &
+           UnitDischarge_ReasonDischarged == "A. Ending critical care" &
+           UnitDischarge_UnitOutcome == "1. Improved") %>%
+  select(Identifiers_PatientPseudoId) %>% collect() %>% 
+  deframe() %>% unique()
+
+# Load dataset of surgical patients
+icnarc <- tbl(con, "ICNARC") %>% 
+  collect() %>% 
+  filter(Identifiers_PatientPseudoId %in% surgical_ID)
+
+# Remove cases where no physiological records
+sum(icnarc$Physiology_AllDataMissing)
+icnarc %<>%
+  filter(Physiology_AllDataMissing == FALSE)
+
+# Filter by past medical history available
+icnarc %<>%
+  filter(PastMedicalHistory_AssessmentEvidenceAvailable == TRUE)
+
+# Screen merged patients (ensure all patient IDs have same core demographics, at least)
+icnarc %<>%
+  group_by(Identifiers_PatientPseudoId) %>%
+  summarise(ethnicity = length(unique(Demographics_Ethnicity)),
+            sex = length(unique(Demographics_Sex))) %>%
+  filter(ethnicity == 1 & sex == 1) %>%
+  ungroup() %>%
+  select(Identifiers_PatientPseudoId) %>%
+  left_join(icnarc)
+
+# Filter empty demographics
+icnarc %<>% 
+  filter(Demographics_UnitAdmissionAgeBand != "")
+
+# Count readmission rate
+count_admissions <- icnarc %>% 
+  group_by(Identifiers_PatientPseudoId) %>% 
+  summarise(entries = n()) %>% 
+  mutate(mult = entries > 1) %>% 
+  ungroup()
+
+count_admissions %>% 
+  summarise(readmission_rate = mean(mult) * 100)
+
+# Write
+icnarc %>% 
+  write_csv("data/icnarc_surgical_cohort.csv")
