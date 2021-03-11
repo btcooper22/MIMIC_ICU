@@ -26,11 +26,12 @@ dbListTables(con)
 
 # Read IDs of surgical patients discharged under normal conditions
 surgical_ID <- tbl(con, "ICNARC") %>% 
+  collect() %>% 
   filter(Source_ClassificationOfSurgery == "4. Elective" &
            AdmissionType == "04. Planned local surgical admission" &
            UnitDischarge_ReasonDischarged == "A. Ending critical care" &
            UnitDischarge_UnitOutcome == "1. Improved") %>%
-  select(Identifiers_PatientPseudoId) %>% collect() %>% 
+  select(Identifiers_PatientPseudoId) %>% 
   deframe() %>% unique()
 
 # Load dataset of surgical patients
@@ -74,3 +75,26 @@ count_admissions %>%
 # Write
 icnarc %>% 
   write_csv("data/icnarc_surgical_cohort.csv")
+
+# Multiple in same month - which is elective?
+# If can't tell, probably exclude
+
+test <- icnarc %>% 
+  select(PriorToAdmission_HospitalAdmissionDaysBefore,
+         MonthYearOfAdmission,
+         UnitDischarge_DischargedDiedOnDays,
+         UnitDischarge_ClinicallyReadyForDischargeDays,
+         UltimateHospitalDischarge_DischargedDays,
+         HospitalDischarge_DateDischarged)
+
+icnarc %>%
+  group_by(Identifiers_PatientPseudoId) %>% 
+  group_by(Identifiers_PatientPseudoId) %>%
+  summarise(ethnicity = length(unique(Demographics_Ethnicity)),
+            sex = length(unique(Demographics_Sex))) %>%
+  filter(ethnicity != 1 | sex != 1) %>% # age bands non-consecutive
+  ungroup() %>%
+  select(Identifiers_PatientPseudoId) %>%
+  left_join(icnarc)
+  summarise(n_months = length(unique(MonthYearOfAdmission)),
+            n_id = length(Identifiers_PatientPseudoId))
