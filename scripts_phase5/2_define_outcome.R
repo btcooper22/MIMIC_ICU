@@ -6,6 +6,7 @@ require(lubridate)
 require(magrittr)
 require(stringr)
 require(foreach)
+require(tidyr)
 
 # Load cohort
 icnarc <- read_csv("data/icnarc_surgical_cohort.csv")
@@ -125,7 +126,7 @@ mean(results$readmission) * 100
 length(unique(results$Identifiers_PatientPseudoId)) == nrow(results)
 
 # Remove deaths or discharges with intention of death
-results %>% 
+results %<>% 
   filter(UnitDischarge_ReasonDischarged != "F. Palliative care",
          UnitDischarge_ExpectedDependencyPostDischarge != "E. Discharged with the expectation of dying",
          UnitDischarge_UnitOutcome != "4. Died")
@@ -133,6 +134,66 @@ results %>%
 results %>% 
   write_csv("data/icnarc_outcomes.csv")
 
-#	Table on length of stay for single visit and readmission visit 
+#	Table on length of stay for single visit and readmission visit
+tabling_df <- results %>% 
+  rbind(
+    readmission_df%>% 
+      select(-admit_month, -multiple_planned_elective,
+             -exclude_same_month, -index_admission,
+             -order_id) %>% 
+      mutate(readmission = "more_visits")
+  )
+
+T1 <- tabling_df %>% 
+  group_by(readmission) %>% 
+  summarise(median = median(UnitDischarge_DischargedDiedOnDays),
+            LQ = quantile(UnitDischarge_DischargedDiedOnDays, 0.25),
+            UQ = quantile(UnitDischarge_DischargedDiedOnDays, 0.75),
+            mean = mean(UnitDischarge_DischargedDiedOnDays),
+            sd = sd(UnitDischarge_DischargedDiedOnDays)) %>% 
+  mutate(name = "LengthOfStay")
+
+# Total days support
+T2 <- tabling_df %>% 
+  mutate(total_support = OrganSupport_Ccmds_BasicRespiratoryDays +
+                             OrganSupport_Ccmds_AdvancedRepiratoryDays +
+                             OrganSupport_Ccmds_BasicCardiovascularDays +
+                             OrganSupport_Ccmds_AdvancedCardiovascularDays +
+                             OrganSupport_Ccmds_RenalDays +
+                             OrganSupport_Ccmds_GastrointestinalDays +
+                             OrganSupport_Ccmds_DermatologicalDays) %>% 
+  group_by(readmission) %>% 
+  summarise(median = median(total_support),
+            LQ = quantile(total_support, 0.25),
+            UQ = quantile(total_support, 0.75),
+            mean = mean(total_support),
+            sd = sd(total_support)) %>% 
+  mutate(name = "TotalDaysSupport")
+
+
 # Table on organ support for single visit and readmission visit
+T3 <- tabling_df %>% 
+  select(readmission, OrganSupport_Ccmds_BasicRespiratoryDays,
+           OrganSupport_Ccmds_AdvancedRepiratoryDays,
+           OrganSupport_Ccmds_BasicCardiovascularDays,
+           OrganSupport_Ccmds_AdvancedCardiovascularDays,
+           OrganSupport_Ccmds_RenalDays,
+           OrganSupport_Ccmds_GastrointestinalDays,
+           OrganSupport_Ccmds_DermatologicalDays) %>% 
+  pivot_longer(2:8) %>% 
+  group_by(readmission, name) %>% 
+  summarise(median = median(value),
+            LQ = quantile(value, 0.25),
+            UQ = quantile(value, 0.75),
+            mean = mean(value),
+            sd = sd(value))
+
+# Combine
+rbind(T1, T2, T3) %>% 
+  mutate(value = paste(mean %>% round(2), " +/-", 
+                       sd %>% round(2), sep = "")) %>% 
+  select(readmission, name, value) %>% 
+  pivot_wider(names_from = "readmission",
+              values_from = "value") %>% 
+  write_csv("output/readmission_tables.csv")
 
