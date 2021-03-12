@@ -632,6 +632,13 @@
       "Repository": "CRAN",
       "Hash": "716869fffc16e282c118f8894e082a7d"
     },
+    "e1071": {
+      "Package": "e1071",
+      "Version": "1.7-4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "7e9462e3e3e565f51fbec181dfcab890"
+    },
     "ellipse": {
       "Package": "ellipse",
       "Version": "0.4.2",
@@ -1289,6 +1296,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "2f841d7915986a8fd995ab4ec105dd1b"
+    },
+    "patchwork": {
+      "Package": "patchwork",
+      "Version": "1.1.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "c446b30cb33ec125ff02588b60660ccb"
     },
     "pbapply": {
       "Package": "pbapply",
