@@ -28,9 +28,7 @@ dbListTables(con)
 surgical_ID <- tbl(con, "ICNARC") %>% 
   collect() %>% 
   filter(Source_ClassificationOfSurgery == "4. Elective" &
-           AdmissionType == "04. Planned local surgical admission" &
-           UnitDischarge_ReasonDischarged == "A. Ending critical care" &
-           UnitDischarge_UnitOutcome == "1. Improved") %>%
+           AdmissionType == "04. Planned local surgical admission") %>%
   select(Identifiers_PatientPseudoId) %>% 
   deframe() %>% unique()
 
