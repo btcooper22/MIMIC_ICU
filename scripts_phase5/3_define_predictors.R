@@ -369,20 +369,23 @@ results$anaemia <- case_when(
   is.numeric(df$Haemoglobin_Low) ~ df$Haemoglobin_Low
 ) < 9
 
+# Lactate
+results$lactate <- ifelse(is.na(df$SerumLactate_High), df$SerumLactate_PreAdmit,
+       df$SerumLactate_High)
 
-[109] "SerumLactate_High"                                   
-[110] "SerumLactate_PreAdmit"                               
-[111] "SerumUrea_High"                                      
-[112] "SerumUrea_PreAdmit"     
-[121] "Platelets_Low"                                       
-[122] "Platelets_PreAdmit"   
-[124] "WhiteCellCount_NeutrophilLow"  
-[126] "WhiteCellCount_NeutrophilHigh"  
-[128] "WhiteCellCount_NeutrophilPreAdmit"   
+# Urea
+results$urea <- ifelse(is.na(df$SerumUrea_High), df$SerumUrea_PreAdmit,
+                          df$SerumUrea_High)
+                             
+# Platelets  
+results$platelets <- ifelse(is.na(df$Platelets_Low), df$Platelets_PreAdmit,
+                       df$Platelets_Low)
 
 # Organ support----
 
 # > 0 days on resp. support
+results$respiratory_support <-  (df$OrganSupport_Ccmds_BasicRespiratoryDays + 
+  df$OrganSupport_Ccmds_AdvancedRepiratoryDays) > 0
 
 # > 0  days on advanced CV support
 
