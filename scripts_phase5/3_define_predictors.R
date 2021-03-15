@@ -319,6 +319,69 @@ results$temperature <- unfold_value(temp_all, bd = 37.2)
 # Mean arterial pressure
 results$mean_arterial_pressure <- unfold_value(map_full, bd = "max")
 
+# Pulse
+results$pulse_rate <- unfold_value(pulse_full, bd = 90)
+
+# Respiratory
+results$respiratory_rate <- unfold_value(respiratory_full, 4, "max")
+
+# Sodium
+results$sodium <- unfold_value(sodium_full, 3, 140)
+
+# Potassium
+results$potassium <- unfold_value(potassium_full, 3, 4.5)
+
+# Creatinine
+results$creatinine <- creatinine
+
+# Haematocrit
+results$haematocrit <- unfold_value(haematocrit_full, 3, 44)
+
+# White cell count
+results$white_cell_count <- unfold_value(wbc_full, 3, "max")
+
+# Glasgow coma scale
+results$glasgow_coma_below_15 <- gcs_extract$sum < 15
+
+# Age
+results$age_over_65 <- age_band %in% c("66 to 70", "71 to 75",
+                                       "76 to 80", "81 to 85",
+                                       "86 to 90", "over 90")
+
+# Other variables----
+
+# Glucose
+results$glucose <-  case_when(
+  is.na(df$SerumGlucose_High) & 
+    is.na(df$SerumGlucose_Low) ~ df$SerumGlucose_PreAdmit,
+  is.na(df$SerumGlucose_High) ~ df$SerumGlucose_Low,
+  is.numeric(df$SerumGlucose_High) ~ df$SerumGlucose_High
+) * 18
+
+# Hyperglycaemia
+results$hyperglycaemia <- results$glucose > 180 
+
+# Anaemia
+results$anaemia <- case_when(
+  is.na(df$Haemoglobin_Low) & 
+    is.na(df$Haemoglobin_High) ~ df$Haemoglobin_PreAdmit,
+  is.na(df$Haemoglobin_Low) ~ df$Haemoglobin_High,
+  is.numeric(df$Haemoglobin_Low) ~ df$Haemoglobin_Low
+) < 9
+
+
+[109] "SerumLactate_High"                                   
+[110] "SerumLactate_PreAdmit"                               
+[111] "SerumUrea_High"                                      
+[112] "SerumUrea_PreAdmit"     
+[121] "Platelets_Low"                                       
+[122] "Platelets_PreAdmit"   
+[124] "WhiteCellCount_NeutrophilLow"  
+[126] "WhiteCellCount_NeutrophilHigh"  
+[128] "WhiteCellCount_NeutrophilPreAdmit"   
+
+# Organ support----
+
 # > 0 days on resp. support
 
 # > 0  days on advanced CV support
@@ -329,7 +392,7 @@ results$mean_arterial_pressure <- unfold_value(map_full, bd = "max")
 
 # Any organ support required
 
-# Age
+# Sex
 
 # BMI
 
