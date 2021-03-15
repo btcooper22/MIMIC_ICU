@@ -9,11 +9,11 @@ require(stringr)
 df <- read_csv("data/icnarc_outcomes.csv")
 
 # Define functions
-implausability_filter <- function(val, good_range)
+quicktab <- function(varname)
 {
-  val[val < good_range[1]] <- NA
-  val[val > good_range[2]] <- NA
-  return(val)
+  results %>% 
+    group_by_at(all_of(varname)) %>% 
+      summarise(n = n(), percent = mean(readmission) * 100)
 }
 
 unfold <- function(x, repeats = 2)
@@ -388,12 +388,49 @@ results$respiratory_support <-  (df$OrganSupport_Ccmds_BasicRespiratoryDays +
   df$OrganSupport_Ccmds_AdvancedRepiratoryDays) > 0
 
 # > 0  days on advanced CV support
+results$advanced_cv_support <- df$OrganSupport_Ccmds_AdvancedCardiovascularDays > 0
+
+# Days on CV support
+results$CV_support <- df$OrganSupport_Ccmds_BasicCardiovascularDays
 
 # Basic CV support for  % of stay
+results$CV_support_prop <- df %>% 
+  mutate(CV_support_prop = OrganSupport_Ccmds_BasicCardiovascularDays /
+           UnitDischarge_DischargedDiedOnDays) %>% 
+  mutate(CV_support_prop = case_when(is.infinite(CV_support_prop) ~ 1,
+                                     is.numeric(CV_support_prop) ~ CV_support_prop)) %>% 
+  select(CV_support_prop) %>% deframe()
+
+# Total support
+results$total_support <- df %>% 
+  mutate(total_support = OrganSupport_Ccmds_BasicRespiratoryDays +
+           OrganSupport_Ccmds_AdvancedRepiratoryDays +
+           OrganSupport_Ccmds_BasicCardiovascularDays +
+           OrganSupport_Ccmds_AdvancedCardiovascularDays +
+           OrganSupport_Ccmds_RenalDays +
+           OrganSupport_Ccmds_GastrointestinalDays +
+           OrganSupport_Ccmds_DermatologicalDays) %>% 
+  select(total_support) %>% deframe()
 
 # Total support as % of stay
+results$total_support_prop <- df %>% 
+  mutate(total_support = OrganSupport_Ccmds_BasicRespiratoryDays +
+           OrganSupport_Ccmds_AdvancedRepiratoryDays +
+           OrganSupport_Ccmds_BasicCardiovascularDays +
+           OrganSupport_Ccmds_AdvancedCardiovascularDays +
+           OrganSupport_Ccmds_RenalDays +
+           OrganSupport_Ccmds_GastrointestinalDays +
+           OrganSupport_Ccmds_DermatologicalDays) %>% 
+  mutate(total_support_prop = total_support /
+           UnitDischarge_DischargedDiedOnDays) %>% 
+  mutate(total_support_prop = case_when(is.infinite(total_support_prop) ~ total_support,
+                                     is.numeric(total_support_prop) ~ total_support_prop)) %>% 
+  select(total_support_prop) %>% deframe()
 
 # Any organ support required
+results$organ_support <- results$total_support > 0
+
+# Simple variables----
 
 # Sex
 
