@@ -274,10 +274,20 @@ abg_score <-
   ifelse(df$ArterialBloodGases_NotAvailable, bicarbonate_score,
          oxygenation_score + artpH_score)
 
+# Set NA scores to 0
+abg_score[is.na(abg_score)] <- 0
+sodium_score[is.na(sodium_score)] <- 0
+potassium_score[is.na(potassium_score)] <- 0
+creatinine_score[is.na(creatinine_score)] <- 0
+wbc_score[is.na(wbc_score)] <- 0
+gcs_score[is.na(gcs_score)] <- 0
+haematocrit_score[is.na(haematocrit_score)] <- 0
+
 # Sum scores
 apache_scores <- temperature_scores + map_scores + pulse_score +
   respiratory_score + abg_score + sodium_score + potassium_score +
-  creatinine_score + wbc_score + gcs_score + age_score + chronic_score
+  creatinine_score + wbc_score + haematocrit_score + gcs_score +
+  age_score + chronic_score
 
 # Add to results
 results %<>% 

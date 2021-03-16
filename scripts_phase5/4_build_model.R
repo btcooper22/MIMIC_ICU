@@ -17,10 +17,9 @@ results <- read_csv("data/icnarc_predictors.csv") %>%
 # Assess NA
 sapply(results, function(x) sum(is.na(x)))
 
-
 # Take complete cases only
 results_complete <- results %>% 
-  select(-apache_II, -glucose,
+  select(-glucose,
          -hyperglycaemia,
          -haematocrit,
          -lactate, -follow_up_days,
@@ -70,7 +69,6 @@ final_model <- glm(readmission ~ glasgow_coma_below_15 +
                    family = "binomial")
 
 # Predict and assess----
-
 
 # Create predictions
 probs <- predict(final_model, newdata = patients_validate) %>% inverse_logit()
