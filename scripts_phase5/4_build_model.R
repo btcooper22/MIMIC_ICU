@@ -4,6 +4,8 @@ require(dplyr)
 require(caret)
 require(glmnet)
 require(magrittr)
+require(ROCR)
+require(ResourceSelection)
 
 source("functions/inverse_logit.R")
 
@@ -69,9 +71,16 @@ final_model <- glm(readmission ~ glasgow_coma_below_15 +
 
 # Predict and assess----
 
+
 # Create predictions
 probs <- predict(final_model, newdata = patients_validate) %>% inverse_logit()
 
 # Assess discrimination
+pred <- prediction(probs[!is.na(probs)],
+                   patients_validate$readmission[!is.na(probs)])
+perf <- performance(pred, "tpr", "fpr")
+performance(pred, measure = "auc")@y.values[[1]]
 
 # Assess calibration
+hoslem.test(patients_validate$readmission[!is.na(probs)],
+            probs[!is.na(probs)], g = 10)
