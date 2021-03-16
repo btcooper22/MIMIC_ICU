@@ -24,7 +24,8 @@ results_complete <- results %>%
          -haematocrit,
          -lactate, -follow_up_days,
          -CV_support_prop,
-         -total_support_prop) %>% 
+         -total_support_prop,
+         -admission_source) %>% 
   na.omit()
 
 sum(results_complete$readmission)
@@ -55,9 +56,7 @@ initial_model$beta
 set.seed(123)
 patients_train <- results %>% 
   group_by(readmission) %>% 
-  slice_sample(prop = 0.75) %>% 
-  mutate(type = "train")
-
+  slice_sample(prop = 0.75) 
 patients_validate <- results %>% 
   filter(id %in% patients_train$id == FALSE)
 

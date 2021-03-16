@@ -494,6 +494,10 @@ results$posthospital_dependency <- df$UnitDischarge_ExpectedDependencyPostDischa
 # Follow up care days >5
 results$follow_up_days <- df$FollowUpCare_FirstNumberOfDays
 
+# Admission source
+results$admission_source <- ifelse(df$Source_AdmitFrom == "B. Recovery/theatre (following surgery/anaesthetic procedure)",
+                                   "OT", "Ward")
+
 # Write results
 results %>% 
   write_csv("data/icnarc_predictors.csv")
