@@ -4,6 +4,7 @@ require(magrittr)
 require(dplyr)
 require(tibble)
 require(stringr)
+require(lubridate)
 
 # Load data
 df <- read_csv("data/icnarc_outcomes.csv")
@@ -433,25 +434,56 @@ results$organ_support <- results$total_support > 0
 # Simple variables----
 
 # Sex
+results$sex <- df$Demographics_Sex
 
 # BMI
+results$height <- df$Demographics_UnitAdmissionHeightCm
+results$weight <- df$Demographics_UnitAdmissionWeightKg
+results$BMI <-  df$Demographics_UnitAdmissionWeightKg / 
+  ((df$Demographics_UnitAdmissionHeightCm / 100) ^ 2)
 
-# LOS > 2 
+# LOS
+results$length_of_stay <- df$UnitDischarge_DischargedDiedOnDays
 
 # Time in hospital before ICU
+results$days_before_ICU <- abs(df$PriorToAdmission_HospitalAdmissionDaysBefore)
 
-# Cardiac surgery
+# Surgery types
+results$surgical_type <- df$PriorToAdmission_Specialty
+results$cardiac_surgery <- results$surgical_type %in% c("172. Cardiac Surgery", 
+                             "170. Cardiothoracic Surgery", "320. Cardiology")
+results$high_risk_speciality <- results$surgical_type %in%
+  c("106. Upper Gastrointestinal Surgery", "104. Colorectal Surgery",
+    "105. Hepatobiliary & Pancreatic Surgery", "306. Hepatology",
+    "173. Thoracic Surgery", "107. Vascular Surgery",
+    "301. Gastroenterology")
 
 # Diabetes
+results$diabetes <- grepl("diabetes", df$PastMedicalHistory_Condition,
+      ignore.case = TRUE)
 
 # Prehospital dependency
+results$prehospital_dependency <-  df$PastMedicalHistory_PrehospitalDependency != 
+  "A. Able to live without assistance in daily activities"
 
 # Sedation
+results$sedation <- df$Sedation != "5. No sedation or paralysis during scored period"
 
 # Clinically ready for discharge days == 0
+results$clinically_ready_discharge_days <-  df$UnitDischarge_ClinicallyReadyForDischargeDays
 
 # Out-of-hours discharge
+discharge_time <- substr(df$UnitDischarge_DischargedDiedAtTime, 1, 2) %>% 
+  as.numeric()
+results$out_of_hours_discharge <-  discharge_time < 8 | discharge_time > 17
 
-# Some expected dependency
+# Some expected dependency post-discharge
+results$posthospital_dependency <- df$UnitDischarge_ExpectedDependencyPostDischarge != 
+  "A. Able to live without assistance in daily activities"
 
 # Follow up care days >5
+results$follow_up_days <- df$FollowUpCare_FirstNumberOfDays
+
+# Write results
+results %>% 
+  write_csv("data/icnarc_predictors.csv")
