@@ -25,7 +25,8 @@ results_complete <- results %>%
          -lactate, -follow_up_days,
          -CV_support_prop,
          -total_support_prop,
-         -admission_source) %>% 
+         -admission_source,
+         -age) %>% 
   na.omit()
 
 sum(results_complete$readmission)

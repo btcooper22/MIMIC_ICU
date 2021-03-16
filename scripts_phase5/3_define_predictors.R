@@ -355,6 +355,7 @@ results$white_cell_count <- unfold_value(wbc_full, 3, "max")
 results$glasgow_coma_below_15 <- gcs_extract$sum < 15
 
 # Age
+results$age <- age_band
 results$age_over_65 <- age_band %in% c("66 to 70", "71 to 75",
                                        "76 to 80", "81 to 85",
                                        "86 to 90", "over 90")
