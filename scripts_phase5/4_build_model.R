@@ -6,6 +6,8 @@ require(glmnet)
 require(magrittr)
 require(ROCR)
 require(ResourceSelection)
+require(tidyr)
+require(foreach)
 
 source("functions/inverse_logit.R")
 
@@ -44,12 +46,33 @@ results_complete %<>%
 x <- model.matrix(readmission~., results_complete[,feature_id])[,-1]
 y <- results_complete$readmission
 
-# Find optimal lambda
-cv <- cv.glmnet(x, y, alpha = 1)
+# Find model structure
+model_structure <- foreach(i = 1:100, .combine = "rbind") %do%
+  {
+    # Determine lambda
+    print(i)
+    set.seed(i)
+    cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(results_complete))
+    
+    # Fit model
+    initial_model <- glmnet(x, y, alpha = 1, lambda = cv$lambda.min)
+    
+    # Output
+    data.frame(varname = initial_model$beta@Dimnames[[1]],
+               included = 1:length(initial_model$beta@Dimnames[[1]]) %in%
+                 (initial_model$beta@i + 1)) %>% 
+      pivot_wider(names_from = "varname",
+                  values_from = "included") %>% 
+      mutate(iteration = i)
+    
+  }
 
-# Fit model
-initial_model <- glmnet(x, y, alpha = 1, lambda = cv$lambda.min)
-initial_model$beta
+model_structure %>% 
+  select(-iteration) %>% 
+  pivot_longer(1:34) %>% 
+  group_by(name) %>% 
+  summarise(prop = mean(value)) %>% 
+  filter(prop != 0)
 
 # Rebuild model on complete cases for relevant variables----
 
