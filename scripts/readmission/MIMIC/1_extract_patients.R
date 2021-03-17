@@ -9,9 +9,10 @@ require(magrittr)
 # Load MIMIC dataset
 source("functions/mimic_load.R")
 
-# Find patients moved to surgical services
+# Find patients admitted under surgical services
 surgical_services <- mimic$services %>%
-  filter(curr_service %LIKE% "%SURG%") %>% 
+  filter(curr_service %LIKE% "%SURG%" &
+           is.na(prev_service)) %>% 
   select(hadm_id, subject_id, curr_service,
          transfertime)
 
@@ -52,7 +53,8 @@ results <- surgical_services %>%
   rename(type = subsectionheader)
 
 results %<>% 
-  filter(type != "Operating microscope (deleted code)")
+  filter(type != "Operating microscope (deleted code)",
+         type != "Laparoscopy, Surgical; Cholecystectomy (deleted code)")
 
 # Write patient IDs
 results %>% 
