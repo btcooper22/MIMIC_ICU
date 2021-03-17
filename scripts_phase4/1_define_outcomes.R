@@ -6,7 +6,7 @@ require(doParallel)
 require(tools)
 options(dplyr.summarise.inform = FALSE)
 
-# Load preprocessed data
+# Load preprocessed data -> Make this into own script from scratch
 mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
 
 # Create outcome measures: Mortality-------------------
