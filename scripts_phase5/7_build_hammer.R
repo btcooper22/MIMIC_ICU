@@ -26,7 +26,7 @@ coefficients_hammer <- log(0.005 / (1 - 0.005)) +
   ifelse(results$anaemia, 1.11, 0) +
   ifelse(results$apache_II >- 20, 0.44, 0) +
   ifelse(results$posthospital_dependency == TRUE, 0.7, 0) +
-  ifelse(results$length_of_stay >= 5, 0.88, 0)
+  ifelse(results$length_of_stay >= 5, 0.88, 0) + 0.26
 
 # Convert coefficients to probs
 probs_hammer <- inverse_logit(coefficients_hammer)
