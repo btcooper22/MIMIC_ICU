@@ -143,6 +143,29 @@ results %<>%
          UnitDischarge_ExpectedDependencyPostDischarge != "E. Discharged with the expectation of dying",
          UnitDischarge_UnitOutcome != "4. Died")
 
+# Measure readmission timescales
+readmitted_first <- results %>% 
+  filter(readmission == TRUE)
+
+readmission_delay <- c()
+for(i in 1:nrow(readmitted_first))
+{
+  # Find readmission month
+  readmit_time <- readmitted_df %>% 
+    ungroup() %>% 
+    filter(index_admission == FALSE &
+             Identifiers_PatientPseudoId == readmitted_first$Identifiers_PatientPseudoId[i]) %>% 
+    slice_min(admit_month) %>% 
+    select(admit_month) %>% deframe() %>% unique()
+  
+  # Compare to admission month
+  readmission_delay[i] <- difftime(readmitted_first$admit_month[i],
+                                   readmit_time, unit = "days")
+}
+
+# Remove patients readmitted outside of a year
+results$readmission[results$row_id %in% readmitted_first$row_id[abs(readmission_delay) > 365]] <- FALSE
+
 # Confirm no duplicates
 any(duplicated(results$row_id))
 
@@ -156,7 +179,7 @@ mean(results$readmission) * 100
 results %>% 
   write_csv("data/icnarc_outcomes.csv")
 
-#	Table on length of stay for single visit and readmission visit---- (needs rewrite)
+#	Table on length of stay for single visit and readmission visit (needs rewrite)---- 
 tabling_df <- results %>% 
   rbind(
     readmission_df %>% 
@@ -219,34 +242,5 @@ rbind(T1, T2, T3) %>%
               values_from = "value") %>% 
   write_csv("output/readmission_tables.csv")
 
-# Measure readmission timescales----
-timescales <- results %>% 
-  rbind(
-    readmission_df %>% 
-      select(-admit_month, -multiple_planned_elective,
-             -exclude_same_month, -index_admission,
-             -order_id) %>% 
-      mutate(readmission = "more_visits")
-  ) %>% 
-  filter(readmission != FALSE)
 
-# Fix date
-admit_month <- c()
-for(j in 1:nrow(timescales))
-{
-  dlength <- nchar(timescales$MonthYearOfAdmission[j])
-  year <- substr(timescales$MonthYearOfAdmission[j], dlength-3, dlength)
-  month <- substr(timescales$MonthYearOfAdmission[j], 1, dlength-4)
-  admit_month[j] <- paste(year, str_pad(month, 2, "left", "0"),
-                          sep = "") %>% as.numeric()
-}
-timescales$admit_month <- as.Date(paste(admit_month, "01", sep = ""), format = "%Y%m%d")
-
-foreach(i == 1:length(unique(timescales$Identifiers_PatientPseudoId))) %do%
-  {
-    id <- unique(timescales$Identifiers_PatientPseudoId)[i]
-    
-    id_df <- timescales %>% 
-      filter(Identifiers_PatientPseudoId == id)
-  }
 
