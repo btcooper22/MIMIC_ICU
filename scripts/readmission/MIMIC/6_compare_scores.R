@@ -52,7 +52,16 @@ patients %<>% filter(!is.na(patients$apache_II) & !is.na(patients$apache_II_disc
 sum(is.na(patients$hyperglycemia) | is.na(patients$anaemia))
 patients %<>% filter(!is.na(patients$hyperglycemia) & !is.na(patients$anaemia))
 
-#46 - 56
+# Filter missing physiology on discharge
+patients %<>% 
+  filter(!is.na(apache_temperature_discharge) &
+           !is.na(apache_map_discharge) &
+           !is.na(apache_respiratory_discharge))
+
+# Filter implausible
+patients %<>% 
+  filter(apache_temperature_discharge >= 30,
+          apache_temperature_discharge <= 40)
 
 # Data cleanup-------
 
@@ -76,91 +85,7 @@ patients %<>%
 patients %<>% 
   mutate(admission_source = fct_relevel(admission_source, "OT"))
 
-# Table 1-------------
-
-# Crosstabulation function
-crosstab <- function(varname, .df = patients)
-{
-  options(dplyr.summarise.inform=F)
-  
-  # Find
-  .df  %>% 
-    group_by_at(c("readmission", varname)) %>% 
-    summarise(n = n()) %>% 
-    mutate(`%` = (n/sum(n) * 100)) %>% 
-    mutate(`n (%)` = paste(n, " (", round(`%`,1),
-                           "%)", sep = "")) %>% 
-    select(any_of(c("readmission", varname, "n (%)"))) %>% 
-    pivot_wider(names_from = "readmission",
-                values_from = "n (%)") %>% 
-    as.data.frame()
-}
-decile_cut <- function(in_var)
-{
-  quantile(in_var, probs = seq(0, 1, 0.25)) %>% 
-    round()
-}
-
-### Hammer variables
-crosstab("sex")
-crosstab("general_surgery")
-crosstab("cardiac_surgery")
-crosstab("hyperglycemia")
-crosstab("anaemia")
-crosstab("high_apache")
-crosstab("fluid_balance_5L")
-crosstab("ambulation")
-crosstab("los_5")
-
-### Frost variables
-patients %>%       
-  mutate(age = cut(age, decile_cut(age))) %>% 
-  crosstab("age", .)
-crosstab("elective_admission")
-crosstab("admission_source")
-patients %>% 
-  mutate(apache_II_discharge = cut(apache_II_discharge, decile_cut(apache_II_discharge),
-                         right = FALSE)) %>% 
-  crosstab("apache_II_discharge", .)
-crosstab("los_7")
-crosstab("after_hours_discharge")  
-crosstab("acute_renal_failure")
-
-### Martin variables
-patients %>% 
-  mutate(respiratory_rate = cut(respiratory_rate, decile_cut(respiratory_rate),
-                                right = FALSE)) %>% 
-  crosstab("respiratory_rate", .)
-patients %>% 
-  mutate(blood_urea_nitrogen = cut(blood_urea_nitrogen, 
-                                   decile_cut(blood_urea_nitrogen),
-                                right = FALSE)) %>% 
-  crosstab("blood_urea_nitrogen", .)
-patients %>% 
-  mutate(serum_glucose = cut(serum_glucose, decile_cut(serum_glucose),
-                                   right = FALSE)) %>% 
-  crosstab("serum_glucose", .)
-patients %>% 
-  mutate(serum_choride = cut(serum_choride, decile_cut(serum_choride),
-                             right = FALSE)) %>% 
-  crosstab("serum_choride", .)
-crosstab("atrial_fibrillation")
-crosstab("renal_insufficiency")
-
-
 # Hammer----------
-
-# Score data - points
-points_hammer <- ifelse(patients$sex == "M", 1, 0) +
-  ifelse(patients$general_surgery, 2, 0) +
-  ifelse(patients$cardiac_surgery, -3, 0) +
-  ifelse(patients$hyperglycemia, 1, 0) +
-  ifelse(patients$anaemia, 3, 0) +
-  ifelse(patients$high_apache, 1, 0) +
-  ifelse(patients$fluid_balance_5L, 1, 0) +
-  ifelse(patients$ambulation == FALSE, 2, 0) +
-  ifelse(patients$los_5, 2, 0)
-table(points_hammer)
 
 # Score data - coefficients
 coefficients_hammer <- log(0.005 / (1 - 0.005)) +
@@ -176,17 +101,6 @@ coefficients_hammer <- log(0.005 / (1 - 0.005)) +
 
 # Convert coefficients to probs
 probs_coefficients_hammer <- inverse_logit(coefficients_hammer)
-
-# Convert scores to probs
-scale_hammer <- data.frame(
-  points = -3:12,
-  probs = c(0.1, 0.2, 0.35, 0.5, 0.75, 1, 1.5, 2, 3.1,
-            4.2, 6.4, 8.6, 12.55, 16.5, 23.05, 29.6)
-)
-probs_points_hammer <- scale_hammer$probs[match(points_hammer, scale_hammer$points)] / 100
-
-# Correlate points with coefficients
-#cor(probs_coefficients_hammer, probs_points_hammer)
 probs_hammer <- probs_coefficients_hammer
 
 # Martin------------
@@ -258,6 +172,7 @@ points_system_output <- data.frame(
 probs_frost <- nomogram_convert(scores_frost, points_system_input,
                  points_system_output, log = TRUE)
 
+# Bespoke----
 
 # Discrimination----------
 
@@ -265,25 +180,21 @@ probs_frost <- nomogram_convert(scores_frost, points_system_input,
 prediction_hammer <- prediction(probs_hammer, patients$readmission == "Readmitted to ICU")
 prediction_martin <- prediction(probs_martin, patients$readmission == "Readmitted to ICU")
 prediction_frost <- prediction(probs_frost, patients$readmission == "Readmitted to ICU")
-prediction_apache <- prediction(patients$apache_II_discharge,
-                                patients$readmission == "Readmitted to ICU")
+
 # Create performance objects
 performance_hammer <- performance(prediction_hammer, "tpr", "fpr")
 performance_martin <- performance(prediction_martin, "tpr", "fpr")
 performance_frost <- performance(prediction_frost, "tpr", "fpr")
-performance_apache <- performance(prediction_apache, "tpr", "fpr")
 
 # Create AUC objects
 auc_hammer <- performance(prediction_hammer, measure = "auc")
 auc_martin <- performance(prediction_martin, measure = "auc")
 auc_frost <- performance(prediction_frost, measure = "auc")
-auc_apache <- performance(prediction_apache, measure = "auc")
 
 # Print AUC
 auc_hammer@y.values[[1]]
 auc_martin@y.values[[1]]
 auc_frost@y.values[[1]]
-auc_apache@y.values[[1]]
 
 # Plot AUC
 data.frame(x = performance_hammer@x.values[[1]],
@@ -295,10 +206,7 @@ data.frame(x = performance_hammer@x.values[[1]],
                model = "Martin"),
     data.frame(x = performance_frost@x.values[[1]],
                y = performance_frost@y.values[[1]],
-               model = "Frost"),
-    data.frame(x = performance_apache@x.values[[1]],
-               y = performance_apache@y.values[[1]],
-               model = "APACHE-II")
+               model = "Frost")
   ) %>% 
   ggplot(aes(x, y, colour = model))+
   geom_abline(slope = 1, intercept = 0,
@@ -323,9 +231,7 @@ deciles_df <- tibble(
   probs_martin,
   decile_martin = ntile(probs_martin, 10),
   probs_frost,
-  decile_frost = ntile(probs_frost, 10),
-  probs_apache = patients$apache_II_discharge / 200,
-  decile_apache = ntile(patients$apache_II_discharge, 10)
+  decile_frost = ntile(probs_frost, 10)
 )
 
 # Calculate calibration
@@ -335,14 +241,11 @@ cal_martin <- calibration(deciles_df, "probs_martin", "decile_martin") %>%
   mutate(model = "martin")
 cal_frost <- calibration(deciles_df, "probs_frost", "decile_frost") %>% 
   mutate(model = "frost")
-cal_apache <- calibration(deciles_df, "probs_apache", "decile_apache") %>% 
-  mutate(model = "apache")
 
 # Plot
 rbind(cal_hammer %>% select(-decile_hammer), 
       cal_martin %>% select(-decile_martin),
-      cal_frost %>% select(-decile_frost), 
-      cal_apache %>% select(-decile_apache)) %>% 
+      cal_frost %>% select(-decile_frost)) %>% 
   ggplot(aes(predicted, observed ,
              colour = model))+
   geom_abline(slope = 1, intercept = 0,
@@ -369,8 +272,6 @@ hoslem_martin <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_martin, g = 10)
 hoslem_frost <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_frost, g = 10)
-hoslem_apache <- hoslem.test(patients$readmission == "Readmitted to ICU",
-            patients$apache_II_discharge / 200, g = 10)
 
 # Calculate brier scores
 brier_df <- rbind(
@@ -379,10 +280,7 @@ brier_df <- rbind(
   brier_extraction(patients$readmission == "Readmitted to ICU", probs_martin) %>% 
     mutate(model = "martin"),  
   brier_extraction(patients$readmission == "Readmitted to ICU", probs_frost) %>% 
-    mutate(model = "frost"),
-  brier_extraction(patients$readmission == "Readmitted to ICU", 
-                   patients$apache_II_discharge / 200) %>% 
-    mutate(model = "apache")
+    mutate(model = "frost")
 )
 
 # Plot brier scores
