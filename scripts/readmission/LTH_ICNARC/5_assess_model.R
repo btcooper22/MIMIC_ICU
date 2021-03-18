@@ -66,7 +66,8 @@ output %>%
    na.omit() %>% 
   summarise(AUC = mean(disc),
             AUC_error = sd(disc),
-            cal = mean(cal_chisq),
-            cal_error = sd(cal_chisq))
-# AUC 0.629 (0.053)
-# Cal 11.54 (7.93)
+            cal = median(cal_chisq),
+            cal_error_low = quantile(cal_chisq, 0.25),
+            cal_error_high = quantile(cal_chisq, 0.75))
+# AUC 0.629 pm 0.053
+# Cal 9.59 [6.81, 13.88]
