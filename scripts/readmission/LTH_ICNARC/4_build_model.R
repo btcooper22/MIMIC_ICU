@@ -8,6 +8,7 @@ require(ROCR)
 require(ResourceSelection)
 require(tidyr)
 require(foreach)
+require(doParallel)
 
 source("functions/inverse_logit.R")
 
@@ -46,29 +47,20 @@ results_complete %<>%
 x <- model.matrix(readmission~., results_complete[,feature_id])[,-1]
 y <- results_complete$readmission
 
-# Find model structure
-model_structure <- foreach(i = 1:100, .combine = "rbind") %do%
-  {
-    # Determine lambda
-    print(i)
-    set.seed(i)
-    cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(results_complete))
-    
-    # Fit model
-    initial_model <- glmnet(x, y, alpha = 1, lambda = cv$lambda.min)
-    
-    # Output
-    data.frame(varname = initial_model$beta@Dimnames[[1]],
-               included = 1:length(initial_model$beta@Dimnames[[1]]) %in%
-                 (initial_model$beta@i + 1)) %>% 
-      pivot_wider(names_from = "varname",
-                  values_from = "included") %>% 
-      mutate(iteration = i)
-    
-  }
+# Determine lambda
+cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(results_complete),
+                family = "binomial")
 
-model_structure %>% 
-  select(-iteration) %>% 
+# Fit model
+initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.9),
+                        family = "binomial")
+
+# Identify retained variables
+data.frame(varname = initial_model$beta@Dimnames[[1]],
+           included = 1:length(initial_model$beta@Dimnames[[1]]) %in%
+             (initial_model$beta@i + 1)) %>% 
+  pivot_wider(names_from = "varname",
+              values_from = "included") %>% 
   pivot_longer(1:34) %>% 
   group_by(name) %>% 
   summarise(prop = mean(value)) %>% 
@@ -85,10 +77,12 @@ patients_validate <- results %>%
   filter(id %in% patients_train$id == FALSE)
 
 # Rebuild model
-final_model <- glm(readmission ~ glasgow_coma_below_15 + 
-                     respiratory_support +
-                     days_before_ICU + high_risk_speciality +
-                     out_of_hours_discharge, data = patients_train,
+final_model <- glm(readmission ~ 
+                     anaemia + apache_II + 
+                     glasgow_coma_below_15 +
+                     high_risk_speciality + length_of_stay +
+                     out_of_hours_discharge + pulse_rate,
+                     data = patients_train,
                    family = "binomial")
 
 # Predict and assess----
