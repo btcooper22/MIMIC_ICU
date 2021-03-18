@@ -52,28 +52,7 @@ patients %<>% filter(!is.na(patients$apache_II) & !is.na(patients$apache_II_disc
 sum(is.na(patients$hyperglycemia) | is.na(patients$anaemia))
 patients %<>% filter(!is.na(patients$hyperglycemia) & !is.na(patients$anaemia))
 
-# Filter patients missing Fialho criteria
-sum(is.na(patients$final_bp) | is.na(patients$final_lactate) |
-      is.na(patients$final_platelets) | is.na(patients$final_pO2) |
-      is.na(patients$final_pulse) | is.na(patients$final_temp))
-patients %<>% filter(!is.na(final_bp) & !is.na(final_lactate) &
-                       !is.na(final_platelets) & !is.na(final_pO2) &
-                       !is.na(final_pulse) & !is.na(final_temp))
-
-# Fix Fialho variables
-patients %<>% 
-  # Fix lactate
-  mutate(final_lactate = final_lactate / 9) %>% 
-  # Rename SpO2
-  rename("final_SpO2" = final_pO2)
-
-# Filter patients with physiologically implausible values
-patients %<>% 
-  mutate(physiologically_implausible = final_temp < 35 |
-           final_temp > 40 | final_SpO2 > 100 | final_bp < 30 |
-           final_bp > 180 | final_platelets > 1000)
-sum(patients$physiologically_implausible)
-patients %<>% filter(physiologically_implausible == FALSE)
+#46 - 56
 
 # Data cleanup-------
 
@@ -168,34 +147,6 @@ patients %>%
 crosstab("atrial_fibrillation")
 crosstab("renal_insufficiency")
 
-### Fialho variables
-patients %>% 
-  mutate(final_pulse = cut(final_pulse, decile_cut(final_pulse),
-                                right = FALSE)) %>% 
-  crosstab("final_pulse", .)
-patients %>% 
-  mutate(final_temp = cut(final_temp, c(30,36, 36.5, 37,
-                                        37.5, 38,40),
-                           right = FALSE)) %>% 
-  crosstab("final_temp", .)
-patients %>% 
-  mutate(final_SpO2 = cut(final_SpO2, c(75,90, 93:100),
-                          right = TRUE)) %>% 
-  crosstab("final_SpO2", .)
-patients %>% 
-  mutate(final_bp = cut(final_bp, c(20,60, 70, 80, 85, 90,
-                                    100, 140),
-                          right = TRUE)) %>% 
-  crosstab("final_bp", .)
-patients %>% 
-  mutate(final_platelets = cut(final_platelets, decile_cut(final_platelets),
-                           right = FALSE)) %>% 
-  crosstab("final_platelets", .)
-patients %>% 
-  mutate(final_lactate = cut(final_lactate, c(0, 0.5, 1, 1.25, 1.5, 2, 
-                                              2.5, 4, 8),
-                           right = FALSE)) %>% 
-  crosstab("final_lactate", .)
 
 # Hammer----------
 
@@ -307,142 +258,6 @@ points_system_output <- data.frame(
 probs_frost <- nomogram_convert(scores_frost, points_system_input,
                  points_system_output, log = TRUE)
 
-# Fialho-----------
-
-# Normalise fialho variables
-patients %<>% 
-  mutate(final_pulse_n = rescale(final_pulse, to = c(0, 1)),
-         final_temp_n = rescale(final_temp, to = c(0, 1)),
-         final_SpO2_n = rescale(final_SpO2, to = c(0, 1)),
-         final_bp_n = rescale(final_bp, to = c(0, 1)),
-         final_platelets_n = rescale(final_platelets, to = c(0, 1)),
-         final_lactate_n = rescale(final_lactate, to = c(0, 1)))
-
-# Generate fuzzy thesholds
-
-threshold_pulse <- quantile(patients$final_pulse_n, c(0.25,0.75)) # pulse low/normal/high
-threshold_temp <- quantile(patients$final_temp_n, 0.75) # temp normal/high
-threshold_SpO2 <- quantile(patients$final_SpO2_n, 0.25) # spO2 low/normal
-threshold_bp <- quantile(patients$final_bp_n, c(0.25,0.75)) # bp low/normal/high
-threshold_platelets <- quantile(patients$final_platelets_n, 0.5) # platelets low/high
-threshold_lactate <- quantile(patients$final_lactate_n, c(0.125,0.75)) # lactate very low/normal/high
-
-# Create fuzzy scores
-score_pulse <- case_when(
-  patients$final_pulse_n > threshold_pulse[2] ~ 1,
-  patients$final_pulse_n > threshold_pulse[1] ~ 0,
-  is.numeric(patients$final_pulse_n) ~ -1)
-
-score_temp <- case_when(
-  patients$final_temp_n >= threshold_temp ~ 1,
-  is.numeric(patients$final_temp_n) ~ 0)
-
-score_SpO2 <- case_when(
-  patients$final_SpO2_n < threshold_SpO2 ~ -1,
-  is.numeric(patients$final_SpO2_n) ~ 0)
-
-score_bp <- case_when(
-  patients$final_bp_n > threshold_bp[2] ~ 1,
-  patients$final_bp_n > threshold_bp[1] ~ 0,
-  is.numeric(patients$final_bp_n) ~ -1)
-
-score_platelets <- case_when(
-  patients$final_platelets_n >= threshold_platelets ~ 1,
-  is.numeric(patients$final_platelets_n) ~ -1)
-
-score_lactate <- case_when(
-  patients$final_lactate_n >= threshold_lactate[2] ~ 1,
-  patients$final_lactate_n > threshold_lactate[1] ~ 0,
-  is.numeric(patients$final_lactate_n) ~ -2)
-
-# Find absolute cases
-fuzzy_class_1 <- score_pulse >= 0 & score_temp == 0 & 
-  score_SpO2 == 0  & score_bp >= 0 & 
-  score_platelets == 1 & score_lactate == -2
-  
-fuzzy_class_2 <- score_pulse == -1 & score_temp == 1 & 
-  score_SpO2 == 0  & score_bp <= 0 & 
-  score_platelets == -1 & score_lactate >= 0
-
-fuzzy_class_3 <- score_pulse == 0 & score_temp == 0 & 
-  score_SpO2 == -1  & score_bp <= 0 & 
-  score_platelets == -1 & score_lactate == 0
-
-# Find marginal cases
-marginal_cases <- fuzzy_class_1 == FALSE & 
-  fuzzy_class_2 == FALSE &  fuzzy_class_3 == FALSE
-  
-# Assign classes
-fuzzy_class <- c()
-for(i in 1:length(marginal_cases))
-{
-  if(marginal_cases[i] == TRUE)
-  {
-    # Score for class 1
-    sum_class1 <- sum(score_pulse[i] >= 0, score_temp[i] == 0, score_SpO2[i] == 0,
-      score_bp[i] >= 0, score_platelets[i] == 1, score_lactate[i] == -2)
-    
-    # Score for class 2
-    sum_class2 <- sum(score_pulse[i] == -1, score_temp[i] == 1, score_SpO2[i] == 0,
-                      score_bp[i] <= 0, score_platelets[i] == -1, score_lactate[i] >= 0)
-    
-    # Score for class 3
-    sum_class3 <- sum(score_pulse[i] == 0, score_temp[i] == 0, score_SpO2[i] == -1,
-                      score_bp[i] <= 0, score_platelets[i] == -1, score_lactate[i] == 0)
-    
-    # Find greatest
-    best_class <- which.max(c(sum_class1, sum_class2, sum_class3))
-    if(length(best_class) > 1)
-    {
-      stop(i)
-    }else
-    {
-      fuzzy_class[i] <- best_class
-    }
-  }else 
-  {
-    # Output class if absolute
-    class <- which(c(fuzzy_class_1[i], fuzzy_class_2[i], 
-            fuzzy_class_3[i]) == TRUE)
-    fuzzy_class[i] <- class
-  }
-}
-
-# Score based on fuzzy class
-coefficients_fialho <- case_when(
-  fuzzy_class == 1 ~ (0.17 * patients$final_pulse_n) -
-    (0.64 * patients$final_temp_n) +
-    (0.08 * patients$final_SpO2_n) -
-    (0.27 * patients$final_bp_n) -
-    (0.1 * patients$final_platelets_n) +
-    (1.3 * patients$final_lactate_n) + 0.54,
-  fuzzy_class == 2 ~ (0.47 * patients$final_pulse_n) -
-    (0.68 * patients$final_temp_n) +
-    (0.16 * patients$final_SpO2_n) +
-    (0.16 * patients$final_bp_n) +
-    (0.17 * patients$final_platelets_n) +
-    (0.1 * patients$final_lactate_n) + 0.06,
-  fuzzy_class == 3 ~ (-1.1 * patients$final_pulse_n) +
-    (3.2 * patients$final_temp_n) -
-    (1.0 * patients$final_SpO2_n) -
-    (1.5 * patients$final_bp_n) -
-    (1.2 * patients$final_platelets_n) +
-    (1.1 * patients$final_lactate_n) + 0.12,
-)
-
-# Exponentiate those in class 1
-coefficients_fialho[fuzzy_class == 1] <- exp(coefficients_fialho[fuzzy_class == 1])
-
-# DEBUG TABLES
-debug_table <- data.frame(coef = coefficients_fialho,
-           class = fuzzy_class)
-
-debug_table %>% 
-  group_by(class) %>% 
-  summarise(range(coef))
-
-# Inverse logit all
-probs_fialho <- inverse_logit(coefficients_fialho)
 
 # Discrimination----------
 
@@ -452,29 +267,23 @@ prediction_martin <- prediction(probs_martin, patients$readmission == "Readmitte
 prediction_frost <- prediction(probs_frost, patients$readmission == "Readmitted to ICU")
 prediction_apache <- prediction(patients$apache_II_discharge,
                                 patients$readmission == "Readmitted to ICU")
-prediction_fialho <- prediction(probs_fialho,
-                                patients$readmission == "Readmitted to ICU")
-
 # Create performance objects
 performance_hammer <- performance(prediction_hammer, "tpr", "fpr")
 performance_martin <- performance(prediction_martin, "tpr", "fpr")
 performance_frost <- performance(prediction_frost, "tpr", "fpr")
 performance_apache <- performance(prediction_apache, "tpr", "fpr")
-performance_fialho <- performance(prediction_fialho, "tpr", "fpr")
 
 # Create AUC objects
 auc_hammer <- performance(prediction_hammer, measure = "auc")
 auc_martin <- performance(prediction_martin, measure = "auc")
 auc_frost <- performance(prediction_frost, measure = "auc")
 auc_apache <- performance(prediction_apache, measure = "auc")
-auc_fialho <- performance(prediction_fialho, measure = "auc")
 
 # Print AUC
 auc_hammer@y.values[[1]]
 auc_martin@y.values[[1]]
 auc_frost@y.values[[1]]
 auc_apache@y.values[[1]]
-auc_fialho@y.values[[1]]
 
 # Plot AUC
 data.frame(x = performance_hammer@x.values[[1]],
@@ -489,10 +298,7 @@ data.frame(x = performance_hammer@x.values[[1]],
                model = "Frost"),
     data.frame(x = performance_apache@x.values[[1]],
                y = performance_apache@y.values[[1]],
-               model = "APACHE-II"),
-    data.frame(x = performance_fialho@x.values[[1]],
-               y = performance_fialho@y.values[[1]],
-               model = "Fialho")
+               model = "APACHE-II")
   ) %>% 
   ggplot(aes(x, y, colour = model))+
   geom_abline(slope = 1, intercept = 0,
@@ -519,9 +325,7 @@ deciles_df <- tibble(
   probs_frost,
   decile_frost = ntile(probs_frost, 10),
   probs_apache = patients$apache_II_discharge / 200,
-  decile_apache = ntile(patients$apache_II_discharge, 10),
-  probs_fialho,
-  decile_fialho = ntile(probs_fialho, 10),
+  decile_apache = ntile(patients$apache_II_discharge, 10)
 )
 
 # Calculate calibration
@@ -533,15 +337,12 @@ cal_frost <- calibration(deciles_df, "probs_frost", "decile_frost") %>%
   mutate(model = "frost")
 cal_apache <- calibration(deciles_df, "probs_apache", "decile_apache") %>% 
   mutate(model = "apache")
-cal_fialho <- calibration(deciles_df, "probs_fialho", "decile_fialho") %>% 
-  mutate(model = "fialho")
 
 # Plot
 rbind(cal_hammer %>% select(-decile_hammer), 
       cal_martin %>% select(-decile_martin),
       cal_frost %>% select(-decile_frost), 
-      cal_apache %>% select(-decile_apache),
-      cal_fialho %>% select(-decile_fialho)) %>% 
+      cal_apache %>% select(-decile_apache)) %>% 
   ggplot(aes(predicted, observed ,
              colour = model))+
   geom_abline(slope = 1, intercept = 0,
@@ -570,8 +371,6 @@ hoslem_frost <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_frost, g = 10)
 hoslem_apache <- hoslem.test(patients$readmission == "Readmitted to ICU",
             patients$apache_II_discharge / 200, g = 10)
-hoslem_fialho <- hoslem.test(patients$readmission == "Readmitted to ICU",
-            probs_fialho, g = 10)
 
 # Calculate brier scores
 brier_df <- rbind(
@@ -583,9 +382,7 @@ brier_df <- rbind(
     mutate(model = "frost"),
   brier_extraction(patients$readmission == "Readmitted to ICU", 
                    patients$apache_II_discharge / 200) %>% 
-    mutate(model = "apache"),
-  brier_extraction(patients$readmission == "Readmitted to ICU", probs_fialho) %>% 
-    mutate(model = "fialho")
+    mutate(model = "apache")
 )
 
 # Plot brier scores
