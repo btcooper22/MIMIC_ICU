@@ -52,7 +52,7 @@ cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(results_complete),
                 family = "binomial")
 
 # Fit model
-initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.9),
+initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.85),
                         family = "binomial")
 
 # Identify retained variables
