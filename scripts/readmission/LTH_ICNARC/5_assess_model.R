@@ -12,11 +12,11 @@ source("functions/inverse_logit.R")
 results <- read_csv("data/icnarc_predictors.csv") %>% 
   filter(surgical_type != "221. Paediatric Cardiac Surgery") %>% 
   select(-height, -weight, -surgical_type) %>% 
-  select(id, readmission, glasgow_coma_below_15,
-         respiratory_support, high_risk_speciality,
-         out_of_hours_discharge, days_before_ICU) %>% 
+  select(id, readmission, anaemia, apache_II, 
+           glasgow_coma_below_15,
+           high_risk_speciality, length_of_stay,
+           out_of_hours_discharge, pulse_rate) %>% 
   na.omit()
-
 
 # Loop through datasets
 ptm <- proc.time()
@@ -34,12 +34,13 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
       filter(id %in% patients_train$id == FALSE)
     
     # Rebuild model
-    final_model <- glm(readmission ~ glasgow_coma_below_15 + 
-                         respiratory_support +
-                         days_before_ICU + high_risk_speciality +
-                         out_of_hours_discharge, data = patients_train,
+    final_model <- glm(readmission ~ 
+                         anaemia + apache_II + 
+                         glasgow_coma_below_15 +
+                         high_risk_speciality + length_of_stay +
+                         out_of_hours_discharge + pulse_rate,
+                       data = patients_train,
                        family = "binomial")
-    
     
     # Create predictions
     probs <- predict(final_model, newdata = patients_validate) %>% inverse_logit()
@@ -67,5 +68,5 @@ output %>%
             AUC_error = sd(disc),
             cal = mean(cal_chisq),
             cal_error = sd(cal_chisq))
-# AUC 0.658 (0.044)
-# Cal 8.79 (4.68)
+# AUC 0.629 (0.053)
+# Cal 11.54 (7.93)
