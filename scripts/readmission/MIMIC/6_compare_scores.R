@@ -10,6 +10,8 @@ require(tidyr)
 require(ResourceSelection)
 require(s2dverification)
 require(scales)
+require(caret)
+require(glmnet)
 
 # Load data
 patients <- read_csv("data/predictors.csv")
@@ -151,7 +153,7 @@ scores_frost <- nomogram_convert(patients$age, age_score_system_input,
     patients$admission_source == "OtherHosp" ~ 10.25,
     patients$admission_source == "Ward" ~ 14.75
   ) +
-  nomogram_convert(patients$apache_II_discharge, apache_score_system_input,
+  nomogram_convert(patients$apache_II, apache_score_system_input,
                    apache_score_system_output) +
   ifelse(patients$los_7, 17, 0) +
   ifelse(patients$after_hours_discharge, 4, 0) +
@@ -172,14 +174,103 @@ points_system_output <- data.frame(
 probs_frost <- nomogram_convert(scores_frost, points_system_input,
                  points_system_output, log = TRUE)
 
-# Bespoke----
+# Bespoke model----
+
+# Vector of acceptable features
+feature_id <- c(7:29, 45:49, 51:56, 61:64)
+
+# Binarise readmission column
+patients %<>%
+  mutate(readmission = readmission == "Readmitted to ICU")
+
+# Select predictor and outcome vectors
+x <- model.matrix(readmission~., patients[,feature_id])[,-1]
+y <- patients$readmission
+
+# Find model structure
+model_structure <- foreach(i = 1:100, .combine = "rbind") %do%
+  {
+    # Determine lambda
+    print(i)
+    set.seed(i)
+    cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(patients))
+    
+    # Fit model
+    initial_model <- glmnet(x, y, alpha = 1, lambda = cv$lambda.min)
+    
+    # Output
+    data.frame(varname = initial_model$beta@Dimnames[[1]],
+               included = 1:length(initial_model$beta@Dimnames[[1]]) %in%
+                 (initial_model$beta@i + 1)) %>% 
+      pivot_wider(names_from = "varname",
+                  values_from = "included") %>% 
+      mutate(iteration = i)
+    
+  }
+
+structure_assessment <- model_structure %>% 
+  select(-iteration) %>% 
+  pivot_longer(1:38) %>% 
+  group_by(name) %>% 
+  summarise(prop = mean(value)) %>% 
+  filter(prop > 0.95)
+
+# Loop through datasets
+ptm <- proc.time()
+output <- foreach(i = 1:10000, .combine = "rbind") %do%
+  {
+    # Seed
+    set.seed(i)
+    
+    # Split data
+    patients_train <- results %>% 
+      group_by(readmission) %>% 
+      slice_sample(prop = 0.75)
+    
+    patients_validate <- results %>% 
+      filter(id %in% patients_train$id == FALSE)
+    
+    # Rebuild model
+    final_model <- glm(readmission ~ glasgow_coma_below_15 + 
+                         respiratory_support +
+                         days_before_ICU + high_risk_speciality +
+                         out_of_hours_discharge, data = patients_train,
+                       family = "binomial")
+    
+    
+    # Create predictions
+    probs <- predict(final_model, newdata = patients_validate) %>% inverse_logit()
+    
+    # Assess discrimination
+    pred <- prediction(probs[!is.na(probs)],
+                       patients_validate$readmission[!is.na(probs)])
+    AUC <- performance(pred, measure = "auc")@y.values[[1]]
+    
+    # Assess calibration
+    cal <- hoslem.test(patients_validate$readmission[!is.na(probs)],
+                       probs[!is.na(probs)], g = 10)
+    
+    # Output
+    data.frame(i, disc = AUC,
+               cal_chisq = cal$statistic,
+               cal_p = cal$p.value)
+  }
+proc.time() - ptm # 4 minutes (220 seconds)
+
+# Summarise
+output %>% 
+  na.omit() %>% 
+  summarise(AUC = mean(disc),
+            AUC_error = sd(disc),
+            cal = mean(cal_chisq),
+            cal_error = sd(cal_chisq))
 
 # Discrimination----------
 
 # Create prediction objects
-prediction_hammer <- prediction(probs_hammer, patients$readmission == "Readmitted to ICU")
-prediction_martin <- prediction(probs_martin, patients$readmission == "Readmitted to ICU")
-prediction_frost <- prediction(probs_frost, patients$readmission == "Readmitted to ICU")
+prediction_hammer <- prediction(probs_hammer, patients$readmission)
+prediction_martin <- prediction(probs_martin, patients$readmission)
+prediction_frost <- prediction(probs_frost, patients$readmission)
 
 # Create performance objects
 performance_hammer <- performance(prediction_hammer, "tpr", "fpr")
@@ -225,7 +316,7 @@ data.frame(x = performance_hammer@x.values[[1]],
 # Split data into deciles
 deciles_df <- tibble(
   patient_id = 1:nrow(patients),
-  readmission = patients$readmission == "Readmitted to ICU",
+  readmission = patients$readmission,
   probs_hammer,
   decile_hammer = ntile(probs_hammer, 10),
   probs_martin,
