@@ -9,7 +9,20 @@ require(foreach)
 require(tidyr)
 
 # Load cohort
-icnarc <- read_csv("data/icnarc_surgical_cohort.csv")
+icnarc <- read_csv("data/icnarc_surgical_cohort.csv") 
+icnarc$row_id <- 1:nrow(icnarc)
+
+# Fix admission month
+admit_month <- c()
+for(j in 1:nrow(icnarc))
+{
+  dlength <- nchar(icnarc$MonthYearOfAdmission[j])
+  year <- substr(icnarc$MonthYearOfAdmission[j], dlength-3, dlength)
+  month <- substr(icnarc$MonthYearOfAdmission[j], 1, dlength-4)
+  admit_month[j] <- paste(year, str_pad(month, 2, "left", "0"),
+                          sep = "") %>% as.numeric()
+}
+icnarc$admit_month <- as.Date(paste(admit_month, "01", sep = ""), format = "%Y%m%d")
 
 # Count crude readmission rate
 count_admissions <- icnarc %>% 
@@ -21,35 +34,30 @@ count_admissions <- icnarc %>%
 count_admissions %>% 
   summarise(readmission_rate = mean(mult) * 100)
 
-# Identify readmitted patients
-readmitted_ID <- count_admissions %>% 
+# Identify recurring patients
+recurring_ID <- count_admissions %>% 
   filter(mult == TRUE) %>% 
   select(Identifiers_PatientPseudoId) %>% 
   deframe()
 
-readmitted_df <- icnarc %>% 
-  filter(Identifiers_PatientPseudoId %in% readmitted_ID)
+recurring_df <- icnarc %>% 
+  filter(Identifiers_PatientPseudoId %in% recurring_ID)
+
+isolated_df <- icnarc %>% 
+  filter(Identifiers_PatientPseudoId %in% recurring_ID == FALSE)
+
+# Confirm isolation
+any(recurring_df$row_id %in% isolated_df$row_id)
+any(isolated_df$row_id %in% recurring_df$row_id)
 
 
-# Fix admission month
-admit_month <- c()
-for(j in 1:nrow(readmitted_df))
-{
-  dlength <- nchar(readmitted_df$MonthYearOfAdmission[j])
-  year <- substr(readmitted_df$MonthYearOfAdmission[j], dlength-3, dlength)
-  month <- substr(readmitted_df$MonthYearOfAdmission[j], 1, dlength-4)
-  admit_month[j] <- paste(year, str_pad(month, 2, "left", "0"),
-                                          sep = "") %>% as.numeric()
-}
-readmitted_df$admit_month <- admit_month
-
-# Identify first stay
-assessed_readmission <- foreach(i = 1:length(unique(readmitted_df$Identifiers_PatientPseudoId)),
+# Identify first stay for recurring patients
+assessed_readmission <- foreach(i = 1:length(recurring_ID),
                                .combine = "rbind") %do%
 {
   # Identify patient
-  patient <- unique(readmitted_df$Identifiers_PatientPseudoId)[i]
-  patient_df <- readmitted_df %>% 
+  patient <- recurring_ID[i]
+  patient_df <- recurring_df %>% 
     filter(Identifiers_PatientPseudoId == patient)
   
   # Find index admission
@@ -95,49 +103,63 @@ assessed_readmission <- foreach(i = 1:length(unique(readmitted_df$Identifiers_Pa
     arrange(admit_month)
 }
 
-# Identify readmitted records
-readmission_df <- assessed_readmission %>% 
-  filter(index_admission == FALSE &
-           exclude_same_month == FALSE &
-           multiple_planned_elective == FALSE)
+# Pull out records who were recurring but not "readmitted"
+additional_isolated <- assessed_readmission %>% 
+  group_by(Identifiers_PatientPseudoId) %>% 
+  mutate(freq = n()) %>% 
+  filter(freq == 1 & index_admission == TRUE)
 
-# Set aside single admissions
-single_df <- icnarc %>% 
-  filter(Identifiers_PatientPseudoId %in% readmitted_ID == FALSE) %>% 
+# Add to isolated data frame
+isolated_df <- additional_isolated %>% 
+  select(-multiple_planned_elective,
+         -exclude_same_month, -order_id,
+         -freq, -index_admission) %>% 
+  rbind(isolated_df) %>% 
   mutate(readmission = FALSE)
 
-# Add first admissions of readmitted patients
-first_readmitted <- assessed_readmission %>% 
-  filter(index_admission == TRUE &
-           exclude_same_month == FALSE &
-           multiple_planned_elective == FALSE) %>% 
-  mutate(readmission = TRUE)
+# Confirm no duplicates
+any(duplicated(isolated_df$row_id))
 
-results <- single_df %>% 
-  rbind(first_readmitted %>% 
-          select(-admit_month, -multiple_planned_elective,
-                 -exclude_same_month, -index_admission,
-                 -order_id))
+# Identify all records of truly readmitted patients
+readmitted_df <- assessed_readmission %>% 
+  group_by(Identifiers_PatientPseudoId) %>% 
+  mutate(freq = n()) %>% 
+  filter(freq > 1 & multiple_planned_elective == FALSE
+         & exclude_same_month == FALSE)
 
-# Count readmission rate
-mean(results$readmission) * 100
-
-# Count unique patients
-length(unique(results$Identifiers_PatientPseudoId)) == nrow(results)
+# Extract index admission of readmitted patients
+results <- readmitted_df %>% 
+  filter(index_admission == TRUE) %>% 
+  select(-multiple_planned_elective,
+         -exclude_same_month, -order_id,
+         -freq, -index_admission) %>% 
+  mutate(readmission = TRUE) %>% 
+  # Add to total
+  rbind(isolated_df)
 
 # Remove deaths or discharges with intention of death
 results %<>% 
   filter(UnitDischarge_ReasonDischarged != "F. Palliative care",
          UnitDischarge_ExpectedDependencyPostDischarge != "E. Discharged with the expectation of dying",
          UnitDischarge_UnitOutcome != "4. Died")
+
+# Confirm no duplicates
+any(duplicated(results$row_id))
+
+# Count unique patients
+length(unique(results$Identifiers_PatientPseudoId)) == nrow(results)
+
+# Count readmission rate
+mean(results$readmission) * 100
+
 # Write
 results %>% 
   write_csv("data/icnarc_outcomes.csv")
 
-#	Table on length of stay for single visit and readmission visit
+#	Table on length of stay for single visit and readmission visit---- (needs rewrite)
 tabling_df <- results %>% 
   rbind(
-    readmission_df%>% 
+    readmission_df %>% 
       select(-admit_month, -multiple_planned_elective,
              -exclude_same_month, -index_admission,
              -order_id) %>% 
@@ -196,4 +218,35 @@ rbind(T1, T2, T3) %>%
   pivot_wider(names_from = "readmission",
               values_from = "value") %>% 
   write_csv("output/readmission_tables.csv")
+
+# Measure readmission timescales----
+timescales <- results %>% 
+  rbind(
+    readmission_df %>% 
+      select(-admit_month, -multiple_planned_elective,
+             -exclude_same_month, -index_admission,
+             -order_id) %>% 
+      mutate(readmission = "more_visits")
+  ) %>% 
+  filter(readmission != FALSE)
+
+# Fix date
+admit_month <- c()
+for(j in 1:nrow(timescales))
+{
+  dlength <- nchar(timescales$MonthYearOfAdmission[j])
+  year <- substr(timescales$MonthYearOfAdmission[j], dlength-3, dlength)
+  month <- substr(timescales$MonthYearOfAdmission[j], 1, dlength-4)
+  admit_month[j] <- paste(year, str_pad(month, 2, "left", "0"),
+                          sep = "") %>% as.numeric()
+}
+timescales$admit_month <- as.Date(paste(admit_month, "01", sep = ""), format = "%Y%m%d")
+
+foreach(i == 1:length(unique(timescales$Identifiers_PatientPseudoId))) %do%
+  {
+    id <- unique(timescales$Identifiers_PatientPseudoId)[i]
+    
+    id_df <- timescales %>% 
+      filter(Identifiers_PatientPseudoId == id)
+  }
 
