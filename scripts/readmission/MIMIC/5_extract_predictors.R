@@ -123,6 +123,12 @@ mimic_patients <- mimic$patients %>% collect()
 mimic_services <- mimic$services %>% collect()
 mimic_admissions <- mimic$admissions %>% collect()
 mimic_diagnoses <- mimic$diagnoses_icd %>% collect()
+mimic_procedures <- mimic$cptevents %>% collect()
+
+# Database of high-risk specialities
+highrisk <- mimic_procedures %>% 
+  filter(sectionheader == "Surgery",
+         subsectionheader %in% c("Digestive system", "Mediastinum and diaphragm"))
 
 # Prepare parallel options
 ptm <- proc.time()
@@ -135,7 +141,8 @@ registerDoParallel(ifelse(detectCores() <= 15,
 # Run loop
 predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
         .packages = c("magrittr", "readr", "dplyr",
-                      "tibble", "lubridate", "purrr")) %dopar%
+                      "tibble", "lubridate", "purrr",
+                      "tidyr")) %dopar%
 {
   # Identify subject
   # print(i)
@@ -176,6 +183,9 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   # Define surgical types
   general_surgery <-  "SURG" %in% surg_type
   cardiac_surgery <-  "CSURG" %in% surg_type
+  
+  # Determine high-risk speciality
+  high_risk_speciality <- nrow(highrisk %>% filter(hadm_id == adm)) > 0
   
   # Duration of stay
   los <- mimic_preproc$stays %>% 
@@ -229,6 +239,13 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
       TRUE ~ "OtherHosp"
     )) %>% 
     select(frost_source) %>%  deframe()
+  
+  # Determine hospital days before ICU
+  days_before_ICU <- admission_info %>% 
+    mutate(days_before_ICU = difftime(intime, admittime,
+                                      units = "days")) %>% 
+    select(days_before_ICU) %>% 
+    deframe() %>% ceiling()
   
   # History predictors---------
   
@@ -435,12 +452,62 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
                                      VALUENUM >2, na.rm = TRUE)) %>% 
         deframe()
     }
+    
+    # Extract GCS measurements
+    gcs_motor <- charts %>% 
+      filter(ITEMID %in% c(454, 223901)) %>% 
+      select(CHARTTIME, VALUENUM) %>% 
+      mutate(type = "motor")
+    
+    gcs_verbal <- charts %>% 
+      filter(ITEMID %in% c(723, 223900)) %>% 
+      select(CHARTTIME, VALUENUM) %>% 
+      mutate(type = "verbal")
+    
+    gcs_eye <- charts %>% 
+      filter(ITEMID %in% c(184, 220739)) %>% 
+      select(CHARTTIME, VALUENUM) %>% 
+      mutate(type = "eye")
+    
+    # Combine and filter to first 24h
+    gcs_df <- rbind(gcs_motor,
+                         gcs_verbal,
+                         gcs_eye) %>% 
+      group_by(CHARTTIME) %>% 
+      mutate(freq = n()) %>% 
+      ungroup() %>% 
+      filter(freq == 3) %>% 
+      select(-freq) %>% 
+      pivot_wider(names_from = "type",
+                  values_from = "VALUENUM") %>% 
+      filter(CHARTTIME > admit_time,
+             CHARTTIME < (admit_time + 86400))
+    
+    # Measure if below 15
+    if(any(gcs_df$motor < 6) |
+       any(gcs_df$verbal < 5) |
+       any(gcs_df$eye < 4))
+    {
+      glasgow_coma_below_15 <- TRUE
+    }else
+    {
+      glasgow_coma_below_15 <- FALSE
+    }
+    
+    # Determine respiratory support
+    respiratory_support_df <- charts %>% 
+      filter(ITEMID %in% c(3605, 225792,
+                           225794,225303))
+    
+    respiratory_support <- nrow(respiratory_support_df) >0
 
     chart_missing <- FALSE
   }else
   {
     respiratory_rate <- NA
     ambulation <- NA
+    glasgow_coma_below_15 <- NA
+    respiratory_support <- NA
     chart_missing <- TRUE
   }
   
@@ -506,18 +573,6 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     apache_II_discharge <- NA
   }
   
-  # Fialho's variables
-  if(!chart_missing | !lab_missing | !is.na(respiratory_rate))
-  {
-    fialho_vars <- fialho_variables(discharge_time,
-                                    charts,
-                                    labs)
-  }else
-  {
-    fialho_vars <- rep(NA, 6)
-  }
-  
-  
   # I/O Predictors----------
   
   # Positive fluid balance (>5L)
@@ -567,10 +622,6 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              # Martin variables
              serum_glucose, blood_urea_nitrogen, serum_choride,
              respiratory_rate, atrial_fibrillation, renal_insufficiency,
-             # Fialho variables
-             final_pulse = fialho_vars[1], final_temp = fialho_vars[2],
-             final_pO2 = fialho_vars[3], final_bp = fialho_vars[4],
-             final_platelets = fialho_vars[5], final_lactate = fialho_vars[6],
              # APACHE-II variables
              apache_temperature = apache_score_vector["temperature"],
              apache_map = apache_score_vector["map"],
@@ -602,7 +653,10 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              apache_age_discharge = apache_value_vector_discharge["age"],
              apache_oxygenation_discharge = apache_value_vector_discharge["oxygen"],
              apache_chronic_discharge = apache_value_vector_discharge["chronic"],
-             apache_bicarbonate_discharge = apache_value_vector_discharge["bicarbonate"]
+             apache_bicarbonate_discharge = apache_value_vector_discharge["bicarbonate"],
+             # Additional variables
+             glasgow_coma_below_15, days_before_ICU, respiratory_support,
+             high_risk_speciality
              )
   #row.names(output) <- i
   output
