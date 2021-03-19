@@ -12,13 +12,7 @@ fluid_balance <- function(icustay_df, chart_df, readmission)
   # chart_df <- charts
   # readmission <- outcomes$readmission[i]
   
-  # Find icu stay
-  if(readmission)
-  {
-    icustay_df <- icustay_df[1,]
-  }
-  
-  # Extract database source
+  icustay_df <- icustay_df[1,]
   dbsource <- icustay_df$dbsource
   
   # Add specific exceptions

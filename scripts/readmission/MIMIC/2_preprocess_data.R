@@ -59,52 +59,65 @@ stays %<>%
                                 TRUE, FALSE)) %>% 
   filter(age >= 18)
 
-# Trim to only hospitalisations involving a surgical service
+# Find hospitalisations involving a surgical service
 surgical_hosps_df <- stays %>% 
   filter(surgical_hospitalisation == TRUE)
 
-# Prepare parallel engine
-ptm <- proc.time()
-psnice(value = 19)
-registerDoParallel(ifelse(detectCores() <= 12,
-                          detectCores() - 1,
-                          8)
-)
-
-# Flag which stays involved or followed surgeries
-unique_admissions <- unique(surgical_hosps_df$hadm_id)
-stays_filtered <- foreach(i = 1:length(unique_admissions),
+# Flag index stays
+index_stays <- foreach(i = 1:nrow(patient_df),
         .combine = "rbind",
         .packages = c("dplyr", "lubridate",
-                      "tibble")) %dopar%
+                      "tibble")) %do%
 {
-  admission_df <- surgical_hosps_df %>% 
-    filter(hadm_id == unique_admissions[i])
+  # Extract all stays for patient
+  patient_stays <- stays %>% 
+    filter(subject_id == patient_df$subject_id[i]) %>% 
+    arrange(intime)
   
-  if(nrow(admission_df) > 1)
+  # Skip patients with no surgical stays
+  if(any(patient_stays$surgical_hospitalisation))
   {
-    # Find time moved to surgical service
-    surgery_time <- patient_df %>%
-      filter(hadm_id == unique_admissions[i]) %>% 
-      select(transfertime) %>% deframe()
-    
-    # Compare to ICU times
-    post_surgery <- difftime(admission_df$outtime, surgery_time,
-                                units = "hours")
-    
-    # Negative times == icu stays pre-surgery
-    if(any(post_surgery < 0))
-    {
-      admission_df <- admission_df[post_surgery > 0,]
-    }
+  # Take only elective surgical stays
+  index_stay <- patient_stays %>% 
+    filter(admission_type == "ELECTIVE" &
+             surgical_hospitalisation == TRUE)
+  
+  # Filter multiple elective procedures in one hospitalisation
+  if(nrow(index_stay) > 1 & length(unique(index_stay$hadm_id)) == 1)
+  {
+    # Take latest elective procedure
+    index_stay <- index_stay %>% 
+      filter(admission_type == "ELECTIVE") %>% 
+      slice_tail(n = 1)
   }
-  admission_df
+
+  
+  if(nrow(index_stay) > 1)
+  {
+    stop(i)
+    # # Find time moved to surgical service
+    # surgery_time <- patient_df %>%
+    #   filter(hadm_id == unique_admissions[i]) %>% 
+    #   select(transfertime) %>% deframe()
+    # 
+    # # Compare to ICU times
+    # post_surgery <- difftime(admission_df$outtime, surgery_time,
+    #                             units = "hours")
+    # 
+    # # Negative times == icu stays pre-surgery
+    # if(any(post_surgery < 0))
+    # {
+    #   admission_df <- admission_df[post_surgery > 0,]
+    # }
+  }
+  index_stay
+  }else
+  {
+    output <- stays[i,]
+    output[,1] <- NA
+    output
+  }
 }
-stopImplicitCluster()
-proc.time() - ptm
-
-stays <- stays_filtered
-
 
 # Read and filter input data per stay----------------------------------
 
@@ -171,6 +184,11 @@ names(mimic_preproc)[4:5] <- c("diagnoses", "procedures")
 mimic_preproc[[6]] <- list("procedure" = procedure_counts,
                            "diagnosis" = diagnosis_counts)
 names(mimic_preproc)[6] <- "counts"
+
+# Insert index stays
+mimic_preproc[[7]] <- index_stays %>% 
+  filter(!is.na(row_id.x))
+names(mimic_preproc)[7] <- "index_stays"
 
 # Write data
 write_rds(mimic_preproc, "data/mimic_preprocessed.RDS")

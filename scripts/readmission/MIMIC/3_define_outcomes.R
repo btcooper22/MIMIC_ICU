@@ -9,7 +9,7 @@ options(dplyr.summarise.inform = FALSE)
 # Load preprocessed data
 mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
 
-# Create outcome measures: Readmission within same hospitalisation-------------------
+# Create outcome measures: Any subsequent nonelective readmission within a year-------------------
 
 # Prepare parallel options
 ptm <- proc.time()
@@ -20,57 +20,56 @@ registerDoParallel(ifelse(detectCores() <= 12,
                    )
 
 # Large loop for all patients
-outcomes <- foreach(i = 1:length(mimic_preproc$patients),
+outcomes <- foreach(i = 1:nrow(mimic_preproc$index_stays),
                     .combine = "rbind",
-                    .packages = c("dplyr", "magrittr")) %dopar%
+                    .packages = c("dplyr", "magrittr",
+                                  "tibble")) %dopar%
 {
   # Identify subject
   # print(i)
-  SUBJECT_ID <- mimic_preproc$patients[i]
+  SUBJECT_ID <- mimic_preproc$index_stays$subject_id[i]
   
-  # Extract stays (up to 124)
+  # Extract stays 
   stays <- mimic_preproc$stays %>% 
-    filter(subject_id == SUBJECT_ID)
+    filter(subject_id == SUBJECT_ID) %>% 
+    arrange(intime)
   
-  # Identify surgical admission
-  surgical_stay <- stays %>%
-    group_by(hadm_id) %>%
-    filter(any(surgical_hospitalisation == TRUE)) %>% 
-    ungroup()
+  # Find admission ID of surgical stay
+  surg_adm <- mimic_preproc$index_stays$hadm_id[mimic_preproc$index_stays$subject_id == SUBJECT_ID]
   
-  # Flag readmission
-  readmission_flag <- nrow(surgical_stay) > 1
-  surgical_stay %<>% 
-    mutate(readmission = readmission_flag)
-  
-  
-  # # Count stays (126-128)
-  # stays %<>%
-  #   group_by(hadm_id) %>%
-  #   summarise(counts = n()) %>%
-  #   left_join(stays, by  = "hadm_id") %>%
-  #   arrange(row_id.x)
-  #
-  # # Generate output points for each stay (130-132)
-  # stays %<>%
-  #   group_by(hadm_id) %>%
-  #   mutate(max_outtime = max(outtime) == outtime)
+  # Filter out subsequent elective admissions
+  stays %<>% 
+    filter(admission_type != "ELECTIVE" |
+             surgical_hospitalisation == TRUE)
 
-  # Detect back transfers to ICU (134)
-  # stays %<>%
-  #   mutate(readmission = (counts > 1) & (max_outtime == 0)) %>%
-  #   # Restrict to surgical hospitalisations
-  #   filter(surgical_stay == TRUE)
-  #
-  # # Write all information
-  surgical_stay %>%
-    select(subject_id, hadm_id, in_hospital_mortality, readmission) %>%
-    mutate(subject_n = i) %>%
-    group_by(hadm_id) %>%
-    slice_head()
+  # Find all stays after surgical admission
+
+  if(max(which(stays$hadm_id == surg_adm)) < nrow(stays))
+  {
+    subseq_stays <- stays[(max(which(stays$hadm_id == surg_adm))+1):nrow(stays),]
+    
+   surg_time <- stays %>% 
+      filter(surgical_hospitalisation == TRUE) %>% 
+      select(intime) %>% deframe() %>% min()
+   
+   readmission <- difftime(min(subseq_stays$intime),
+            surg_time) < 365
+  }else
+  {
+    readmission <- FALSE
+  }
+
+
+  # Collect output
+  stays %>% 
+    filter(hadm_id == surg_adm) %>% 
+    slice_min(intime) %>% 
+    select(subject_id, hadm_id, in_hospital_mortality) %>% 
+    mutate(subject_n = i,
+           readmission)
 }
 stopImplicitCluster()
-proc.time() - ptm # 70 seconds @ 12 cores
+proc.time() - ptm # 8 seconds @ 12 cores
 
 # Clean and write results-------------
 
@@ -84,7 +83,7 @@ table(outcomes$in_hospital_mortality)
 outcomes %<>% filter(in_hospital_mortality == FALSE)
 
 # How many readmissions?
-table(outcomes$readmission)
+mean(outcomes$readmission) * 100
 
 # Write
 outcomes %>% 

@@ -10,10 +10,30 @@ source("functions/mimic_load.R")
 source("functions/event_filter_discharge.R")
 source("functions/flag_within_discharge.R")
 source("functions/apache_ii.R")
-source("functions/apache_ii_discharge.R")
 source("functions/fluid_balance.R")
 source("functions/fialho_variables.R")
 source("functions/NA_count.r")
+
+filter_window_lab <- function(.df, time)
+{
+  # Filter within 24 of admission
+    out_df <- .df %>% 
+      mutate(window = difftime(charttime, time,
+                               units = "hours"))  %>% 
+      filter(window < 24 & 
+               window >= 0)
+  
+  # Take nearest pre-admission if none available
+  if(nrow(out_df) == 0)
+  {
+    out_df <- .df %>% 
+      mutate(window = difftime(charttime, time,
+                               units = "hours"))  %>% 
+      filter(window < 0) %>% 
+      slice_min(window)
+  }
+  return(out_df)
+}
 
 # Load preprocessed data
 mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
@@ -123,19 +143,26 @@ mimic_patients <- mimic$patients %>% collect()
 mimic_services <- mimic$services %>% collect()
 mimic_admissions <- mimic$admissions %>% collect()
 mimic_diagnoses <- mimic$diagnoses_icd %>% collect()
+mimic_procedures <- mimic$cptevents %>% collect()
+
+# Database of high-risk specialities
+highrisk <- mimic_procedures %>% 
+  filter(sectionheader == "Surgery",
+         subsectionheader %in% c("Digestive system", "Mediastinum and diaphragm"))
 
 # Prepare parallel options
 ptm <- proc.time()
 psnice(value = 19)
 registerDoParallel(ifelse(detectCores() <= 15,
                           detectCores() - 1,
-                          15)
+                          12)
 )
 
 # Run loop
 predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
         .packages = c("magrittr", "readr", "dplyr",
-                      "tibble", "lubridate", "purrr")) %dopar%
+                      "tibble", "lubridate", "purrr",
+                      "tidyr")) %dopar%
 {
   # Identify subject
   # print(i)
@@ -176,6 +203,9 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   # Define surgical types
   general_surgery <-  "SURG" %in% surg_type
   cardiac_surgery <-  "CSURG" %in% surg_type
+  
+  # Determine high-risk speciality
+  high_risk_speciality <- nrow(highrisk %>% filter(hadm_id == adm)) > 0
   
   # Duration of stay
   los <- mimic_preproc$stays %>% 
@@ -230,6 +260,13 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     )) %>% 
     select(frost_source) %>%  deframe()
   
+  # Determine hospital days before ICU
+  days_before_ICU <- admission_info %>% 
+    mutate(days_before_ICU = difftime(intime, admittime,
+                                      units = "days")) %>% 
+    select(days_before_ICU) %>% 
+    deframe() %>% ceiling()
+  
   # History predictors---------
   
   # Determine acute renal failure
@@ -265,29 +302,30 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   
   # Extract lab events
   labfile <- paste("data/events/labevents_", adm, ".csv", sep = "")
-  labs <- read_csv(labfile)
-  
-  if(nrow(labs) > 0)
+
+  if(file.exists(labfile))
   {
+    labs <- read_csv(labfile)
+    
     # Extract serum glucose measurements
     serum_glucose_measurements <- labs %>% 
       filter(itemid %in% ID_blood_glucose) %>% 
-      event_filter_discharge(discharge_time)
+      filter_window_lab(admit_time)
     
     # Extract haemoglobin measurements
     haemoglobin_measurements <- labs %>% 
       filter(itemid %in% ID_haemoglobin) %>% 
-      event_filter_discharge(discharge_time) 
+      filter_window_lab(admit_time) 
     
     # Extract blood urea nitrogen
     blood_urea_nitrogen_measurements <- labs %>% 
       filter(itemid %in% ID_blood_urea_nitrogen) %>% 
-      event_filter_discharge(discharge_time)
+      filter_window_lab(admit_time)
     
     # Extract serum chloride
     serum_choride_measurements <- labs %>% 
       filter(itemid %in% ID_serum_choride) %>% 
-      event_filter_discharge(discharge_time) 
+      filter_window_lab(admit_time) 
     
     # If no serum glucose measurements
     if(nrow(serum_glucose_measurements) == 0)
@@ -297,16 +335,10 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     }else
     {
       # Hypoglycemia within 24h discharge
-      serum_glucose_24h <- serum_glucose_measurements %>% 
-        flag_within_discharge(24) %>% 
-        select(valuenum) %>% deframe()
-      hyperglycemia <- any(serum_glucose_24h > 180)
-      
-      # Final serum glucose measurement
       serum_glucose <- serum_glucose_measurements %>% 
-        flag_within_discharge(48) %>% 
-        summarise(serum_glucose = mean(valuenum, na.rm = TRUE)) %>% 
-        deframe()
+        summarise(valuenum = max(valuenum, na.rm = T)) %>% 
+        select(valuenum) %>% deframe()
+      hyperglycemia <- serum_glucose > 180
     }
     
     # If no haemoglobin measurements
@@ -317,9 +349,9 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     {
       # Anaemia within 24h discharge
       anaemia <- haemoglobin_measurements %>% 
-        flag_within_discharge(24) %>% 
+        summarise(valuenum = min(valuenum, na.rm = T)) %>% 
         select(valuenum) %>%
-        summarise(anaemia = any(valuenum < 7)) %>% 
+        summarise(anaemia = valuenum < 9) %>% 
         select(anaemia) %>%  deframe()
     }
     
@@ -331,9 +363,8 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     {
       # Final BUN measurement
       blood_urea_nitrogen <- blood_urea_nitrogen_measurements %>% 
-        flag_within_discharge(48) %>% 
-        summarise(blood_urea_nitrogen = mean(valuenum, na.rm = TRUE)) %>% 
-        deframe()
+        summarise(valuenum = max(valuenum, na.rm = T)) %>% 
+        select(valuenum) %>% deframe()
     }
     
     # If no serum chloride measurements
@@ -343,10 +374,9 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     }else
     {
       # Final serum chloride measurement
-      serum_choride <- serum_choride_measurements %>% 
-        flag_within_discharge(48) %>% 
-        summarise(serum_choride = mean(valuenum, na.rm = TRUE)) %>% 
-        deframe()
+      serum_chloride <- serum_choride_measurements %>% 
+        summarise(valuenum = max(valuenum, na.rm = T)) %>% 
+        select(valuenum) %>% deframe()
     }
     
     lab_missing <- FALSE
@@ -356,7 +386,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
     serum_glucose <- NA
     anaemia <- NA
     blood_urea_nitrogen <- NA
-    serum_choride <- NA
+    serum_chloride <- NA
     lab_missing <- TRUE
   }
   
@@ -435,12 +465,63 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
                                      VALUENUM >2, na.rm = TRUE)) %>% 
         deframe()
     }
+    
+    # Extract GCS measurements
+    gcs_motor <- charts %>% 
+      filter(ITEMID %in% c(454, 223901)) %>% 
+      select(CHARTTIME, VALUENUM) %>% 
+      mutate(type = "motor")
+    
+    gcs_verbal <- charts %>% 
+      filter(ITEMID %in% c(723, 223900)) %>% 
+      select(CHARTTIME, VALUENUM) %>% 
+      mutate(type = "verbal")
+    
+    gcs_eye <- charts %>% 
+      filter(ITEMID %in% c(184, 220739)) %>% 
+      select(CHARTTIME, VALUENUM) %>% 
+      mutate(type = "eye")
+    
+    # Combine and filter to first 24h
+    gcs_df <- rbind(gcs_motor,
+                         gcs_verbal,
+                         gcs_eye) %>% 
+      group_by(CHARTTIME) %>% 
+      mutate(freq = n()) %>% 
+      ungroup() %>% 
+      filter(freq == 3) %>% 
+      select(-freq) %>% 
+      pivot_wider(names_from = "type",
+                  values_from = "VALUENUM") %>% 
+      filter(CHARTTIME > admit_time,
+             CHARTTIME < (admit_time + 86400))
+    
+    # Measure if below 15
+    if(any(gcs_df$motor < 6) |
+       any(gcs_df$verbal < 5) |
+       any(gcs_df$eye < 4))
+    {
+      glasgow_coma_below_15 <- TRUE
+    }else
+    {
+      glasgow_coma_below_15 <- FALSE
+    }
+    
+    # Determine respiratory support
+    respiratory_support_df <- charts %>% 
+      filter(ITEMID %in% c(3605, 225792,
+                           225794,225303))
+    
+    respiratory_support <- nrow(respiratory_support_df) >0
 
     chart_missing <- FALSE
   }else
   {
     respiratory_rate <- NA
+    rr_time <- NA
     ambulation <- NA
+    glasgow_coma_below_15 <- NA
+    respiratory_support <- NA
     chart_missing <- TRUE
   }
   
@@ -448,7 +529,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   if(!chart_missing | !lab_missing | !is.na(respiratory_rate))
   {
     # Calculate apache score at admission
-    apache_score_vector <- apacheII_score(labs_df = labs, chart_df = charts,
+    apache_vector <- apacheII_score(labs_df = labs, chart_df = charts,
                                           patient_df = mimic_preproc$stays %>% 
                                             filter(subject_id == subj,
                                                    hadm_id == adm),
@@ -457,66 +538,32 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
                                           prev_diagnoses = history,
                                           arf = acute_renal_failure)
     # Sum score
-    if(is.na(apache_score_vector["bicarbonate"]))
+    if(is.na(apache_vector$full_scores["bicarbonate"]))
     {
-      apache_II <- sum(apache_score_vector[c("temperature", "map", "pulse", "respiratory",
+      apache_II <- sum(apache_vector$full_scores[c("temperature", "map", "pulse", "respiratory",
                                              "oxygen", "arterialpH", "sodium", "potassium",
                                              "creatinine", "haematocrit", "whitebloodcount",
-                                             "glasgowcoma", "age", "chronic")])
+                                             "glasgowcoma", "age", "chronic")], na.rm = T)
     }else
     {
-      apache_II <- sum(apache_score_vector[c("temperature", "map", "pulse", "respiratory",
+      apache_II <- sum(apache_vector$full_scores[c("temperature", "map", "pulse", "respiratory",
                                              "bicarbonate", "sodium", "potassium",
                                              "creatinine", "haematocrit", "whitebloodcount",
-                                             "glasgowcoma", "age", "chronic")])
+                                             "glasgowcoma", "age", "chronic")], na.rm = T)
     }
 
     high_apache <- apache_II > 20
-    
-    # Calculate apache score at discharge
-    apache_score_discharge <- apacheII_score_discharge(labs_df = labs, chart_df = charts,
-                                          patient_df = mimic_preproc$stays %>%
-                                            filter(subject_id == subj,
-                                                   hadm_id == adm),
-                                          time_of_discharge = discharge_time,
-                                          elect_admit = elective_admission,
-                                          prev_diagnoses = history,
-                                          arf = acute_renal_failure)
-    apache_score_vector_discharge <- apache_score_discharge$score
-    apache_value_vector_discharge <- apache_score_discharge$value
-    
-    # Sum score
-    if(is.na(apache_score_vector_discharge["bicarbonate"]))
-    {
-      apache_II_discharge <- sum(apache_score_vector_discharge[c("temperature", "map", "pulse", "respiratory",
-                                             "oxygen", "arterialpH", "sodium", "potassium",
-                                             "creatinine", "haematocrit", "whitebloodcount",
-                                             "glasgowcoma", "age", "chronic")])
-    }else
-    {
-      apache_II_discharge <- sum(apache_score_vector_discharge[c("temperature", "map", "pulse", "respiratory",
-                                             "bicarbonate", "sodium", "potassium",
-                                             "creatinine", "haematocrit", "whitebloodcount",
-                                             "glasgowcoma", "age", "chronic")])
-    }
   }else
   {
     apache_II <- NA
     high_apache <- NA
-    apache_II_discharge <- NA
+    apache_vector <- list(full_values = c("temperature" = NA, "map" = NA, "pulse" = NA,
+                                          "respiratory" = NA, "arterialpH" = NA, "sodium" = NA,
+                                          "potassium" = NA, "creatinine" = NA, "haematocrit" = NA,
+                                          "whitebloodcount" = NA, "glasgowcoma" = NA, "bicarbonate" = NA,
+                                          "fractioninspiredoxygen" = NA, "arterialoxygen" = NA,
+                                          "arterialcarbon" = NA))
   }
-  
-  # Fialho's variables
-  if(!chart_missing | !lab_missing | !is.na(respiratory_rate))
-  {
-    fialho_vars <- fialho_variables(discharge_time,
-                                    charts,
-                                    labs)
-  }else
-  {
-    fialho_vars <- rep(NA, 6)
-  }
-  
   
   # I/O Predictors----------
   
@@ -565,44 +612,26 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              after_hours_discharge, los_7, elective_admission,
              admission_source, acute_renal_failure, apache_II,
              # Martin variables
-             serum_glucose, blood_urea_nitrogen, serum_choride,
+             serum_glucose, blood_urea_nitrogen, serum_chloride,
              respiratory_rate, atrial_fibrillation, renal_insufficiency,
-             # Fialho variables
-             final_pulse = fialho_vars[1], final_temp = fialho_vars[2],
-             final_pO2 = fialho_vars[3], final_bp = fialho_vars[4],
-             final_platelets = fialho_vars[5], final_lactate = fialho_vars[6],
              # APACHE-II variables
-             apache_temperature = apache_score_vector["temperature"],
-             apache_map = apache_score_vector["map"],
-             apache_pulse = apache_score_vector["pulse"],
-             apache_respiratory = apache_score_vector["respiratory"],
-             apache_artpH = apache_score_vector["arterialpH"],
-             apache_sodium = apache_score_vector["sodium"],
-             apache_potassium = apache_score_vector["potassium"],
-             apache_creatinine = apache_score_vector["creatinine"],
-             apache_hematocrit = apache_score_vector["haematocrit"],
-             apache_wbc = apache_score_vector["whitebloodcount"],
-             apache_gcs = apache_score_vector["glasgowcoma"],
-             apache_age = apache_score_vector["age"],
-             apache_oxygenation = apache_score_vector["oxygen"],
-             apache_chronic = apache_score_vector["chronic"],
-             apache_bicarbonate = apache_score_vector["bicarbonate"],
-             apache_II_discharge,
-             apache_temperature_discharge = apache_value_vector_discharge["temperature"],
-             apache_map_discharge = apache_value_vector_discharge["map"],
-             apache_pulse_discharge = apache_value_vector_discharge["pulse"],
-             apache_respiratory_discharge = apache_value_vector_discharge["respiratory"],
-             apache_artpH_discharge = apache_value_vector_discharge["arterialpH"],
-             apache_sodium_discharge = apache_value_vector_discharge["sodium"],
-             apache_potassium_discharge = apache_value_vector_discharge["potassium"],
-             apache_creatinine_discharge = apache_value_vector_discharge["creatinine"],
-             apache_hematocrit_discharge = apache_value_vector_discharge["haematocrit"],
-             apache_wbc_discharge = apache_value_vector_discharge["whitebloodcount"],
-             apache_gcs_discharge = apache_value_vector_discharge["glasgowcoma"],
-             apache_age_discharge = apache_value_vector_discharge["age"],
-             apache_oxygenation_discharge = apache_value_vector_discharge["oxygen"],
-             apache_chronic_discharge = apache_value_vector_discharge["chronic"],
-             apache_bicarbonate_discharge = apache_value_vector_discharge["bicarbonate"]
+             temperature = apache_vector$full_values["temperature"],
+             mean_arterial_pressure = apache_vector$full_values["map"],
+             pulse = apache_vector$full_values["pulse"],
+             respiratory_rate = apache_vector$full_values["respiratory"],
+             arterial_ph = apache_vector$full_values["arterialpH"],
+             sodium = apache_vector$full_values["sodium"],
+             potassium = apache_vector$full_values["potassium"],
+             creatinine = apache_vector$full_values["creatinine"],
+             hematocrit = apache_vector$full_values["haematocrit"],
+             wbc = apache_vector$full_values["whitebloodcount"],
+             gcs = apache_vector$full_values["glasgowcoma"],
+             arterial_o2 = apache_vector$full_values["arterialoxygen"],
+             arterial_co2 = apache_vector$full_values["arterialcarbon"],
+             bicarbonate = apache_vector$full_values["bicarbonate"],
+             # Additional variables
+             glasgow_coma_below_15, days_before_ICU, respiratory_support,
+             high_risk_speciality, length_of_stay = ceiling(los)
              )
   #row.names(output) <- i
   output
@@ -610,7 +639,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
 }
 row.names(predictors) <- c()
 stopImplicitCluster()
-proc.time() - ptm # 1481s (~25 min)
+proc.time() - ptm # 160 s
 
 # Write and quality control ------------
 
