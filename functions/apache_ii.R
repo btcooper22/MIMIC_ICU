@@ -16,36 +16,63 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   # prev_diagnoses <- history
   # arf <- acute_renal_failure
   
-  # Helper function: Find closest chart measurement to admission (or up to 12h before)
-  filter_closest <- function(.df, time, type = "chart")
+  # Helper function: Find measurements within 24h of admission (or before, if not availble)
+  filter_window <- function(.df, time, type = "chart")
   {
-    if(type == "chart")
+    # Filter within 24 of admission
+      if(type == "chart")
+      {
+        out_df <- .df %>% 
+          mutate(window = difftime(CHARTTIME, time,
+                                   units = "hours"))  %>% 
+          filter(window < 24 & 
+                   window >= 0)
+      } else
+      {
+        out_df <- .df %>% 
+          mutate(window = difftime(charttime, time,
+                                   units = "hours"))  %>% 
+          filter(window < 24& 
+                   window >= 0)
+      }
+    
+    # Take nearest pre-admission if none available
+    if(nrow(out_df) == 0)
     {
-      .df %>% 
-        mutate(after_admission = difftime(CHARTTIME, time,
-                                          units = "hours"))  %>% 
-        filter(after_admission > -12) %>% 
-        slice_min(abs(after_admission))
-    } else
-    {
-      .df %>% 
-        mutate(after_admission = difftime(charttime, time,
-                                          units = "hours")) %>% 
-        filter(after_admission > -12) %>% 
-        slice_min(abs(after_admission))
+      if(type == "chart")
+      {
+        out_df <- .df %>% 
+          mutate(window = difftime(CHARTTIME, time,
+                                   units = "hours"))  %>% 
+          filter(window < 0) %>% 
+          slice_min(window)
+      }else
+      {
+        out_df <- .df %>% 
+          mutate(window = difftime(charttime, time,
+                                   units = "hours"))  %>% 
+          filter(window < 0) %>% 
+          slice_min(window)
+      }
     }
+    
+    # Return NA if none available at all
+    if(nrow(out_df) == 0)
+    {
+      ifelse(type == "chart",
+             return(data.frame(VALUENUM = NA)),
+             return(data.frame(valuenum = NA)))
+      
+    }
+    return(out_df)
   }
   
-  # Average value if multiple "simultaneous" measurements
-  average <- function(val)
+  # Filter out implausible values
+  implausability_filter <- function(val, good_range)
   {
-    if(length(val) > 1)
-    {
-      return(mean(val))
-    }else
-    {
-      return(val)
-    }
+    val[val < good_range[1]] <- NA
+    val[val > good_range[2]] <- NA
+    return(val)
   }
   
   # NA value if missing score
@@ -60,23 +87,46 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     }
   }
   
+  # Take the worst value inside the window
+  worst_value <- function(val, bad_direction)
+  {
+    if(all(is.na(val)))
+    {
+      return(NA)
+    }else 
+    {
+      if(bad_direction == "max")
+      {
+        return(max(val, na.rm = TRUE))
+      }else if(bad_direction == "min")
+      {
+        return(min(val, na.rm = TRUE))
+      } else
+      {
+        return(val[which.max(abs(val - bad_direction))])
+      }
+    }
+  }
+  
   # Calculate temperature---------
   
   # Gather all temperature measurements
   temp_measurements <- chart_df %>% 
     filter(ITEMID %in% c(676, 677, 678, 679, 223761, 223762)) %>% 
     # Convert any F to C
-    mutate(value_degC = ifelse(ITEMID %in% c(678, 679, 223761),
+    mutate(VALUENUM = ifelse(ITEMID %in% c(678, 679, 223761),
                                (VALUENUM - 32) * 5/9,
                                VALUENUM)
            )
   
   # Find closest to ICU admission 
   temp_value <- temp_measurements %>% 
-    filter_closest(admission_time) %>% 
-    select(value_degC) %>% deframe()
+    filter_window(admission_time) %>% 
+    select(VALUENUM) %>% deframe()
   
-  temp_value %<>% average()
+  temp_value %<>%
+    implausability_filter(c(30,40)) %>% 
+    worst_value(37.2)
   
   # Score
   temp_score <- case_when(
@@ -93,7 +143,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   systolic_bp <- chart_df %>% 
     filter(ITEMID %in% c(6, 51, 455, 6701, 220050, 220179)) %>% 
     # Find closest
-    filter_closest(admission_time) %>% 
+    filter_window(admission_time) %>% 
     # Extract sBP
     select(VALUENUM) %>% deframe()
   
@@ -102,13 +152,21 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     filter(ITEMID %in% c(8364, 8368, 8441, 
                          8555, 220051, 220180)) %>% 
     # Find closest
-    filter_closest(admission_time) %>% 
+    filter_window(admission_time) %>% 
     # Extract sBP
     select(VALUENUM) %>% deframe()
   
+  # Find worst
+  systolic_bp %<>% 
+    implausability_filter(c(70,220)) %>% 
+    worst_value("max")
+  
+  diastolic_bp %<>%
+    implausability_filter(c(40,140)) %>% 
+    worst_value("max")
+  
   # Calculate MAP and score
   map_value <- (systolic_bp + (2 * diastolic_bp) )/ 3
-  map_value %<>% average()
   map_score <- case_when(
     map_value >= 160 | map_value <= 49 ~ 4L,
     map_value >= 130 ~ 3L,
@@ -124,9 +182,13 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Find closest to ICU admission 
   pulse_value <- pulse_measurements %>% 
-    filter_closest(admission_time) %>% 
+    filter_window(admission_time) %>% 
     select(VALUENUM) %>% deframe()
-  pulse_value %<>% average()
+  
+  # Find worst
+  pulse_value %<>%
+    implausability_filter(c(20,200)) %>% 
+    worst_value(90)
   
   # Score
   pulse_score <- case_when(
@@ -146,9 +208,13 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Find closest to ICU admission 
   respiratory_value <- respiratory_measurements %>% 
-    filter_closest(admission_time) %>% 
+    filter_window(admission_time) %>% 
     select(VALUENUM) %>% deframe()
-  respiratory_value %<>% average()
+  
+  # Find worst
+  respiratory_value %<>%
+    implausability_filter(c(0,60)) %>% 
+    worst_value("max")
   
   # Score
   respiratory_score <-  case_when(
@@ -167,14 +233,13 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Find closest to ICU admission 
   artpH_value <- artpH_measurements %>% 
-    filter_closest(admission_time) %>% 
+    filter_window(admission_time) %>% 
     select(VALUENUM) %>% deframe()
-  artpH_value %<>% average()
   
-  if(length(artpH_value) > 1)
-  {
-    artpH_value <- mean(artpH_value)
-  }
+  # Find worst
+  artpH_value %<>% 
+    implausability_filter(c(7,8)) %>% 
+    worst_value(7.55)
   
   # Score
   artpH_score <-  case_when(
@@ -193,9 +258,13 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Find closest to ICU admission 
   sodium_value <- sodium_measurements %>% 
-    filter_closest(admission_time, "labs") %>% 
+    filter_window(admission_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  sodium_value %<>% average()
+  
+  # Find worst
+  sodium_value %<>% 
+    implausability_filter(c(100,160)) %>% 
+    worst_value(140)
   
   # Score
   sodium_score <-  case_when(
@@ -214,9 +283,13 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Find closest to ICU admission 
   potassium_value <- potassium_measurements %>% 
-    filter_closest(admission_time, "labs") %>% 
+    filter_window(admission_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  potassium_value %<>% average()
+  
+  # Find worst
+  potassium_value %<>%
+    implausability_filter(c(0,8.5)) %>% 
+    worst_value(4.5)
   
   # Score
   potassium_score <- case_when(
@@ -227,7 +300,6 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     is.numeric(potassium_value) ~ 0L
   )
 
-  
   # Calculate serum creatinine (mg/dL)------------
   
   # Gather all serum creatinine measurements
@@ -236,9 +308,13 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Find closest to ICU admission 
   creatinine_value <- creatinine_measurements %>% 
-    filter_closest(admission_time, "labs") %>% 
+    filter_window(admission_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  creatinine_value %<>% average()
+  
+  # Find worst
+  creatinine_value %<>% 
+    implausability_filter(c(0,6)) %>% 
+    worst_value("max")
   
   # Score
   creatinine_score <- case_when(
@@ -262,9 +338,13 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Find closest to ICU admission 
   hematocrit_value <- hematocrit_measurements %>% 
-    filter_closest(admission_time, "labs") %>% 
+    filter_window(admission_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  hematocrit_value %<>% average()
+  
+  # Find worst
+  hematocrit_value %<>%
+    implausability_filter(c(15,60)) %>% 
+    worst_value(44)
   
   # Score
   hematocrit_score <- case_when(
@@ -282,9 +362,13 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Find closest to ICU admission 
   wbc_value <- wbc_measurements %>% 
-    filter_closest(admission_time, "labs") %>% 
+    filter_window(admission_time, "labs") %>% 
     select(valuenum) %>% deframe()
-  wbc_value %<>% average()
+
+  # Find worst
+  wbc_value %<>%
+    implausability_filter(c(0,50)) %>% 
+    worst_value("max")
   
   # Score
   wbc_score <- case_when(
@@ -310,21 +394,21 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Find closest motor measurement
   gcs_motor_value <- gcs_motor_measurements %>% 
-    filter_closest(admission_time) %>% 
+    filter_window(admission_time) %>% 
     select(VALUENUM) %>%  deframe()
-  gcs_motor_value %<>% average()
+  gcs_motor_value %<>% worst_value("min")
   
   # Find closest verbal measurement
   gcs_verbal_value <- gcs_verbal_measurements %>% 
-    filter_closest(admission_time) %>% 
+    filter_window(admission_time) %>% 
     select(VALUENUM) %>%  deframe()
-  gcs_verbal_value %<>% average()
+  gcs_verbal_value %<>% worst_value("min")
   
   # Find closest eye measurement
   gcs_eye_value <- gcs_eye_measurements %>% 
-    filter_closest(admission_time) %>% 
+    filter_window(admission_time) %>% 
     select(VALUENUM) %>%  deframe()
-  gcs_eye_value %<>% average()
+  gcs_eye_value %<>% worst_value("min")
   
   # Sum and score
   gcs_value <- gcs_motor_value + gcs_verbal_value + gcs_eye_value
@@ -357,16 +441,21 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   fio2_measurements <- chart_df %>% 
     filter(ITEMID %in% c(223835, 2981, 3420))
   
-  # Find closest to ICU admission 
-  fio2_value <- fio2_measurements %>% 
-    filter_closest(admission_time) %>% 
-    select(VALUENUM) %>% deframe()
-  fio2_value %<>% average()
-  
   # Set to 21 if measurements missing
-  if(is_empty(fio2_value))
+  if(nrow(fio2_measurements) == 0)
   {
     fio2_value <- 21
+  }else
+  {
+    # Find closest to ICU admission 
+    fio2_value <- fio2_measurements %>% 
+      filter_window(admission_time) %>% 
+      select(VALUENUM) %>% deframe()
+    
+    # Find worst
+    fio2_value %<>% 
+      implausability_filter(c(21,100)) %>% 
+      worst_value("max")
   }
   
   # Calculate arterial o2
@@ -375,23 +464,31 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Find closest to ICU admission 
   pao2_value <- pao2_measurements %>% 
-    filter_closest(admission_time) %>% 
+    filter_window(admission_time) %>% 
     select(VALUENUM) %>% deframe()
-  pao2_value %<>% average()
+
+  # Find worst
+  pao2_value %<>% 
+    implausability_filter(c(20,250)) %>% 
+    worst_value("min")
+  
+  # Calculate Pco2
+  paco2_measurements <- chart_df %>% 
+    filter(ITEMID %in%  c(220235, 777, 778, 3784, 3835, 3836))
+  
+  # Find closest to ICU admission 
+  paco2_value <- paco2_measurements %>% 
+    filter_window(admission_time) %>% 
+    select(VALUENUM) %>% deframe()
+  
+  # Find worst
+  paco2_value %<>%
+    implausability_filter(c(8,200)) %>% 
+    worst_value(40)
   
   # If fio2 > 0.5 use aa_grad
-  if(fio2_value > 50)
+  if(fio2_value > 50 & !is.na(fio2_value))
   {
-    # Calculate Pco2
-    paco2_measurements <- chart_df %>% 
-      filter(ITEMID %in%  c(779, 220235, 777, 778, 3784, 3835, 3836))
-    
-    # Find closest to ICU admission 
-    paco2_value <- paco2_measurements %>% 
-      filter_closest(admission_time) %>% 
-      select(VALUENUM) %>% deframe()
-    paco2_value %<>% average()
-    
     # Calculate AA gradient
     elev <-  5
     patm <- 760 * exp(elev / -7000)
@@ -426,9 +523,13 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     
     # Find closest to ICU admission 
     bicarbonate_value <- bicarbonate_measurements %>% 
-      filter_closest(admission_time, "labs") %>% 
+      filter_window(admission_time, "labs") %>% 
       select(valuenum) %>% deframe()
-    bicarbonate_value %<>% average()
+    
+    # Find worst
+    bicarbonate_value %<>%
+      implausability_filter(c(0,60)) %>% 
+      worst_value(27)
     
     # Score
     bicarbonate_score <- case_when(
@@ -440,6 +541,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
           )
   }else
   {
+    bicarbonate_value <- NA
     bicarbonate_score <- NA
   }
   
@@ -465,7 +567,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
     }
   }
   
-  # Return full vector of scores
+  # Create score vector
   full_scores <- c("temperature" = missing_to_na(temp_score),
                    "map" = missing_to_na(map_score),
                    "pulse" = missing_to_na(pulse_score),
@@ -481,7 +583,25 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
                    "age" = missing_to_na(age_score),
                    "chronic" = missing_to_na(chronic_score),
                    "bicarbonate" = missing_to_na(bicarbonate_score))
-  return(full_scores)
+  
+  # Create value vector
+  full_values <- c("temperature" = missing_to_na(temp_value),
+                   "map" = missing_to_na(map_value),
+                   "pulse" = missing_to_na(pulse_value),
+                   "respiratory" = missing_to_na(respiratory_value),
+                   "arterialpH" = missing_to_na(artpH_value),
+                   "sodium" = missing_to_na(sodium_value),
+                   "potassium" = missing_to_na(potassium_value),
+                   "creatinine" = missing_to_na(creatinine_value),
+                   "haematocrit" = missing_to_na(hematocrit_value),
+                   "whitebloodcount" = missing_to_na(wbc_value),
+                   "glasgowcoma" = missing_to_na(gcs_value),
+                   "bicarbonate" = missing_to_na(bicarbonate_value),
+                   "fractioninspiredoxygen" = missing_to_na(fio2_value),
+                   "arterialoxygen" = missing_to_na(pao2_value),
+                   "arterialcarbon" = missing_to_na(paco2_value))
+  return(list(full_scores = full_scores, 
+              full_values = full_values))
 }
 
 

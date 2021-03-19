@@ -47,23 +47,24 @@ sum(is.na(patients$ambulation))
 patients %<>% filter(!is.na(patients$ambulation))
 
 # Filter patients missing information to calculate APACHE-II score
-sum(is.na(patients$apache_II) | is.na(patients$apache_II_discharge))
-patients %<>% filter(!is.na(patients$apache_II) & !is.na(patients$apache_II_discharge))
+sum(is.na(patients$apache_II))
+patients %<>% filter(!is.na(patients$apache_II))
 
-# Filter patients with no blood labs 24h before discharge
+# Filter patients with no blood labs
 sum(is.na(patients$hyperglycemia) | is.na(patients$anaemia))
 patients %<>% filter(!is.na(patients$hyperglycemia) & !is.na(patients$anaemia))
 
+# Assess NA
+sapply(patients, function(x) sum(is.na(x)))
+
 # Filter missing physiology on discharge
 patients %<>% 
-  filter(!is.na(apache_temperature_discharge) &
-           !is.na(apache_map_discharge) &
-           !is.na(apache_respiratory_discharge))
+  filter(!is.na(temperature) &
+           !is.na(mean_arterial_pressure) &
+           !is.na(respiratory_rate.1) &
+           !is.na(creatinine) &
+           !is.na(wbc) & !is.na(gcs))
 
-# Filter implausible
-patients %<>% 
-  filter(apache_temperature_discharge >= 30,
-          apache_temperature_discharge <= 40)
 
 # Data cleanup-------
 
@@ -111,7 +112,7 @@ probs_hammer <- probs_coefficients_hammer
 coefficients_martin <- -9.284491 +
   (0.04883 * patients$respiratory_rate) +
   (0.011588 * patients$age) +
-  (0.036104 * patients$serum_choride) +
+  (0.036104 * patients$serum_chloride) +
   (0.004967 * patients$blood_urea_nitrogen) +
   (0.580153 * patients$atrial_fibrillation) +
   (0.458202 * patients$renal_insufficiency) +
@@ -177,43 +178,28 @@ probs_frost <- nomogram_convert(scores_frost, points_system_input,
 # Bespoke model----
 
 # Vector of acceptable features
-feature_id <- c(7:29, 45:49, 51:56, 61:64)
+feature_id <- c(7:13, 15:18, 20:33, 35:40, 44:48)
 
 # Binarise readmission column
-patients %<>%
-  mutate(readmission = readmission == "Readmitted to ICU")
+patients_trim <-  patients %>% 
+  mutate(readmission = readmission == "Readmitted to ICU") %>% 
+  select(all_of(feature_id)) %>% 
+  na.omit()
 
 # Select predictor and outcome vectors
-x <- model.matrix(readmission~., patients[,feature_id])[,-1]
-y <- patients$readmission
+x <- model.matrix(readmission~., patients_trim)[,-1]
+y <- patients_trim$readmission
 
-# Find model structure
-model_structure <- foreach(i = 1:100, .combine = "rbind") %do%
-  {
-    # Determine lambda
-    print(i)
-    set.seed(i)
-    cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(patients))
-    
-    # Fit model
-    initial_model <- glmnet(x, y, alpha = 1, lambda = cv$lambda.min)
-    
-    # Output
-    data.frame(varname = initial_model$beta@Dimnames[[1]],
-               included = 1:length(initial_model$beta@Dimnames[[1]]) %in%
-                 (initial_model$beta@i + 1)) %>% 
-      pivot_wider(names_from = "varname",
-                  values_from = "included") %>% 
-      mutate(iteration = i)
-    
-  }
+# Determine lambda
+cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(patients_trim),
+                family = "binomial", tytype.measure = "auc")
 
-structure_assessment <- model_structure %>% 
-  select(-iteration) %>% 
-  pivot_longer(1:38) %>% 
-  group_by(name) %>% 
-  summarise(prop = mean(value)) %>% 
-  filter(prop > 0.95)
+# Fit model
+initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.85),
+                        family = "binomial")
+
+# Identify retained variables
+initial_model$beta
 
 # Loop through datasets
 ptm <- proc.time()
@@ -223,21 +209,19 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
     set.seed(i)
     
     # Split data
-    patients_train <- results %>% 
+    patients_train <- patients %>% 
       group_by(readmission) %>% 
       slice_sample(prop = 0.75)
     
-    patients_validate <- results %>% 
-      filter(id %in% patients_train$id == FALSE)
+    patients_validate <- patients %>% 
+      filter(row_id %in% patients_train$row_id == FALSE)
     
     # Rebuild model
-    final_model <- glm(readmission ~ glasgow_coma_below_15 + 
-                         respiratory_support +
-                         days_before_ICU + high_risk_speciality +
-                         out_of_hours_discharge, data = patients_train,
+    final_model <- glm(readmission ~ cardiac_surgery +
+                         acute_renal_failure + length_of_stay + 
+                         days_before_ICU, data = patients_train,
                        family = "binomial")
-    
-    
+
     # Create predictions
     probs <- predict(final_model, newdata = patients_validate) %>% inverse_logit()
     
@@ -247,7 +231,7 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
     AUC <- performance(pred, measure = "auc")@y.values[[1]]
     
     # Assess calibration
-    cal <- hoslem.test(patients_validate$readmission[!is.na(probs)],
+    cal <- hoslem.test(patients_validate$readmission[!is.na(probs)] == "Readmitted to ICU",
                        probs[!is.na(probs)], g = 10)
     
     # Output
@@ -255,15 +239,92 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
                cal_chisq = cal$statistic,
                cal_p = cal$p.value)
   }
-proc.time() - ptm # 4 minutes (220 seconds)
+proc.time() - ptm 
 
 # Summarise
 output %>% 
   na.omit() %>% 
   summarise(AUC = mean(disc),
             AUC_error = sd(disc),
-            cal = mean(cal_chisq),
-            cal_error = sd(cal_chisq))
+            cal = median(cal_chisq),
+            cal_error_low = quantile(cal_chisq, 0.25),
+            cal_error_high = quantile(cal_chisq, 0.75))
+
+# AUC  AUC_error      cal cal_error_low cal_error_high
+# 0.653 0.039          8.15     5.62      11.26
+
+# Discrimination
+set.seed(which.min(abs(output$disc - median(output$disc))))
+
+# Split data
+patients_train <- patients %>% 
+  group_by(readmission) %>% 
+  slice_sample(prop = 0.75)
+
+patients_validate <- patients %>% 
+  filter(subject_id %in% patients_train$subject_id == FALSE)
+
+# Rebuild model
+final_model <- glm(readmission ~ cardiac_surgery +
+                     acute_renal_failure + length_of_stay + 
+                     days_before_ICU, data = patients_train,
+                   family = "binomial")
+
+# Create predictions
+probs <- predict(final_model, newdata = patients_validate) %>% inverse_logit()
+
+# Assess discrimination
+pred <- prediction(probs[!is.na(probs)],
+                   patients_validate$readmission[!is.na(probs)])
+
+# Calibration
+set.seed(which.min(abs(output$cal_chisq - median(output$cal_chisq, na.rm = TRUE))))
+
+# Split data
+patients_train <- patients %>% 
+  group_by(readmission) %>% 
+  slice_sample(prop = 0.75)
+
+patients_validate <- patients %>% 
+  filter(subject_id %in% patients_train$subject_id == FALSE)
+
+# Rebuild model
+final_model <- glm(readmission ~ cardiac_surgery +
+                     acute_renal_failure + length_of_stay + 
+                     days_before_ICU, data = patients_train,
+                   family = "binomial")
+
+# Create predictions
+probs <- predict(final_model, newdata = patients_validate) %>% inverse_logit()
+
+# Split to deciles
+decile_df <- tibble(
+  patient_id = 1:nrow(patients_validate),
+  readmission = patients_validate$readmission,
+  probs,
+  decile = ntile(probs, 10)) %>% 
+  na.omit()
+
+# Measure calibration
+calibration_df <- decile_df %>% 
+  select(readmission, probs, decile) %>% 
+  group_by(decile) %>%
+  summarise(N = length(readmission),
+            observed = (sum(readmission == "Readmitted to ICU") / length(readmission)) * 100,
+            predicted = mean(probs * 100),
+            error = sd(probs * 100))
+
+# Quantify calibration
+cal_test <- hoslem.test(patients_validate$readmission[!is.na(probs)] == "Readmitted to ICU",
+                        probs[!is.na(probs)], g = 10)
+
+# Combine and write
+list(model = "bespoke",
+     data = "MIMIC",
+     discrimination = pred,
+     calibration = cal_test,
+     deciles = calibration_df) %>% 
+  write_rds("scripts/readmission/shared/models/MIMIC_bespoke.RDS")
 
 # Discrimination----------
 
@@ -316,7 +377,7 @@ data.frame(x = performance_hammer@x.values[[1]],
 # Split data into deciles
 deciles_df <- tibble(
   patient_id = 1:nrow(patients),
-  readmission = patients$readmission,
+  readmission = patients$readmission == "Readmitted to ICU",
   probs_hammer,
   decile_hammer = ntile(probs_hammer, 10),
   probs_martin,
@@ -363,29 +424,34 @@ hoslem_martin <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_martin, g = 10)
 hoslem_frost <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_frost, g = 10)
-
-# Calculate brier scores
-brier_df <- rbind(
-  brier_extraction(patients$readmission == "Readmitted to ICU", probs_hammer) %>% 
-    mutate(model = "hammer"),
-  brier_extraction(patients$readmission == "Readmitted to ICU", probs_martin) %>% 
-    mutate(model = "martin"),  
-  brier_extraction(patients$readmission == "Readmitted to ICU", probs_frost) %>% 
-    mutate(model = "frost")
-)
-
-# Plot brier scores
-brier_df %>% 
-  pivot_longer(1:3) %>% 
-  ggplot(aes(x = model, y = value))+
-  geom_bar(stat = "identity", colour = "black",
-           aes(fill = model))+
-  facet_wrap(~name, scales = "free_y")+
-  theme_classic(20)+
-  theme(legend.position = "none")+
-  labs(x = "", y = "")+
-  scale_fill_brewer(palette = "Set1",
-                      name = "")
+hoslem_hammer
+hoslem_martin
+hoslem_frost
 
 # Write final patients file
 write_csv(patients, "data/final_patients.csv")
+
+# Combine and write----
+
+list(model = "hammer",
+     data = "MIMIC",
+     discrimination = prediction_hammer,
+     calibration = hoslem_hammer,
+     deciles = cal_hammer) %>% 
+  write_rds("scripts/readmission/shared/models/MIMIC_hammer.RDS")
+
+list(model = "frost",
+     data = "MIMIC",
+     discrimination = prediction_frost,
+     calibration = hoslem_frost,
+     deciles = cal_frost) %>% 
+  write_rds("scripts/readmission/shared/models/MIMIC_frost.RDS")
+
+
+list(model = "martin",
+     data = "MIMIC",
+     discrimination = prediction_martin,
+     calibration = hoslem_martin,
+     deciles = cal_martin) %>% 
+  write_rds("scripts/readmission/shared/models/MIMIC_martin.RDS")
+
