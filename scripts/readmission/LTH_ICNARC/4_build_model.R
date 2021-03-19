@@ -49,7 +49,7 @@ y <- results_complete$readmission
 
 # Determine lambda
 cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(results_complete),
-                family = "binomial")
+                family = "binomial", type.measure = "auc")
 
 # Fit model
 initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.85),
