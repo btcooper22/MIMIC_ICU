@@ -627,7 +627,7 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              wbc = apache_vector$full_values["whitebloodcount"],
              gcs = apache_vector$full_values["glasgowcoma"],
              arterial_o2 = apache_vector$full_values["arterialoxygen"],
-             arterial_co2 = apache_vector$full_values["arterialcarbonarterialcarbon"],
+             arterial_co2 = apache_vector$full_values["arterialcarbon"],
              bicarbonate = apache_vector$full_values["bicarbonate"],
              # Additional variables
              glasgow_coma_below_15, days_before_ICU, respiratory_support,
