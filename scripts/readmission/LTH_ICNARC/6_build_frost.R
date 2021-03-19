@@ -95,7 +95,7 @@ list(model = "frost",
      discrimination = pred,
      calibration = hoslem_frost,
      deciles = calibration_df) %>% 
-  write_rds("scripts/readmission/shared/models/MIMIC_frost.RDS")
+  write_rds("scripts/readmission/shared/models/LTH_ICNARC_frost.RDS")
 
 
 
