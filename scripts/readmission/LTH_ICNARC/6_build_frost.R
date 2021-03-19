@@ -69,9 +69,33 @@ pred <- prediction(probs_frost, results$readmission)
 perf <- performance(pred, "tpr", "fpr")
 performance(pred, measure = "auc")@y.values[[1]]
 
+# Split to deciles
+decile_df <- tibble(
+  patient_id = 1:nrow(results),
+  readmission = results$readmission,
+  probs = probs_frost,
+  decile = ntile(probs_frost, 10)) %>% 
+  na.omit()
+
+# Measure calibration
+calibration_df <- decile_df %>% 
+  select(readmission, probs, decile) %>% 
+  group_by(decile) %>%
+  summarise(N = length(readmission),
+            observed = (sum(readmission) / length(readmission)) * 100,
+            predicted = mean(probs * 100),
+            error = sd(probs * 100))
+
 # Assess calibration
-hoslem.test(results$readmission,
-            probs_frost, g = 10)
+hoslem_frost <- hoslem.test(results$readmission,
+                            probs_frost, g = 10)
+
+list(model = "frost",
+     data = "LTH_ICNARC",
+     discrimination = pred,
+     calibration = hoslem_frost,
+     deciles = calibration_df) %>% 
+  write_rds("scripts/readmission/shared/models/MIMIC_frost.RDS")
 
 
 
