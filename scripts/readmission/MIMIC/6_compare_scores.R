@@ -206,6 +206,7 @@ ptm <- proc.time()
 output <- foreach(i = 1:10000, .combine = "rbind") %do%
   {
     # Seed
+    print(i)
     set.seed(i)
     
     # Split data
@@ -219,7 +220,8 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
     # Rebuild model
     final_model <- glm(readmission ~ cardiac_surgery +
                          acute_renal_failure + length_of_stay + 
-                         days_before_ICU, data = patients_train,
+                         days_before_ICU + blood_urea_nitrogen,
+                       data = patients_train,
                        family = "binomial")
 
     # Create predictions
