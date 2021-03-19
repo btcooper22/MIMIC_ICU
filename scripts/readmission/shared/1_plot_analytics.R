@@ -4,6 +4,8 @@ require(ROCR)
 require(foreach)
 require(dplyr)
 require(tidyr)
+require(ggplot2)
+require(patchwork)
 
 # Load models
 ICNARC_bespoke <- read_rds("scripts/readmission/shared/models/LTH_ICNARC_bespoke.RDS")
@@ -42,4 +44,115 @@ performance_df %>%
               values_from = c("AUC", "chisq", "p")) 
 
 # Plot discrimination----
+discrimination_df <- foreach(i = 1:length(model_list), .combine = "rbind") %do%
+  {
+    # Extract prediction object
+    pred <- model_list[[i]][3]$discrimination
+    
+    # Calculate performance
+    perf <- performance(pred, "tpr", "fpr")
+    
+    # Output
+    data.frame(x = perf@x.values[[1]],
+               y = perf@y.values[[1]],
+               model = model_list[[i]][1]$model,
+               dataset = model_list[[i]][2]$data)
+  } %>% 
+  mutate(identifier = paste(dataset, model, sep = "-"))
 
+# Plot combined
+discrimination_df %>% 
+  ggplot(aes(x, y, colour = model))+
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dotted",
+              size = 1)+
+  geom_path(size = 1)+
+  labs(x = "1 - Specificity",
+       y = "Sensitivity")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  facet_wrap(~dataset)
+
+# Bespoke
+dplot_bespoke <- discrimination_df %>% 
+  filter(model == "bespoke") %>% 
+  ggplot(aes(x, y, colour = dataset))+
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dotted",
+              size = 1)+
+  geom_path(size = 2)+
+  labs(x = "1 - Specificity",
+       y = "Sensitivity")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = c("#a6cee3", "#1f78b4"),
+                      name = "Bespoke")
+
+# Hammer
+dplot_hammer <- discrimination_df %>% 
+  filter(model == "hammer") %>% 
+  ggplot(aes(x, y, colour = dataset))+
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dotted",
+              size = 1)+
+  geom_path(size = 2)+
+  labs(x = "1 - Specificity",
+       y = "Sensitivity")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = c("#b2df8a", "#33a02c"),
+                      name = "Hammer")
+
+# Martin
+dplot_martin <- discrimination_df %>% 
+  filter(model == "martin") %>% 
+  ggplot(aes(x, y, colour = dataset))+
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dotted",
+              size = 1)+
+  geom_path(size = 2)+
+  labs(x = "1 - Specificity",
+       y = "Sensitivity")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = c("#fb9a99", "#e31a1c"),
+                      name = "Martin")
+
+# Frost
+dplot_frost <- discrimination_df %>% 
+  filter(model == "frost") %>% 
+  ggplot(aes(x, y, colour = dataset))+
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dotted",
+              size = 1)+
+  geom_path(size = 2)+
+  labs(x = "1 - Specificity",
+       y = "Sensitivity")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = c("#cab2d6", "#6a3d9a"),
+                      name = "Frost")
+
+# Write
+dplot_colour <- (dplot_bespoke + dplot_frost) / (dplot_hammer + dplot_martin)
+ggsave("figures/Discrimination_colour.png", dplot_colour,
+       height = 15, width = 15)
+
+# B/W Version
+bw_plot <- discrimination_df %>% 
+  ggplot(aes(x, y, colour = identifier))+
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dotted",
+              size = 1)+
+  geom_path(size = 2)+
+  labs(x = "1 - Specificity",
+       y = "Sensitivity")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_colour_manual(values = rep("#f0f0f0",8),
+                      name = "BW")
+
+# Write
+dplot_bw <- (bw_plot + bw_plot) / (bw_plot + bw_plot)
+ggsave("figures/Discrimination_BW.png", dplot_bw,
+       height = 15, width = 15)
