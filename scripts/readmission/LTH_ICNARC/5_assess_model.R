@@ -154,4 +154,4 @@ list(model = "bespoke",
      discrimination = pred,
      calibration = cal_test,
      deciles = calibration_df) %>% 
-  write_rds("scripts/readmission/shared/data/LTH_ICNARC_bespoke")
+  write_rds("scripts/readmission/shared/models/LTH_ICNARC_bespoke.RDS")
