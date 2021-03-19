@@ -9,7 +9,7 @@ options(dplyr.summarise.inform = FALSE)
 # Load preprocessed data
 mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
 
-# Create outcome measures: Any subsequent nonelective readmission-------------------
+# Create outcome measures: Any subsequent nonelective readmission within a year-------------------
 
 # Prepare parallel options
 ptm <- proc.time()
@@ -22,7 +22,8 @@ registerDoParallel(ifelse(detectCores() <= 12,
 # Large loop for all patients
 outcomes <- foreach(i = 1:nrow(mimic_preproc$index_stays),
                     .combine = "rbind",
-                    .packages = c("dplyr", "magrittr")) %dopar%
+                    .packages = c("dplyr", "magrittr",
+                                  "tibble")) %dopar%
 {
   # Identify subject
   # print(i)
@@ -41,19 +42,29 @@ outcomes <- foreach(i = 1:nrow(mimic_preproc$index_stays),
     filter(admission_type != "ELECTIVE" |
              surgical_hospitalisation == TRUE)
 
-  # Flag readmission after surgical stay
-  readmission <- max(which(stays$hadm_id == surg_adm)) < nrow(stays)
+  # Find all stays after surgical admission
+
+  if(max(which(stays$hadm_id == surg_adm)) < nrow(stays))
+  {
+    subseq_stays <- stays[(max(which(stays$hadm_id == surg_adm))+1):nrow(stays),]
+    
+   surg_time <- stays %>% 
+      filter(surgical_hospitalisation == TRUE) %>% 
+      select(intime) %>% deframe() %>% min()
+   
+   readmission <- difftime(min(subseq_stays$intime),
+            surg_time) < 365
+  }else
+  {
+    readmission <- FALSE
+  }
+
 
   # Collect output
   stays %>% 
     filter(hadm_id == surg_adm) %>% 
     slice_min(intime) %>% 
-    select(subject_id, hadm_id, in_hospital_mortality,
-           dischtime, dod) %>% 
-    # Flag death within 3 years of discharge
-    mutate(long_term_mortality = difftime(output$dod, output$dischtime,
-               units = "weeks") > 52*3) %>% 
-    select(-dischtime, -dod) %>%
+    select(subject_id, hadm_id, in_hospital_mortality) %>% 
     mutate(subject_n = i,
            readmission)
 }
