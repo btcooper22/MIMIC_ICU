@@ -73,6 +73,30 @@ probs_martin <- inverse_logit(coefficients_martin)
 pred <- prediction(probs_martin, results$readmission)
 performance(pred, measure = "auc")@y.values[[1]]
 
+# Split to deciles
+decile_df <- tibble(
+  patient_id = 1:nrow(results),
+  readmission = results$readmission,
+  probs = probs_martin,
+  decile = ntile(probs_martin, 10)) %>% 
+  na.omit()
+
+# Measure calibration
+calibration_df <- decile_df %>% 
+  select(readmission, probs, decile) %>% 
+  group_by(decile) %>%
+  summarise(N = length(readmission),
+            observed = (sum(readmission) / length(readmission)) * 100,
+            predicted = mean(probs * 100),
+            error = sd(probs * 100))
+
 # Assess calibration
-hoslem.test(results$readmission,
+hoslem_martin <- hoslem.test(results$readmission,
             probs_martin, g = 10)
+
+list(model = "martin",
+     data = "LTH_ICNARC",
+     discrimination = pred,
+     calibration = hoslem_martin,
+     deciles = calibration_df) %>% 
+  write_rds("scripts/readmission/shared/models/LTH_ICNARC_martin.RDS")
