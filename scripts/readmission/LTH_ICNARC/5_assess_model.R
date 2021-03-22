@@ -12,12 +12,12 @@ source("functions/inverse_logit.R")
 results <- read_csv("data/icnarc_predictors.csv") %>% 
   filter(surgical_type != "221. Paediatric Cardiac Surgery") %>% 
   select(-height, -weight, -surgical_type) %>% 
-  select(id, readmission, anaemia,  
-         glasgow_coma_below_15,
-         high_risk_speciality,
-         out_of_hours_discharge,
-         respiratory_support,
-         clinically_ready_discharge_days) %>% 
+  select(id, readmission, apache_II,
+           pulse_rate,
+           glasgow_coma_below_15,
+           anaemia, respiratory_support,
+           clinically_ready_discharge_days,
+           high_risk_speciality) %>% 
   na.omit()
 
 # Loop through datasets
@@ -25,6 +25,7 @@ ptm <- proc.time()
 output <- foreach(i = 1:10000, .combine = "rbind") %do%
   {
     # Seed
+    print(i)
     set.seed(i)
     
     # Split data
@@ -36,11 +37,12 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
       filter(id %in% patients_train$id == FALSE)
     
     # Rebuild model
-    final_model <- glm(readmission ~ glasgow_coma_below_15 +
+    final_model <- glm(readmission ~ apache_II +
+                         pulse_rate +
+                         glasgow_coma_below_15 +
                          anaemia + respiratory_support +
-                         high_risk_speciality + 
                          clinically_ready_discharge_days +
-                         out_of_hours_discharge,
+                         high_risk_speciality,
                        data = patients_train,
                        family = "binomial")
     
@@ -91,11 +93,12 @@ patients_validate <- results %>%
   filter(id %in% patients_train$id == FALSE)
 
 # Rebuild model
-final_model <- glm(readmission ~ glasgow_coma_below_15 +
+final_model <- glm(readmission ~ apache_II +
+                     pulse_rate +
+                     glasgow_coma_below_15 +
                      anaemia + respiratory_support +
-                     high_risk_speciality + 
                      clinically_ready_discharge_days +
-                     out_of_hours_discharge,
+                     high_risk_speciality,
                    data = patients_train,
                    family = "binomial")
 
@@ -118,11 +121,12 @@ patients_validate <- results %>%
   filter(id %in% patients_train$id == FALSE)
 
 # Rebuild model
-final_model <- glm(readmission ~ glasgow_coma_below_15 +
+final_model <- glm(readmission ~ apache_II +
+                     pulse_rate +
+                     glasgow_coma_below_15 +
                      anaemia + respiratory_support +
-                     high_risk_speciality + 
                      clinically_ready_discharge_days +
-                     out_of_hours_discharge,
+                     high_risk_speciality,
                    data = patients_train,
                    family = "binomial")
 
