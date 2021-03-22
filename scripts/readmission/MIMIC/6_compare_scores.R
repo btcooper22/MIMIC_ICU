@@ -195,7 +195,7 @@ cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(patients_trim),
                 family = "binomial", tytype.measure = "auc")
 
 # Fit model
-initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.85),
+initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.875),
                         family = "binomial")
 
 # Identify retained variables
@@ -218,9 +218,8 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
       filter(row_id %in% patients_train$row_id == FALSE)
     
     # Rebuild model
-    final_model <- glm(readmission ~ cardiac_surgery +
-                         acute_renal_failure + length_of_stay + 
-                         days_before_ICU + blood_urea_nitrogen,
+    final_model <- glm(readmission ~ sex + age + 
+                         respiratory_rate + high_risk_speciality,
                        data = patients_train,
                        family = "binomial")
 
@@ -267,11 +266,10 @@ patients_validate <- patients %>%
   filter(subject_id %in% patients_train$subject_id == FALSE)
 
 # Rebuild model
-final_model <- glm(readmission ~ cardiac_surgery +
-                     acute_renal_failure + length_of_stay + 
-                     days_before_ICU, data = patients_train,
+final_model <- glm(readmission ~ sex + age + 
+                     respiratory_rate + high_risk_speciality,
+                   data = patients_train,
                    family = "binomial")
-
 # Create predictions
 probs <- predict(final_model, newdata = patients_validate) %>% inverse_logit()
 
@@ -291,9 +289,9 @@ patients_validate <- patients %>%
   filter(subject_id %in% patients_train$subject_id == FALSE)
 
 # Rebuild model
-final_model <- glm(readmission ~ cardiac_surgery +
-                     acute_renal_failure + length_of_stay + 
-                     days_before_ICU, data = patients_train,
+final_model <- glm(readmission ~ sex + age + 
+                     respiratory_rate + high_risk_speciality,
+                   data = patients_train,
                    family = "binomial")
 
 # Create predictions
