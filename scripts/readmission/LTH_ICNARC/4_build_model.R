@@ -52,7 +52,7 @@ cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(results_complete),
                 family = "binomial", type.measure = "auc")
 
 # Fit model
-initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.85),
+initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.9),
                         family = "binomial")
 
 # Identify retained variables
@@ -70,14 +70,12 @@ patients_validate <- results %>%
 
 # Rebuild model
 final_model <- glm(readmission ~ apache_II +
-                     pulse_rate +
                      glasgow_coma_below_15 +
-                     anaemia + respiratory_support +
-                     clinically_ready_discharge_days +
+                     respiratory_support +
+                     days_before_ICU +
                      high_risk_speciality,
-                     data = patients_train,
+                   data = patients_train,
                    family = "binomial")
-
 # Predict and assess----
 
 # Create predictions
