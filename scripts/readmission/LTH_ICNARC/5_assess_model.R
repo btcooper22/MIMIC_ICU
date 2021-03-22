@@ -107,7 +107,7 @@ pred <- prediction(probs[!is.na(probs)],
                    patients_validate$readmission[!is.na(probs)])
 
 # Calibration
-set.seed(which.min(abs(output$cal_chisq - median(output$cal_chisq))))
+set.seed(which.min(abs(output$cal_chisq - median(output$cal_chisq, na.rm = T))))
 
 # Split data
 patients_train <- results %>% 
