@@ -63,28 +63,18 @@ assessed_readmission <- foreach(i = 1:length(recurring_ID),
   # Find index admission
   index_admission <- patient_df %>% 
     filter(Source_ClassificationOfSurgery == "4. Elective" &
-             AdmissionType == "04. Planned local surgical admission")
+             AdmissionType == "04. Planned local surgical admission") %>% 
+    slice_min(admit_month)
   
   if(nrow(index_admission) > 1)
   {
-    # Filter by first admission
-    index_admission %<>% 
-      slice_min(admit_month)
-    
     patient_df$multiple_planned_elective <- TRUE
   }else
   {
     patient_df$multiple_planned_elective <- FALSE
   }
   
-  # Check if multiple ICU stays in first admission
-  if(nrow(index_admission) > 1)
-  {
-    patient_df$exclude_same_month <- TRUE
-  }else
-  {
-    patient_df$exclude_same_month <- FALSE
-  }
+  patient_df$exclude_same_month <- FALSE
   
   # Mark index admission
   patient_df$index_admission <- patient_df$Identifiers_IcnarcPseudoId == index_admission$Identifiers_IcnarcPseudoId[1]
