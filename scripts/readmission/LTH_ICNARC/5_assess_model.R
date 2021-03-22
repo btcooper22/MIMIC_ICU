@@ -40,8 +40,9 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
     final_model <- glm(readmission ~ apache_II +
                          glasgow_coma_below_15 +
                          respiratory_support +
-                         days_before_ICU +
-                         high_risk_speciality,
+                         anaemia + lactate +
+                         out_of_hours_discharge + 
+                         total_support,
                        data = patients_train,
                        family = "binomial")
     
@@ -95,8 +96,9 @@ patients_validate <- results %>%
 final_model <- glm(readmission ~ apache_II +
                      glasgow_coma_below_15 +
                      respiratory_support +
-                     days_before_ICU +
-                     high_risk_speciality,
+                     anaemia + lactate +
+                     out_of_hours_discharge + 
+                     total_support,
                    data = patients_train,
                    family = "binomial")
 
@@ -123,8 +125,9 @@ patients_validate <- results %>%
 final_model <- glm(readmission ~ apache_II +
                      glasgow_coma_below_15 +
                      respiratory_support +
-                     days_before_ICU +
-                     high_risk_speciality,
+                     anaemia + lactate +
+                     out_of_hours_discharge + 
+                     total_support,
                    data = patients_train,
                    family = "binomial")
 
