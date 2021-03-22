@@ -195,7 +195,7 @@ cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(patients_trim),
                 family = "binomial", tytype.measure = "auc")
 
 # Fit model
-initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.875),
+initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.85),
                         family = "binomial")
 
 # Identify retained variables
@@ -218,8 +218,9 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
       filter(row_id %in% patients_train$row_id == FALSE)
     
     # Rebuild model
-    final_model <- glm(readmission ~ sex + age + 
-                         respiratory_rate + high_risk_speciality,
+    final_model <- glm(readmission ~ age + fluid_balance_5L +
+                         acute_renal_failure + atrial_fibrillation +
+                         days_before_ICU + high_risk_speciality,
                        data = patients_train,
                        family = "binomial")
 
