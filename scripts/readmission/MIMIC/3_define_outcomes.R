@@ -58,6 +58,11 @@ outcomes <- foreach(i = 1:nrow(mimic_preproc$index_stays),
     readmission <- FALSE
   }
 
+  # Allow readmission within same hospitalisation
+  if(readmission == FALSE & (nrow(subset(stays, surgical_hospitalisation == TRUE)) > 1))
+  {
+    readmission <- TRUE
+  }
 
   # Collect output
   stays %>% 
@@ -82,6 +87,7 @@ table(outcomes$in_hospital_mortality)
 outcomes %<>% filter(in_hospital_mortality == FALSE)
 
 # How many readmissions?
+sum(outcomes$readmission)
 mean(outcomes$readmission) * 100
 
 # Write
