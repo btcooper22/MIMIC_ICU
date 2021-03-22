@@ -164,7 +164,7 @@ for(i in 1:nrow(readmitted_first))
 }
 
 # Remove patients readmitted outside of a year
-results$readmission[results$row_id %in% readmitted_first$row_id[abs(readmission_delay) > 365]] <- FALSE
+results$readmission[results$row_id %in% readmitted_first$row_id[abs(readmission_delay) > 32]] <- FALSE
 
 # Confirm no duplicates
 any(duplicated(results$row_id))
@@ -173,6 +173,7 @@ any(duplicated(results$row_id))
 length(unique(results$Identifiers_PatientPseudoId)) == nrow(results)
 
 # Count readmission rate
+sum(results$readmission)
 mean(results$readmission) * 100
 
 # Write
