@@ -12,6 +12,7 @@ require(s2dverification)
 require(scales)
 require(caret)
 require(glmnet)
+require(mice)
 
 # Load data
 patients <- read_csv("data/predictors.csv")
@@ -178,28 +179,55 @@ probs_frost <- nomogram_convert(scores_frost, points_system_input,
 # Bespoke model----
 
 # Vector of acceptable features
-feature_id <- c(7:13, 15:18, 20:33, 35:40, 44:48)
+feature_id <- c(7:13, 15:18, 20, 22:33, 35:40, 44:45, 47:48)
 
-# Binarise readmission column
-patients_trim <-  patients %>% 
-  mutate(readmission = readmission == "Readmitted to ICU") %>% 
-  select(all_of(feature_id)) %>% 
-  na.omit()
+# Impute missing
+results_mice <- read_csv("data/predictors.csv") %>% 
+  select(any_of(feature_id)) %>% 
+  mutate(age = ifelse(age == ">90", 90, age)) %>% 
+  mutate(age = floor(as.numeric(age))) %>% 
+  mice(m = 10, maxit = 10)
 
-# Select predictor and outcome vectors
-x <- model.matrix(readmission~., patients_trim)[,-1]
-y <- patients_trim$readmission
-
-# Determine lambda
-cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(patients_trim),
-                family = "binomial", tytype.measure = "auc")
-
-# Fit model
-initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.85),
-                        family = "binomial")
+model_options <- foreach(i = 1:results_mice$m, .combine = "rbind") %do%
+  {
+    print(i)
+    
+    # Binarise readmission column
+    results_imputed <- complete(results_mice, i) %>%
+      as_tibble() %>% 
+      mutate(readmission = ifelse(readmission == TRUE, 1, 0),
+             high_apache  = as.logical(high_apache),
+             hyperglycemia = as.logical(hyperglycemia),
+             anaemia = as.logical(anaemia),
+             ambulation = as.logical(ambulation),
+             fluid_balance_5L = as.logical(fluid_balance_5L),
+             glasgow_coma_below_15 = as.logical(glasgow_coma_below_15))
+    
+    # Select predictor and outcome vectors
+    x <- model.matrix(readmission~., results_imputed)[,-1]
+    y <- results_imputed$readmission
+    
+    # Determine lambda
+    cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(results_imputed),
+                    family = "binomial", type.measure = "auc")
+    
+    # Fit model
+    initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.8),
+                            family = "binomial")
+    
+    # Output
+    output <- as.matrix(initial_model$beta) %>% 
+      as.data.frame()
+    output$var <- rownames(output)
+    output$iteration <- i
+    output
+  }
 
 # Identify retained variables
-initial_model$beta
+model_options %>%
+  group_by(var) %>% 
+  summarise(prop = mean(s0 != 0)) %>% 
+  filter(prop == 1)
 
 # Loop through datasets
 ptm <- proc.time()
