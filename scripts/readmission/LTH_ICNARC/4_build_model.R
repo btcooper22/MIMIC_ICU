@@ -56,15 +56,7 @@ initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.85),
                         family = "binomial")
 
 # Identify retained variables
-data.frame(varname = initial_model$beta@Dimnames[[1]],
-           included = 1:length(initial_model$beta@Dimnames[[1]]) %in%
-             (initial_model$beta@i + 1)) %>% 
-  pivot_wider(names_from = "varname",
-              values_from = "included") %>% 
-  pivot_longer(1:34) %>% 
-  group_by(name) %>% 
-  summarise(prop = mean(value)) %>% 
-  filter(prop != 0)
+initial_model$beta
 
 # Rebuild model on complete cases for relevant variables----
 
