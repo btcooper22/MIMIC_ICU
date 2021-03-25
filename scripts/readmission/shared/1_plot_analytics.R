@@ -43,6 +43,20 @@ performance_df %>%
   pivot_wider(names_from = "dataset",
               values_from = c("AUC", "chisq", "p")) 
 
+ggplot(performance_df,
+       aes(AUC, chisq))+
+  geom_point(size = 8,
+             aes(fill = paste(model, dataset)),
+             shape = 21)+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  scale_fill_manual(values = c("#a6cee3", "#1f78b4",
+                               "#b2df8a", "#33a02c",
+                               "#fb9a99", "#e31a1c",
+                               "#cab2d6", "#6a3d9a"),
+                    name = "")+
+  scale_y_reverse()
+
 # Plot discrimination----
 discrimination_df <- foreach(i = 1:length(model_list), .combine = "rbind") %do%
   {
