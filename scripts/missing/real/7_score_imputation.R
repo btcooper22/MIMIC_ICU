@@ -259,8 +259,13 @@ results_final <- foreach(i = 1:length(results_30d_scored),
 
   }
 
+# Construct hybrids----
+
+
+# Write and process----
+
 results_final  %>%
-  write_rds("data/impute_mortality/boot_results.RDS")
+  write_rds("models/boot_results.RDS")
 
 # Process names
 names_split <- str_split(results_final$method, "_", simplify = TRUE)
@@ -420,7 +425,7 @@ means_df[14:15,2] <- "zero"
 
 # Save
 bootstrap_samples  %>%
-  write_rds("data/impute_mortality/boot_samples.RDS",
+  write_rds("models/boot_samples.RDS",
             compress = "gz")
 
 # Plot
@@ -463,7 +468,135 @@ bootstrap_samples %>%
             calibration = hdi(calib)[,2:3])
 stopCluster(cl)
 
+# Compare subsets----
 
+# Extract best longitudinal
+scores_df <- results_30d_scored[[61]]
+names(scores_df)[1] <- "apache_II"
+
+# Trim to only imputed
+scores_df %<>%
+  mutate(old_score = apache_additional_30d$apache_II) %>%
+  filter(is.na(old_score))
+
+# Extract best mice
+scores_df_mice <- results_30d_scored[[1]]
+names(scores_df_mice)[1] <- "apache_II"
+
+# Trim to only imputed
+scores_df_mice %<>%
+  mutate(old_score = apache_additional_30d$apache_II) %>%
+  filter(is.na(old_score))
+
+# Find matching subsets
+scores_df_mice <- scores_df_mice[which(!is.na(scores_df$apache_II)),]
+scores_df <- scores_df[which(!is.na(scores_df$apache_II)),]
+
+# Loop for bootstrap assessment
+results_boot_subset <- foreach(j = 1:1000, .combine = "rbind",
+                        .packages = c("dplyr", "ROCR",
+                                      "ResourceSelection")) %do%
+  {
+    print(j)
+    set.seed(j)
+    
+    # Set splits
+    scores_df$ID <- 1:nrow(scores_df)
+    scores_df_mice$ID <- 1:nrow(scores_df_mice)
+    
+    valid_df_long <- scores_df %>% 
+      filter(!is.na(apache_II)) %>% 
+      group_by(mort_30) %>% 
+      slice_sample(prop = 0.1) %>% 
+      ungroup()
+    
+    valid_df_mice <- scores_df_mice %>% 
+      filter(ID %in% valid_df_long$ID)
+    
+    # Predict
+      probs_df_long <- 
+        data.frame(probs = predict(full_model_30d, 
+                                   newdata = valid_df_long),
+                   outcome = valid_df_long$mort_30) %>% 
+        mutate(probs = inverse_logit(probs)) %>% 
+        na.omit()
+      
+      probs_df_mice <- 
+        data.frame(probs = predict(full_model_30d, 
+                                   newdata = valid_df_mice),
+                   outcome = valid_df_mice$mort_30) %>% 
+        mutate(probs = inverse_logit(probs)) %>% 
+        na.omit()
+    
+    # Discrimination
+    pred_long <- prediction(probs_df_long$probs,
+                            probs_df_long$outcome)
+    auc_long <- performance(pred_long, measure = "auc")@y.values[[1]]
+    
+    pred_mice <- prediction(probs_df_mice$probs,
+                            probs_df_mice$outcome)
+    auc_mice <- performance(pred_mice, measure = "auc")@y.values[[1]]
+    
+    # Calibration
+    cal_long <- hoslem.test(probs_df_long$outcome,
+                            probs_df_long$probs, g = 10)$statistic
+    
+    cal_mice <- hoslem.test(probs_df_mice$outcome,
+                            probs_df_mice$probs, g = 10)$statistic
+    
+    if(is.na(cal_mice) | is.na(cal_long))
+    {
+      cal_long <- hoslem.test(probs_df_long$outcome,
+                              probs_df_long$probs, g = 9)$statistic
+      
+      cal_mice <- hoslem.test(probs_df_mice$outcome,
+                              probs_df_mice$probs, g = 9)$statistic
+    }
+    
+    # Output
+    data.frame(sample = j,
+               discrim_long = auc_long,
+               discrim_mice = auc_mice,
+               calib_long = cal_long %>% unname(),
+               calib_mice = cal_mice %>% unname())
+  }
+
+
+subset_plot <- results_boot_subset %>% 
+  pivot_longer(2:5) %>% 
+  mutate(measure = ifelse(grepl("discrim", name), "discrim", "calib"),
+         method = ifelse(grepl("long", name), "longitudinal", "MICE")) %>% 
+  pivot_wider(names_from = "measure",
+             values_from = "value") %>% 
+  group_by(sample, method) %>% 
+  summarise(discrim = mean(discrim, na.rm = T),
+            calib = mean(calib, na.rm = T)) %>% 
+  ungroup()
+
+subset_means <- subset_plot %>% 
+  group_by(method) %>% 
+  summarise(discrimination = mean(discrim, na.rm = T),
+            calibration = mean(calib, na.rm = T))
+
+subset_plot %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = pal,
+                      name = "")+
+  scale_fill_manual(values = pal,
+                    name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = method),
+               size = 2, type = "norm",
+               level = 0.682)+
+geom_point(data = subset_means,
+           aes(x = discrimination,
+               y = calibration,
+               fill = method),
+           size = 4, shape = 21)
 
 
   
