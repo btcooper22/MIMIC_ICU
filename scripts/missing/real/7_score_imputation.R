@@ -271,7 +271,7 @@ scores_df %<>%
   filter(is.na(old_score))
 
 # Extract best mice
-scores_df_mice <- results_30d_scored[[1]]
+scores_df_mice <- results_30d_scored[[11]]
 names(scores_df_mice)[1] <- "apache_II"
 
 # Trim to only imputed
@@ -334,6 +334,7 @@ results_hybrid %<>%
   mutate(method = "hybrid_hybrid")
 
 # Write and process----
+results_final %>% rbind(results_hybrid)
 
 results_final %>%
   write_rds("models/boot_results.RDS")
@@ -482,6 +483,8 @@ bootstrap_samples <- foreach(i = 1:nrow(best_methods),
              mortality = mtype)
   }
 
+# Post-process----
+
 bootstrap_samples$method[bootstrap_samples$method == "average_zero"] <- "zero_zero"
 bootstrap_samples %<>% 
   mutate(method = str_split(method, "_", simplify = TRUE)[,1])
@@ -551,7 +554,7 @@ scores_df %<>%
   filter(is.na(old_score))
 
 # Extract best mice
-scores_df_mice <- results_30d_scored[[1]]
+scores_df_mice <- results_30d_scored[[11]]
 names(scores_df_mice)[1] <- "apache_II"
 
 # Trim to only imputed
