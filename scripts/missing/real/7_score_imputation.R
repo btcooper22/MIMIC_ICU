@@ -261,10 +261,81 @@ results_final <- foreach(i = 1:length(results_30d_scored),
 
 # Construct hybrids----
 
+# Extract best longitudinal
+scores_df <- results_30d_scored[[61]]
+names(scores_df)[1] <- "apache_II"
+
+# Trim to only imputed
+scores_df %<>%
+  mutate(old_score = apache_additional_30d$apache_II) %>%
+  filter(is.na(old_score))
+
+# Extract best mice
+scores_df_mice <- results_30d_scored[[1]]
+names(scores_df_mice)[1] <- "apache_II"
+
+# Trim to only imputed
+scores_df_mice %<>%
+  mutate(old_score = apache_additional_30d$apache_II) %>%
+  filter(is.na(old_score))
+
+# Find matching subsets
+scores_df_mice <- scores_df_mice[which(is.na(scores_df$apache_II)),]
+scores_df <- scores_df[which(!is.na(scores_df$apache_II)),]
+
+scores_hybrid <- rbind(scores_df, scores_df_mice)
+
+# Loop for bootstrap assessment
+results_hybrid <- foreach(j = 1:n_boot, .combine = "rbind",
+                            .packages = c("dplyr", "ROCR",
+                                          "ResourceSelection")) %dopar%
+  {
+    # Set splits
+    set.seed(j)
+    scores_hybrid$ID <- 1:nrow(scores_hybrid)
+    valid_df <- scores_hybrid %>%
+      filter(!is.na(apache_II)) %>% 
+      group_by(mort_30) %>% 
+      slice_sample(prop = 0.1) %>% 
+      ungroup()
+    
+    # Predict
+    probs_df <- 
+      data.frame(probs = predict(full_model_30d, 
+                                 newdata = valid_df),
+                 outcome = valid_df$mort_30) %>% 
+      mutate(probs = inverse_logit(probs)) %>% 
+      na.omit()
+    
+    # Discrimination
+    pred <- prediction(probs_df$probs,
+                       probs_df$outcome)
+    auc <- performance(pred, measure = "auc")@y.values[[1]]
+    
+    # Calibration
+    cal <- hoslem.test(probs_df$outcome,
+                       probs_df$probs, g = 10)$statistic
+    
+    # Output
+    data.frame(sample = j,
+               discrim = auc,
+               calib = cal %>% unname())
+  }
+
+# Process results
+results_hybrid %<>% 
+  na.omit() %>% 
+  summarise(discrimination = mean(discrim),
+            discrim_error = sd(discrim),
+            calibration = mean(calib),
+            cal_error = sd(calib)) %>% 
+  mutate(mortality = "30-day",
+         still_missing = 0) %>% 
+  mutate(method = "hybrid_hybrid")
 
 # Write and process----
 
-results_final  %>%
+results_final %>%
   write_rds("models/boot_results.RDS")
 
 # Process names
