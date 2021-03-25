@@ -9,7 +9,7 @@ options(dplyr.summarise.inform = FALSE)
 # Load preprocessed data
 mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
 
-# Create outcome measures: Any subsequent nonelective readmission within a year-------------------
+# Create outcome measures: Any subsequent nonelective readmission within 30 days-------------------
 
 # Prepare parallel options
 ptm <- proc.time()
@@ -43,7 +43,6 @@ outcomes <- foreach(i = 1:nrow(mimic_preproc$index_stays),
              surgical_hospitalisation == TRUE)
 
   # Find all stays after surgical admission
-
   if(max(which(stays$hadm_id == surg_adm)) < nrow(stays))
   {
     subseq_stays <- stays[(max(which(stays$hadm_id == surg_adm))+1):nrow(stays),]
@@ -53,12 +52,17 @@ outcomes <- foreach(i = 1:nrow(mimic_preproc$index_stays),
       select(intime) %>% deframe() %>% min()
    
    readmission <- difftime(min(subseq_stays$intime),
-            surg_time) < 365
+            surg_time) < 30
   }else
   {
     readmission <- FALSE
   }
 
+  # Allow readmission within same hospitalisation
+  if(readmission == FALSE & (nrow(subset(stays, surgical_hospitalisation == TRUE)) > 1))
+  {
+    readmission <- TRUE
+  }
 
   # Collect output
   stays %>% 
@@ -83,6 +87,7 @@ table(outcomes$in_hospital_mortality)
 outcomes %<>% filter(in_hospital_mortality == FALSE)
 
 # How many readmissions?
+sum(outcomes$readmission)
 mean(outcomes$readmission) * 100
 
 # Write

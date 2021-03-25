@@ -11,18 +11,21 @@ source("functions/inverse_logit.R")
 # Load and filter data
 results <- read_csv("data/icnarc_predictors.csv") %>% 
   filter(surgical_type != "221. Paediatric Cardiac Surgery") %>% 
-  select(-height, -weight, -surgical_type) %>% 
-  select(id, readmission, anaemia, apache_II, 
-           glasgow_coma_below_15,
-           high_risk_speciality, length_of_stay,
-           out_of_hours_discharge, pulse_rate) %>% 
-  na.omit()
+  select(-height, -weight, -surgical_type) #%>% 
+  # select(id, readmission, apache_II,
+  #          pulse_rate,
+  #          glasgow_coma_below_15,
+  #          anaemia, respiratory_support,
+  #          clinically_ready_discharge_days,
+  #          high_risk_speciality) %>% 
+  # na.omit()
 
 # Loop through datasets
 ptm <- proc.time()
 output <- foreach(i = 1:10000, .combine = "rbind") %do%
   {
     # Seed
+    print(i)
     set.seed(i)
     
     # Split data
@@ -34,11 +37,12 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
       filter(id %in% patients_train$id == FALSE)
     
     # Rebuild model
-    final_model <- glm(readmission ~ 
-                         anaemia + apache_II + 
+    final_model <- glm(readmission ~ apache_II +
                          glasgow_coma_below_15 +
-                         high_risk_speciality + length_of_stay +
-                         out_of_hours_discharge + pulse_rate,
+                         respiratory_support +
+                         anaemia + lactate +
+                         out_of_hours_discharge + 
+                         total_support,
                        data = patients_train,
                        family = "binomial")
     
@@ -89,11 +93,12 @@ patients_validate <- results %>%
   filter(id %in% patients_train$id == FALSE)
 
 # Rebuild model
-final_model <- glm(readmission ~ 
-                     anaemia + apache_II + 
+final_model <- glm(readmission ~ apache_II +
                      glasgow_coma_below_15 +
-                     high_risk_speciality + length_of_stay +
-                     out_of_hours_discharge + pulse_rate,
+                     respiratory_support +
+                     anaemia + lactate +
+                     out_of_hours_discharge + 
+                     total_support,
                    data = patients_train,
                    family = "binomial")
 
@@ -103,9 +108,10 @@ probs <- predict(final_model, newdata = patients_validate) %>% inverse_logit()
 # Assess discrimination
 pred <- prediction(probs[!is.na(probs)],
                    patients_validate$readmission[!is.na(probs)])
+performance(pred, "auc")@y.values[[1]]
 
 # Calibration
-set.seed(which.min(abs(output$cal_chisq - median(output$cal_chisq))))
+set.seed(which.min(abs(output$cal_chisq - median(output$cal_chisq, na.rm = T))))
 
 # Split data
 patients_train <- results %>% 
@@ -116,11 +122,12 @@ patients_validate <- results %>%
   filter(id %in% patients_train$id == FALSE)
 
 # Rebuild model
-final_model <- glm(readmission ~ 
-                     anaemia + apache_II + 
+final_model <- glm(readmission ~ apache_II +
                      glasgow_coma_below_15 +
-                     high_risk_speciality + length_of_stay +
-                     out_of_hours_discharge + pulse_rate,
+                     respiratory_support +
+                     anaemia + lactate +
+                     out_of_hours_discharge + 
+                     total_support,
                    data = patients_train,
                    family = "binomial")
 
