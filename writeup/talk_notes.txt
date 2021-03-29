@@ -1,0 +1,15 @@
+permutation testing
+
+set up clinical challenge more clearly
+ICU expensive, resource-hungry & dangerous
+	-Opportunity costs
+vast literature on risk scoring in crit care
+
+where going next -> concrete outputs
+
+better overview of aims
+
+introduce in-unit mortality data first
+standardise axes between 2 datasets in results
+
+make LR model clear!
