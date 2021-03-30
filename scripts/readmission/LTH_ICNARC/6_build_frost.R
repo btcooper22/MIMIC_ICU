@@ -9,12 +9,16 @@ require(foreach)
 source("functions/inverse_logit.R")
 source("functions/nomogram_convert.R")
 
-# Load data
+# Load data (2083)
 results <- read_csv("data/icnarc_predictors.csv") %>% 
   filter(surgical_type != "221. Paediatric Cardiac Surgery") %>% 
   select(id, readmission,age, sex, admission_source, apache_II,
          length_of_stay, out_of_hours_discharge, 
-         acute_renal_failure) %>% 
+         acute_renal_failure, respiratory_rate,
+         age, sodium, potassium, urea, glucose, sex, general_surgery,
+         cardiac_surgery, hyperglycaemia,
+         anaemia, apache_II, posthospital_dependency,
+         length_of_stay) %>% 
   na.omit()
 
 # Create scoring system from nomogram for APACHE-II

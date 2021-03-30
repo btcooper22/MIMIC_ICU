@@ -12,8 +12,13 @@ source("functions/inverse_logit.R")
 # Load data
 results <- read_csv("data/icnarc_predictors.csv") %>% 
   filter(surgical_type != "221. Paediatric Cardiac Surgery") %>% 
-  select(id, readmission, respiratory_rate,
-         age, sodium, potassium, urea, glucose) %>% 
+  select(id, readmission,age, sex, admission_source, apache_II,
+         length_of_stay, out_of_hours_discharge, 
+         acute_renal_failure, respiratory_rate,
+         age, sodium, potassium, urea, glucose, sex, general_surgery,
+         cardiac_surgery, hyperglycaemia,
+         anaemia, apache_II, posthospital_dependency,
+         length_of_stay) %>% 
   na.omit()
   
 # Rebuild age
