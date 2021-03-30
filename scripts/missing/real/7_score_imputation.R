@@ -533,7 +533,7 @@ bootstrap_samples %>%
                  y = calibration,
                  fill = method),
              size = 4, shape = 21)+
-  facet_wrap(~mortality, scales = "free")
+  facet_wrap(~mortality)
 
 # HDI
 bootstrap_samples %>% 
