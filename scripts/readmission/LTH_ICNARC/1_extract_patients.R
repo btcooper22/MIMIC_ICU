@@ -46,6 +46,10 @@ icnarc %<>%
 icnarc %<>%
   filter(PastMedicalHistory_AssessmentEvidenceAvailable == TRUE)
 
+# Filter empty demographics
+icnarc %<>% 
+  filter(Demographics_UnitAdmissionAgeBand != "")
+
 # Screen merged patients (ensure all patient IDs have same core demographics, at least)
 icnarc %<>%
   group_by(Identifiers_PatientPseudoId) %>%
@@ -55,10 +59,6 @@ icnarc %<>%
   ungroup() %>%
   select(Identifiers_PatientPseudoId) %>%
   left_join(icnarc)
-
-# Filter empty demographics
-icnarc %<>% 
-  filter(Demographics_UnitAdmissionAgeBand != "")
 
 # Count readmission rate
 count_admissions <- icnarc %>% 
