@@ -13,7 +13,7 @@ source("functions/apache_ii_mort.R")
 source("functions/NA_count.r")
 
 # Load preprocessed data
-mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
+mimic_preproc <- read_rds("data/mimic_preprocessed_missing.RDS")
 
 # Load outcomes
 outcomes <- read_csv("data/outcomes_mortality.csv")

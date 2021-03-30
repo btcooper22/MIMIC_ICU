@@ -271,7 +271,7 @@ ggsave("writeup/presentation_figs/misstogram_B.png",
 pal <- brewer.pal(9, "Set1")[-6]
 
 # Load data
-results <- read_rds("data/impute_mortality/boot_samples.RDS")
+results <- read_rds("models/boot_samples.RDS")
 
 # Adjust factor levels
 results %<>% 
@@ -315,7 +315,7 @@ p1 <- results %>%
                  y = calibration,
                  fill = method),
              size = 4, shape = 21)+
-  coord_cartesian(xlim = c(0.675,1),
+  coord_cartesian(xlim = c(0.65,1),
                   ylim = c(22, 0))
 
 p2 <- results %>% 
@@ -346,7 +346,7 @@ p2 <- results %>%
 
 p1 + p2
 ggsave("writeup/presentation_figs/ellipse_1.png",
-       width = 33.8, height = 17, units = "cm")
+       width = 33.8, height = 14, units = "cm")
 
 # Zero + average
 p1 <- results %>% 
@@ -374,7 +374,7 @@ p1 <- results %>%
                  y = calibration,
                  fill = method),
              size = 4, shape = 21)+
-  coord_cartesian(xlim = c(0.675,1),
+  coord_cartesian(xlim = c(0.65,1),
                   ylim = c(22, 0))
 
 p2 <- results %>% 
@@ -407,7 +407,7 @@ p2 <- results %>%
 
 p1 + p2
 ggsave("writeup/presentation_figs/ellipse_2.png",
-       width = 33.8, height = 17, units = "cm")
+       width = 33.8, height = 14, units = "cm")
 
 
 # All except recent & mice
@@ -436,7 +436,7 @@ p1 <- results %>%
                  y = calibration,
                  fill = method),
              size = 4, shape = 21)+
-  coord_cartesian(xlim = c(0.675,1),
+  coord_cartesian(xlim = c(0.65,1),
                   ylim = c(22, 0))
 
 p2 <- results %>% 
@@ -469,7 +469,7 @@ p2 <- results %>%
 
 p1 + p2
 ggsave("writeup/presentation_figs/ellipse_3.png",
-       width = 33.8, height = 17, units = "cm")
+       width = 33.8, height = 14, units = "cm")
 
 
 # Add mice
@@ -498,7 +498,7 @@ p1 <- results %>%
                  y = calibration,
                  fill = method),
              size = 4, shape = 21)+
-  coord_cartesian(xlim = c(0.675,1),
+  coord_cartesian(xlim = c(0.65,1),
                   ylim = c(22, 0))
 
 p2 <- results %>% 
@@ -531,7 +531,7 @@ p2 <- results %>%
 
 p1 + p2
 ggsave("writeup/presentation_figs/ellipse_4.png",
-       width = 33.8, height = 17, units = "cm")
+       width = 33.8, height = 14, units = "cm")
 
 # All
 p1 <- results %>% 
@@ -557,7 +557,7 @@ p1 <- results %>%
                  y = calibration,
                  fill = method),
              size = 4, shape = 21)+
-  coord_cartesian(xlim = c(0.675,1),
+  coord_cartesian(xlim = c(0.65,1),
                   ylim = c(22, 0))
 
 p2 <- results %>% 
@@ -588,4 +588,4 @@ p2 <- results %>%
 
 p1 + p2
 ggsave("writeup/presentation_figs/ellipse_5.png",
-       width = 33.8, height = 17, units = "cm")
+       width = 33.8, height = 14, units = "cm")

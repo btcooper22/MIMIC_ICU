@@ -6,8 +6,8 @@ require(doParallel)
 require(tools)
 options(dplyr.summarise.inform = FALSE)
 
-# Load preprocessed data -> Make this into own script from scratch
-mimic_preproc <- read_rds("data/mimic_preprocessed.RDS")
+# Load preprocessed data
+mimic_preproc <- read_rds("data/mimic_preprocessed_missing.RDS")
 
 # Create outcome measures: Mortality-------------------
 
@@ -88,7 +88,7 @@ table(outcomes$in_unit_mortality)
 #   filter(in_unit_mortality == FALSE)
 
 # How many patients died in hospital?
-table(outcomes$in_hospital_mortality)
+#table(outcomes$in_hospital_mortality)
 
 # How many died within 30 days
 table(outcomes$mortality_30d)

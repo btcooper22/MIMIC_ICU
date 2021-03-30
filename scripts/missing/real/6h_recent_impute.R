@@ -53,7 +53,7 @@ apache_additional <- apache_df %>%
          apache_II, missing_abg, acute_renal_failure)
 rm(apache_df)
 
-mimic_icustays <- read_rds("data/mimic_preprocessed.RDS")$stays
+mimic_icustays <- read_rds("data/mimic_preprocessed_missing.RDS")$stays
 
 # Preparation----
 
