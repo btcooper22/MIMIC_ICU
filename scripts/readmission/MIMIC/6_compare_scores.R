@@ -89,6 +89,16 @@ patients %<>%
 patients %<>% 
   mutate(admission_source = fct_relevel(admission_source, "OT"))
 
+patients_validate <- patients %>% 
+  select(row_id, readmission, sex, general_surgery,
+         cardiac_surgery, hyperglycemia, anaemia,
+         high_apache, fluid_balance_5L, ambulation,
+         los_5, respiratory_rate, age, serum_chloride,
+         blood_urea_nitrogen, atrial_fibrillation, renal_insufficiency,
+         serum_glucose, admission_source, apache_II, los_7, after_hours_discharge,
+         acute_renal_failure) %>% 
+  na.omit()
+
 # Hammer----------
 
 # Score data - coefficients
