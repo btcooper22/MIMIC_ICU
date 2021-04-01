@@ -10,25 +10,29 @@ require(tidyr)
 # Load data-------
 source("functions/data_loader_splitter.R")
 
-# Select apache variables
-amelia_results <- apache_scores %>% 
+# Perform for 5
+amelia_results_5 <- apache_scores %>% 
   as.data.frame() %>% 
-  # Perform amelia
   amelia(parallel = "no",
-         m = 100)
+         m = 5)
 
-# Extract imputed datasets
-amelia_array <- array(unlist(amelia_results$imputations), 
-                      dim = c(dim(amelia_results$imputations[[1]]), 100))
-rm(amelia_results)
-amelia_output <- apply(amelia_array, c(1,2), mean) %>% 
-  as.data.frame()
-rm(amelia_array)
-names(amelia_output) <- names(apache_scores)
+# Perform for 10
+amelia_results_10 <- apache_scores %>% 
+  as.data.frame() %>% 
+  amelia(parallel = "no",
+         m = 10)
+
+# Perform for 20
+amelia_results_20 <- apache_scores %>% 
+  as.data.frame() %>% 
+  amelia(parallel = "no",
+         m = 20)
 
 # Save to file
-all_amelia <- list(amelia_output)
-names(all_amelia) <- c("amelia_100")
+all_amelia <- list(amelia_results_5,
+                   amelia_results_10,
+                   amelia_results_20)
+names(all_amelia) <- c("amelia_5", "amelia_10", "amelia_20")
 write_rds(all_amelia, "data/impute_discharge/amelia.RDS",
           compress = "gz")
 
@@ -36,25 +40,29 @@ write_rds(all_amelia, "data/impute_discharge/amelia.RDS",
 # Load data-------
 source("functions/data_loader_splitter_admission.R")
 
-# Select apache variables
-amelia_results <- apache_scores %>% 
+# Perform for 5
+amelia_results_5 <- apache_scores %>% 
   as.data.frame() %>% 
-  # Perform amelia
   amelia(parallel = "no",
-         m = 100)
+         m = 5)
 
-# Extract imputed datasets
-amelia_array <- array(unlist(amelia_results$imputations), 
-                      dim = c(dim(amelia_results$imputations[[1]]), 100))
-rm(amelia_results)
-amelia_output <- apply(amelia_array, c(1,2), mean) %>% 
-  as.data.frame()
-rm(amelia_array)
-names(amelia_output) <- names(apache_scores)
+# Perform for 10
+amelia_results_10 <- apache_scores %>% 
+  as.data.frame() %>% 
+  amelia(parallel = "no",
+         m = 10)
+
+# Perform for 20
+amelia_results_20 <- apache_scores %>% 
+  as.data.frame() %>% 
+  amelia(parallel = "no",
+         m = 20)
 
 # Save to file
-all_amelia <- list(amelia_output)
-names(all_amelia) <- c("amelia_100")
+all_amelia <- list(amelia_results_5,
+                   amelia_results_10,
+                   amelia_results_20)
+names(all_amelia) <- c("amelia_5", "amelia_10", "amelia_20")
 write_rds(all_amelia, "data/impute_mortality/amelia.RDS",
           compress = "gz")
 

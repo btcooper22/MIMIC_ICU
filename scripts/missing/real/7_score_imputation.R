@@ -16,7 +16,7 @@ require(ggplot2)
 require(scales)
 require(car)
 require(RColorBrewer)
-pal <- brewer.pal(9, "Set1")[-6]
+pal <- c(brewer.pal(9, "Set1")[-6], "black")
 require(bayestestR)
 
 # Load functions
@@ -28,17 +28,18 @@ results_inunit <- read_rds("data/impute_mortality/average.RDS") %>%
   c(read_rds("data/impute_mortality/MICE.RDS"),
     read_rds("data/impute_mortality/KNN.RDS"),
     read_rds("data/impute_mortality/forest.RDS"),
-    read_rds("data/impute_mortality/amelia.RDS"),
     read_rds("data/impute_mortality/PCA.RDS"))
 
 results_30d <- read_rds("data/impute_discharge/average.RDS") %>% 
   c(read_rds("data/impute_discharge/MICE.RDS"),
     read_rds("data/impute_discharge/KNN.RDS"),
     read_rds("data/impute_discharge/forest.RDS"),
-    read_rds("data/impute_discharge/amelia.RDS"),
     read_rds("data/impute_discharge/PCA.RDS"))
 
 results_long <- read_rds("data/impute_discharge/recent.RDS")
+
+results_multiple <- list(amelia_inunit = read_rds("data/impute_mortality/amelia.RDS"),
+                         amelia_30d = read_rds("data/impute_discharge/amelia.RDS"))
 
 # Load data
 apache_df <- read_csv("data/apache_real_missing.csv")
@@ -67,7 +68,6 @@ apache_additional_30d <- apache_df %>%
          apache_II, missing_abg, acute_renal_failure)
 rm(apache_df)
 
-
 # Imputed datasets----
 
 # Generate scores
@@ -78,6 +78,7 @@ results_inunit_scored <- foreach(i = 1:length(results_inunit)) %do%
   }
 names(results_inunit_scored) <- names(results_inunit)
 
+# 30 day
 results_30d_scored <- foreach(i = 1:length(results_30d)) %do%
   {
     print(names(results_30d)[i])
@@ -85,6 +86,7 @@ results_30d_scored <- foreach(i = 1:length(results_30d)) %do%
   }
 names(results_30d_scored) <- names(results_30d)
 
+# Longitudinal
 results_long_scored <- foreach(i = 1:length(results_long)) %do%
   {
     print(names(results_long)[i])
@@ -103,6 +105,42 @@ results_long_scored <- foreach(i = 1:length(results_long)) %do%
 names(results_long_scored) <- names(results_long)
 
 results_30d_scored <- c(results_30d_scored, results_long_scored)
+
+# Multiple
+results_multiple_scored <- foreach(i = 1:length(results_multiple)) %do%
+  {
+    print(names(results_multiple[i]))
+    
+    # Middle loop for hyperparameters
+    scored_imputations <- foreach(j = 1:length(results_multiple[[i]])) %do%
+    {
+      df <- results_multiple[[i]][[j]]
+      print(df$m)
+      if(class(df) == "amelia")
+      {
+        # Determine additional
+        if(grepl("inunit", names(results_multiple)[i]))
+        {
+          amelia_additional <- apache_additional_inunit
+        }else
+        {
+          amelia_additional <- apache_additional_30d
+        }
+        
+        # Inner loop through m
+        foreach(k = 1:length(df$imputations)) %do%
+          {
+            apache_score(cbind(df$imputations[[k]],
+                               amelia_additional))
+          }
+      }
+    }
+    
+    # Sort names and output
+    names(scored_imputations) <- names(results_multiple[[i]])
+    scored_imputations
+  }
+names(results_multiple_scored) <- names(results_multiple)
 
 # Generate complete cases models
 full_model_inunit <- glm(mort_inunit ~ apache_II,
@@ -259,10 +297,106 @@ results_final <- foreach(i = 1:length(results_30d_scored),
 
   }
 
+# Second section for multiple imputations
+results_mult <- foreach(i = 1:length(results_multiple_scored),
+                         .combine = "rbind") %do%
+  {
+    print(names(results_multiple_scored)[i])
+    
+    # Middle loop for hyperparameters
+    scored_imputations <- foreach(j = 1:length(results_multiple_scored[[i]]),
+                                  .combine = "rbind") %do%
+      {
+        df <- results_multiple_scored[[i]][[j]]
+        print(length(df))
+        
+        # Amelia section
+        if(grepl("amelia", names(results_multiple_scored)[i]))
+        {
+          # Determine additional
+          if(grepl("inunit", names(results_multiple)[i]))
+          {
+            amelia_additional <- apache_additional_inunit
+            amelia_model <- full_model_inunit
+          }else
+          {
+            amelia_additional <- apache_additional_30d
+            amelia_model <- full_model_30d
+          }
+          mort_name <- names(amelia_additional)[3]
+          amelia_additional$row_id <- 1:nrow(amelia_additional)
+          
+          # Innermost loop for bootstrap assessment
+          results_boot_amelia <- foreach(k = 1:n_boot, .combine = "rbind",
+                                         .packages = c("dplyr", "ROCR",
+                                                       "ResourceSelection",
+                                                       "tibble", "foreach")) %dopar%
+            {
+              # Determine validation split
+              set.seed(k)
+              validation_id <- amelia_additional %>% 
+                filter(is.na(apache_II)) %>% 
+                select(all_of(c("row_id", mort_name))) %>% 
+                group_by_at(mort_name) %>% 
+                slice_sample(prop = 0.1) %>% 
+                ungroup() %>% 
+                select(row_id) %>% 
+                deframe()
+              
+              # Innermost loop through m
+              stats_m <- foreach(m = 1:length(df), .combine = "rbind") %do%
+                {
+                  # Select validation sample
+                  valid_df <- df[[m]][validation_id,]
+                  names(valid_df)[1] <- "apache_II"
+                  
+                  # Predict
+                  probs_df <- 
+                    data.frame(probs = predict(amelia_model, 
+                                               newdata = valid_df),
+                               outcome = valid_df[,2]) %>% 
+                    mutate(probs = inverse_logit(probs)) %>% 
+                    na.omit()
+                  
+                  # Discrimination
+                  pred <- prediction(probs_df$probs,
+                                     probs_df[,2])
+                  auc <- performance(pred, measure = "auc")@y.values[[1]]
+                  
+                  # Calibration
+                  cal <- hoslem.test(probs_df[,2],
+                                     probs_df$probs, g = 10)$statistic
+                  
+                  # Output
+                  data.frame(imputation = m,
+                             discrim = auc,
+                             calib = cal %>% unname())
+                }
+              
+              # Take median AUC & cal over all M
+              data.frame(sample = k,
+                         discrim = median(stats_m$discrim, na.rm = T),
+                         calib = median(stats_m$calib, na.rm = T))
+            }
+  
+          results_boot_amelia %>%
+            na.omit() %>% 
+            summarise(discrimination = mean(discrim),
+                      discrim_error = sd(discrim),
+                      calibration = mean(calib),
+                      cal_error = sd(calib)) %>% 
+            mutate(mortality = mort_name,
+                   still_missing = sum(is.na(results_30d_scored[[i]][[1]]))) %>% 
+            mutate(method = paste("amelia", length(df), sep = "_"))
+        }
+      }
+    scored_imputations
+  }
+
 # Construct hybrids----
 
 # Extract best longitudinal
-scores_df <- results_30d_scored[[61]]
+scores_df <- results_30d_scored[[which(names(results_30d_scored) == "recent_worst10")]]
 names(scores_df)[1] <- "apache_II"
 
 # Trim to only imputed
@@ -271,7 +405,7 @@ scores_df %<>%
   filter(is.na(old_score))
 
 # Extract best mice
-scores_df_mice <- results_30d_scored[[11]]
+scores_df_mice <- results_30d_scored[[which(names(results_30d_scored) == "MICE_quadratic")]]
 names(scores_df_mice)[1] <- "apache_II"
 
 # Trim to only imputed
@@ -323,7 +457,7 @@ results_hybrid <- foreach(j = 1:n_boot, .combine = "rbind",
   }
 
 # Process results
-results_hybrid %<>% 
+results_hybrid_final <- results_hybrid %>% 
   na.omit() %>% 
   summarise(discrimination = mean(discrim),
             discrim_error = sd(discrim),
@@ -334,7 +468,9 @@ results_hybrid %<>%
   mutate(method = "hybrid_hybrid")
 
 # Write and process----
-results_final %>% rbind(results_hybrid)
+results_final %<>% rbind(results_hybrid_final, results_mult) %>% 
+  mutate(mortality = ifelse(grepl("30", mortality),
+                            "30-day", "inunit"))
 
 results_final %>%
   write_rds("models/boot_results.RDS")
@@ -398,20 +534,28 @@ best_methods %<>%
   rbind(data.frame(mortality = c("30-day", "inunit"),
                    names = "average_zero"))
 
+# Split by types
+best_methods_single <- best_methods %>% 
+  filter(!grepl("amelia", names) &
+           !grepl("hybrid", names))
+
+best_methods_multiple <- best_methods %>% 
+  filter(grepl("amelia", names))
+
 # Store bootstrap samples for best method
-bootstrap_samples <- foreach(i = 1:nrow(best_methods),
+bootstrap_samples <- foreach(i = 1:nrow(best_methods_single),
                          .combine = "rbind") %do%
   {
-    print(best_methods[i,])
-    mtype <- best_methods[i,1] %>% deframe
+    print(best_methods_single[i,])
+    mtype <- best_methods_single[i,1] %>% deframe
     
     # Extract scores
     if(mtype == "30-day")
     {
-      scores_df <- results_30d_scored[[best_methods[i,2] %>% deframe()]] 
+      scores_df <- results_30d_scored[[best_methods_single[i,2] %>% deframe()]] 
     }else
     {
-      scores_df <- results_inunit_scored[[best_methods[i,2] %>% deframe()]] 
+      scores_df <- results_inunit_scored[[best_methods_single[i,2] %>% deframe()]] 
     }
     names(scores_df)[1:2] <- c("apache_II", "mortality")
     
@@ -479,14 +623,109 @@ bootstrap_samples <- foreach(i = 1:nrow(best_methods),
     # Output
     results_boot %>%
       na.omit() %>% 
-      mutate(method = best_methods[i,2] %>% deframe(),
+      mutate(method = best_methods_single[i,2] %>% deframe(),
              mortality = mtype)
   }
+
+# Second loop for multiple imputation
+bootstrap_samples_multiple <- foreach(i = 1:nrow(best_methods_multiple),
+                        .combine = "rbind") %do%
+  {
+    print(best_methods_multiple[i,])
+    
+    # Amelia section
+    if(grepl("amelia", best_methods_multiple[i,2]))
+    {
+      # Determine additional
+      if(grepl("inunit", best_methods_multiple[i,1]))
+      {
+        amelia_additional <- apache_additional_inunit
+        amelia_model <- full_model_inunit
+        model_list <- results_multiple_scored[["amelia_inunit"]]
+      }else
+      {
+        amelia_additional <- apache_additional_30d
+        amelia_model <- full_model_30d
+        model_list <- results_multiple_scored[["amelia_30d"]]
+      }
+      mort_name <- names(amelia_additional)[3]
+      amelia_additional$row_id <- 1:nrow(amelia_additional)
+      
+      # Extract dataset
+      df <- model_list[[best_methods_multiple[i,2] %>% deframe()]]
+      
+      # Innermost loop for bootstrap assessment
+      results_boot_amelia <- foreach(k = 1:n_boot, .combine = "rbind",
+                                     .packages = c("dplyr", "ROCR",
+                                                   "ResourceSelection",
+                                                   "tibble", "foreach")) %dopar%
+        {
+          # Determine validation split
+          set.seed(k)
+          validation_id <- amelia_additional %>% 
+            filter(is.na(apache_II)) %>% 
+            select(all_of(c("row_id", mort_name))) %>% 
+            group_by_at(mort_name) %>% 
+            slice_sample(prop = 0.1) %>% 
+            ungroup() %>% 
+            select(row_id) %>% 
+            deframe()
+          
+          # Innermost loop through m
+          stats_m <- foreach(m = 1:length(df), .combine = "rbind") %do%
+            {
+              # Select validation sample
+              valid_df <- df[[m]][validation_id,]
+              names(valid_df)[1] <- "apache_II"
+              
+              # Predict
+              probs_df <- 
+                data.frame(probs = predict(amelia_model, 
+                                           newdata = valid_df),
+                           outcome = valid_df[,2]) %>% 
+                mutate(probs = inverse_logit(probs)) %>% 
+                na.omit()
+              
+              # Discrimination
+              pred <- prediction(probs_df$probs,
+                                 probs_df[,2])
+              auc <- performance(pred, measure = "auc")@y.values[[1]]
+              
+              # Calibration
+              cal <- hoslem.test(probs_df[,2],
+                                 probs_df$probs, g = 10)$statistic
+              
+              # Output
+              data.frame(imputation = m,
+                         discrim = auc,
+                         calib = cal %>% unname())
+            }
+          
+          # Take median AUC & cal over all M
+          data.frame(sample = k,
+                     discrim = median(stats_m$discrim, na.rm = T),
+                     calib = median(stats_m$calib, na.rm = T))
+        }
+      
+      results_boot_amelia %>%
+        na.omit() %>% 
+        mutate(mortality = ifelse(grepl("30", mort_name),
+                                   "30-day", "inunit"),
+               method = paste("amelia", length(df), sep = "_"))
+    }
+  }
+
+# Add hybrid
+bootstrap_samples_hybrid <- results_hybrid %>% 
+  mutate(method = "hybrid_hybrid", 
+         mortality = "30-day")
 
 # Post-process----
 
 bootstrap_samples$method[bootstrap_samples$method == "average_zero"] <- "zero_zero"
 bootstrap_samples %<>% 
+  rbind(bootstrap_samples_multiple,
+        bootstrap_samples_hybrid) %>% 
   mutate(method = str_split(method, "_", simplify = TRUE)[,1])
 
 
@@ -495,7 +734,7 @@ names(best_methods)[2] <- "method"
 means_df <- best_methods %>% 
   left_join(results_final) %>% 
   mutate(method = str_split(method, "_", simplify = TRUE)[,1])
-means_df[14:15,2] <- "zero"
+means_df[15:16,2] <- "zero"
 
 # Save
 bootstrap_samples  %>%
@@ -516,31 +755,14 @@ bootstrap_samples %>%
   stat_ellipse(aes(x = discrim, y = calib,
                    colour = method),
                size = 2, type = "norm",
-               level = 0.682)+
-  # geom_errorbar(data = means_df,
-  #               aes(ymin = calibration - cal_error,
-  #                   y = calibration,
-  #                   ymax = calibration + cal_error,
-  #                   x = discrimination,
-  #                   colour = method))+
-  # geom_errorbarh(data = means_df,
-  #               aes(xmin = discrimination - discrim_error,
-  #                   y = calibration,
-  #                   xmax = discrimination + discrim_error,
-  #                   colour = method))+
+               level = 0.682,
+               alpha = 0.8)+
   geom_point(data = means_df,
              aes(x = discrimination,
                  y = calibration,
                  fill = method),
              size = 4, shape = 21)+
   facet_wrap(~mortality)
-
-# HDI
-bootstrap_samples %>% 
-  group_by(mortality, method) %>% 
-  summarise(discrimination = hdi(discrim)[,2:3],
-            calibration = hdi(calib)[,2:3])
-stopCluster(cl)
 
 # Compare subsets----
 
