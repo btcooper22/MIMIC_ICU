@@ -6,6 +6,7 @@ require(dplyr)
 require(tidyr)
 require(ggplot2)
 require(patchwork)
+require(forcats)
 
 # Load models
 ICNARC_bespoke <- read_rds("scripts/readmission/shared/models/LTH_ICNARC_bespoke.RDS")
@@ -43,6 +44,7 @@ performance_df %>%
   pivot_wider(names_from = "dataset",
               values_from = c("AUC", "chisq", "p")) 
 
+# Crude plots-----
 ggplot(performance_df,
        aes(AUC, chisq))+
   geom_point(size = 8,
@@ -56,6 +58,30 @@ ggplot(performance_df,
                                "#cab2d6", "#6a3d9a"),
                     name = "")+
   scale_y_reverse()
+
+# Discrimination
+performance_df %>% 
+  mutate(dataset = ifelse(dataset == "LTH_ICNARC", "LTHT", "MIMIC"),
+         AUC = ifelse(AUC < 0.5, 1-AUC, AUC),
+         model = fct_recode(model, `Martin et al. (2018)` = "martin",
+                            `Frost et al. (2010)` = "frost",
+                            `Hammer et al. (2020)` = "hammer",
+                            `Our model` = "bespoke")) %>% 
+  ggplot(aes(model, AUC))+
+  geom_bar(aes(fill = dataset),
+           colour = "black",
+           stat = "identity",
+           position = "dodge",
+           alpha = 0.7)+
+  scale_fill_manual(values = c("#377eb8", "#ff7f00"),
+                    name = "")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  labs(x = "", y = "Discrimination")+
+  coord_flip(ylim = c(0.5, 1))
+
+ggsave("figures/case_discrimination.png", height = 6,
+       width = 12)
 
 # Plot discrimination----
 discrimination_df <- foreach(i = 1:length(model_list), .combine = "rbind") %do%
