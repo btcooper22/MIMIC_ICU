@@ -24,6 +24,23 @@ source("functions/nomogram_convert.R")
 source("functions/calibration.R")
 source("functions/brier_extraction.R")
 
+crosstab <- function(varname, .df = patients)
+{
+  options(dplyr.summarise.inform=F)
+  
+  # Find
+  .df  %>% 
+    group_by_at(c("readmission", varname)) %>% 
+    summarise(n = n()) %>% 
+    mutate(`%` = (n/sum(n) * 100)) %>% 
+    mutate(`n (%)` = paste(n, " (", round(`%`,1),
+                           "%)", sep = "")) %>% 
+    select(any_of(c("readmission", varname, "n (%)"))) %>% 
+    pivot_wider(names_from = "readmission",
+                values_from = "n (%)") %>% 
+    as.data.frame()
+}
+
 # Filter missing data----------
 
 # Count and exclude missing chart data
@@ -101,6 +118,16 @@ patients_validate <- patients %>%
 
 # Hammer----------
 
+# Cross-tabulate
+crosstab("general_surgery")
+crosstab("cardiac_surgery")
+crosstab("hyperglycemia")
+crosstab("anaemia")
+crosstab("high_apache")
+crosstab("fluid_balance_5L")
+crosstab("ambulation")
+crosstab("los_5")
+
 # Score data - coefficients
 coefficients_hammer <- log(0.005 / (1 - 0.005)) +
   ifelse(patients$sex == "M", 0.43, 0) +
@@ -119,6 +146,41 @@ probs_hammer <- probs_coefficients_hammer
 
 # Martin------------
 
+# Cross tabulate
+table(patients$readmission)
+(table(patients$readmission) / nrow(patients) * 100) %>% round(1)
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(respiratory_rate),
+            sd = sd(respiratory_rate))
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(blood_urea_nitrogen),
+            sd = sd(blood_urea_nitrogen))
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(serum_glucose),
+            sd = sd(serum_glucose)) %>% 
+  as.data.frame()
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(serum_chloride),
+            sd = sd(serum_chloride))%>% 
+  as.data.frame()
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(age),
+            sd = sd(age))
+
+crosstab("atrial_fibrillation")
+crosstab("renal_insufficiency")
+
+
 # Score data - coefficients
 coefficients_martin <- -9.284491 +
   (0.04883 * patients$respiratory_rate) +
@@ -133,6 +195,27 @@ coefficients_martin <- -9.284491 +
 probs_martin <- inverse_logit(coefficients_martin)
 
 # Frost---------------
+
+# Cross tabulate
+table(patients$readmission)
+(table(patients$readmission) / nrow(patients) * 100) %>% round(1)
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(age),
+            sd = sd(age))
+
+crosstab("sex")
+crosstab("admission_source")
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(apache_II),
+            sd = sd(apache_II))
+
+crosstab("los_7")
+crosstab("after_hours_discharge")
+crosstab("acute_renal_failure")
 
 # Create scoring system from nomogram for age
 age_score_system_input <- data.frame(
