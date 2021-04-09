@@ -25,21 +25,21 @@ source("functions/inverse_logit.R")
 
 # Load results
 results_inunit <- read_rds("data/impute_mortality/average.RDS") %>% 
-  c(read_rds("data/impute_mortality/MICE.RDS"),
-    read_rds("data/impute_mortality/KNN.RDS"),
+  c(read_rds("data/impute_mortality/KNN.RDS"),
     read_rds("data/impute_mortality/forest.RDS"),
     read_rds("data/impute_mortality/PCA.RDS"))
 
 results_30d <- read_rds("data/impute_discharge/average.RDS") %>% 
-  c(read_rds("data/impute_discharge/MICE.RDS"),
-    read_rds("data/impute_discharge/KNN.RDS"),
+  c(read_rds("data/impute_discharge/KNN.RDS"),
     read_rds("data/impute_discharge/forest.RDS"),
     read_rds("data/impute_discharge/PCA.RDS"))
 
 results_long <- read_rds("data/impute_discharge/recent.RDS")
 
 results_multiple <- list(amelia_inunit = read_rds("data/impute_mortality/amelia.RDS"),
-                         amelia_30d = read_rds("data/impute_discharge/amelia.RDS"))
+                         amelia_30d = read_rds("data/impute_discharge/amelia.RDS"),
+                         mice_inunit = read_rds("data/impute_mortality/MICE.RDS"),
+                         mice_30d = read_rds("data/impute_discharge/MICE.RDS"))
 
 # Load data
 apache_df <- read_csv("data/apache_real_missing.csv")
@@ -115,9 +115,9 @@ results_multiple_scored <- foreach(i = 1:length(results_multiple)) %do%
     scored_imputations <- foreach(j = 1:length(results_multiple[[i]])) %do%
     {
       df <- results_multiple[[i]][[j]]
-      print(df$m)
       if(class(df) == "amelia")
       {
+        print(df$m)
         # Determine additional
         if(grepl("inunit", names(results_multiple)[i]))
         {
@@ -132,6 +132,24 @@ results_multiple_scored <- foreach(i = 1:length(results_multiple)) %do%
           {
             apache_score(cbind(df$imputations[[k]],
                                amelia_additional))
+          }
+      }else
+      {
+        print(unname(df$method[1]))
+        # Determine additional
+        if(grepl("inunit", names(results_multiple)[i]))
+        {
+          mice_additional <- apache_additional_inunit
+        }else
+        {
+          mice_additional <- apache_additional_30d
+        }
+        
+        # Inner loop through m
+        foreach(k = 1:df$m) %do%
+          {
+            apache_score(cbind(mice::complete(df, k),
+                               mice_additional))
           }
       }
     }
@@ -157,7 +175,7 @@ cl <- makeCluster(ifelse(detectCores() <= n_cores,
                           detectCores() - 1,
                           n_cores))
 registerDoParallel(cl)
-n_boot <- 10000
+n_boot <- 1000
 
 # Generate predictions and assess
 results_final <- foreach(i = 1:length(results_30d_scored),
@@ -308,11 +326,11 @@ results_mult <- foreach(i = 1:length(results_multiple_scored),
                                   .combine = "rbind") %do%
       {
         df <- results_multiple_scored[[i]][[j]]
-        print(length(df))
-        
+
         # Amelia section
         if(grepl("amelia", names(results_multiple_scored)[i]))
         {
+          print(length(df))
           # Determine additional
           if(grepl("inunit", names(results_multiple)[i]))
           {
@@ -388,87 +406,93 @@ results_mult <- foreach(i = 1:length(results_multiple_scored),
             mutate(mortality = mort_name,
                    still_missing = sum(is.na(results_30d_scored[[i]][[1]]))) %>% 
             mutate(method = paste("amelia", length(df), sep = "_"))
+        }else
+        {
+          print(names(results_multiple_scored[[i]])[j])
+          # Determine additional
+          if(grepl("inunit", names(results_multiple)[i]))
+          {
+            mice_additional <- apache_additional_inunit
+            mice_model <- full_model_inunit
+          }else
+          {
+            mice_additional <- apache_additional_30d
+            mice_model <- full_model_30d
+          }
+          mort_name <- names(mice_additional)[3]
+          mice_additional$row_id <- 1:nrow(mice_additional)
+          
+          # Innermost loop for bootstrap assessment
+          results_boot_mice <- foreach(k = 1:n_boot, .combine = "rbind",
+                                         .packages = c("dplyr", "ROCR",
+                                                       "ResourceSelection",
+                                                       "tibble", "foreach")) %dopar%
+            {
+              # Determine validation split
+              set.seed(k)
+              validation_id <- mice_additional %>% 
+                filter(is.na(apache_II)) %>% 
+                select(all_of(c("row_id", mort_name))) %>% 
+                group_by_at(mort_name) %>% 
+                slice_sample(prop = 0.1) %>% 
+                ungroup() %>% 
+                select(row_id) %>% 
+                deframe()
+              
+              # Innermost loop through m
+              stats_m <- foreach(m = 1:length(df), .combine = "rbind") %do%
+                {
+                  # Select validation sample
+                  valid_df <- df[[m]][validation_id,]
+                  names(valid_df)[1] <- "apache_II"
+                  
+                  # Predict
+                  probs_df <- 
+                    data.frame(probs = predict(mice_model, 
+                                               newdata = valid_df),
+                               outcome = valid_df[,2]) %>% 
+                    mutate(probs = inverse_logit(probs)) %>% 
+                    na.omit()
+                  
+                  # Discrimination
+                  pred <- prediction(probs_df$probs,
+                                     probs_df[,2])
+                  auc <- performance(pred, measure = "auc")@y.values[[1]]
+                  
+                  # Calibration
+                  cal <- hoslem.test(probs_df[,2],
+                                     probs_df$probs, g = 10)$statistic
+                  
+                  # Output
+                  data.frame(imputation = m,
+                             discrim = auc,
+                             calib = cal %>% unname())
+                }
+              
+              # Take median AUC & cal over all M
+              data.frame(sample = k,
+                         discrim = median(stats_m$discrim, na.rm = T),
+                         calib = median(stats_m$calib, na.rm = T))
+            }
+          
+          results_boot_mice %>%
+            na.omit() %>% 
+            summarise(discrimination = mean(discrim),
+                      discrim_error = sd(discrim),
+                      calibration = mean(calib),
+                      cal_error = sd(calib)) %>% 
+            mutate(mortality = mort_name,
+                   still_missing = sum(is.na(results_30d_scored[[i]][[1]]))) %>% 
+            mutate(method = names(results_multiple_scored[[i]])[j])
+          
         }
       }
     scored_imputations
   }
 
-# Construct hybrids----
-
-# Extract best longitudinal
-scores_df <- results_30d_scored[[which(names(results_30d_scored) == "recent_worst10")]]
-names(scores_df)[1] <- "apache_II"
-
-# Trim to only imputed
-scores_df %<>%
-  mutate(old_score = apache_additional_30d$apache_II) %>%
-  filter(is.na(old_score))
-
-# Extract best mice
-scores_df_mice <- results_30d_scored[[which(names(results_30d_scored) == "MICE_quadratic")]]
-names(scores_df_mice)[1] <- "apache_II"
-
-# Trim to only imputed
-scores_df_mice %<>%
-  mutate(old_score = apache_additional_30d$apache_II) %>%
-  filter(is.na(old_score))
-
-# Find matching subsets
-scores_df_mice <- scores_df_mice[which(is.na(scores_df$apache_II)),]
-scores_df <- scores_df[which(!is.na(scores_df$apache_II)),]
-
-scores_hybrid <- rbind(scores_df, scores_df_mice)
-
-# Loop for bootstrap assessment
-results_hybrid <- foreach(j = 1:n_boot, .combine = "rbind",
-                            .packages = c("dplyr", "ROCR",
-                                          "ResourceSelection")) %dopar%
-  {
-    # Set splits
-    set.seed(j)
-    scores_hybrid$ID <- 1:nrow(scores_hybrid)
-    valid_df <- scores_hybrid %>%
-      filter(!is.na(apache_II)) %>% 
-      group_by(mort_30) %>% 
-      slice_sample(prop = 0.1) %>% 
-      ungroup()
-    
-    # Predict
-    probs_df <- 
-      data.frame(probs = predict(full_model_30d, 
-                                 newdata = valid_df),
-                 outcome = valid_df$mort_30) %>% 
-      mutate(probs = inverse_logit(probs)) %>% 
-      na.omit()
-    
-    # Discrimination
-    pred <- prediction(probs_df$probs,
-                       probs_df$outcome)
-    auc <- performance(pred, measure = "auc")@y.values[[1]]
-    
-    # Calibration
-    cal <- hoslem.test(probs_df$outcome,
-                       probs_df$probs, g = 10)$statistic
-    
-    # Output
-    data.frame(sample = j,
-               discrim = auc,
-               calib = cal %>% unname())
-  }
-
-# Process results
-results_hybrid_final <- results_hybrid %>% 
-  na.omit() %>% 
-  summarise(discrimination = mean(discrim),
-            discrim_error = sd(discrim),
-            calibration = mean(calib),
-            cal_error = sd(calib)) %>% 
-  mutate(mortality = "30-day",
-         still_missing = 0) %>% 
-  mutate(method = "hybrid_hybrid")
 
 # Write and process----
-results_final %<>% rbind(results_hybrid_final, results_mult) %>% 
+results_final %<>% rbind(results_mult) %>% 
   mutate(mortality = ifelse(grepl("30", mortality),
                             "30-day", "inunit"))
 
@@ -537,10 +561,14 @@ best_methods %<>%
 # Split by types
 best_methods_single <- best_methods %>% 
   filter(!grepl("amelia", names) &
-           !grepl("hybrid", names))
+           !grepl("hybrid", names) &
+           !grepl("MICE", names))
 
 best_methods_multiple <- best_methods %>% 
-  filter(grepl("amelia", names))
+  filter(grepl("amelia", names) |
+           grepl("MICE", names))
+
+nboot <- 10000
 
 # Store bootstrap samples for best method
 bootstrap_samples <- foreach(i = 1:nrow(best_methods_single),
@@ -712,21 +740,103 @@ bootstrap_samples_multiple <- foreach(i = 1:nrow(best_methods_multiple),
         mutate(mortality = ifelse(grepl("30", mort_name),
                                    "30-day", "inunit"),
                method = paste("amelia", length(df), sep = "_"))
+    }else
+    {
+      # Determine additional
+      if(grepl("inunit", best_methods_multiple[i,1]))
+      {
+        mice_additional <- apache_additional_inunit
+        mice_model <- full_model_inunit
+        model_list <- results_multiple_scored[["mice_inunit"]]
+      }else
+      {
+        mice_additional <- apache_additional_30d
+        mice_model <- full_model_30d
+        model_list <- results_multiple_scored[["mice_30d"]]
+      }
+      mort_name <- names(mice_additional)[3]
+      mice_additional$row_id <- 1:nrow(mice_additional)
+      
+      # Extract dataset
+      df <- model_list[[best_methods_multiple[i,2] %>% deframe()]]
+      
+      # Innermost loop for bootstrap assessment
+      results_boot_mice <- foreach(k = 1:n_boot, .combine = "rbind",
+                                     .packages = c("dplyr", "ROCR",
+                                                   "ResourceSelection",
+                                                   "tibble", "foreach")) %dopar%
+        {
+          # Determine validation split
+          set.seed(k)
+          validation_id <- mice_additional %>% 
+            filter(is.na(apache_II)) %>% 
+            select(all_of(c("row_id", mort_name))) %>% 
+            group_by_at(mort_name) %>% 
+            slice_sample(prop = 0.1) %>% 
+            ungroup() %>% 
+            select(row_id) %>% 
+            deframe()
+          
+          # Innermost loop through m
+          stats_m <- foreach(m = 1:length(df), .combine = "rbind") %do%
+            {
+              # Select validation sample
+              valid_df <- df[[m]][validation_id,]
+              names(valid_df)[1] <- "apache_II"
+              
+              # Predict
+              probs_df <- 
+                data.frame(probs = predict(mice_model, 
+                                           newdata = valid_df),
+                           outcome = valid_df[,2]) %>% 
+                mutate(probs = inverse_logit(probs)) %>% 
+                na.omit()
+              
+              # Discrimination
+              pred <- prediction(probs_df$probs,
+                                 probs_df[,2])
+              auc <- performance(pred, measure = "auc")@y.values[[1]]
+              
+              # Calibration
+              cal <- hoslem.test(probs_df[,2],
+                                 probs_df$probs, g = 10)$statistic
+              
+              # Output
+              data.frame(imputation = m,
+                         discrim = auc,
+                         calib = cal %>% unname())
+            }
+          
+          # Take median AUC & cal over all M
+          data.frame(sample = k,
+                     discrim = median(stats_m$discrim, na.rm = T),
+                     calib = median(stats_m$calib, na.rm = T))
+        }
+      
+      results_boot_mice %>%
+        na.omit() %>% 
+        mutate(mortality = ifelse(grepl("30", mort_name),
+                                  "30-day", "inunit"),
+               method = unname(best_methods_multiple[i,2]) %>% 
+                 deframe())
     }
   }
 
 # Add hybrid
-bootstrap_samples_hybrid <- results_hybrid %>% 
-  mutate(method = "hybrid_hybrid", 
-         mortality = "30-day")
+# bootstrap_samples_hybrid <- results_hybrid %>% 
+#   mutate(method = "hybrid_hybrid", 
+#          mortality = "30-day")
 
 # Post-process----
 
 bootstrap_samples$method[bootstrap_samples$method == "average_zero"] <- "zero_zero"
 bootstrap_samples %<>% 
-  rbind(bootstrap_samples_multiple,
-        bootstrap_samples_hybrid) %>% 
-  mutate(method = str_split(method, "_", simplify = TRUE)[,1])
+  rbind(bootstrap_samples_multiple#,
+        #bootstrap_samples_hybrid
+        )
+
+bootstrap_samples$method <- str_split(bootstrap_samples$method,
+                                      "_", simplify = TRUE)[,1]
 
 
 # Extract means and error
@@ -734,7 +844,7 @@ names(best_methods)[2] <- "method"
 means_df <- best_methods %>% 
   left_join(results_final) %>% 
   mutate(method = str_split(method, "_", simplify = TRUE)[,1])
-means_df[15:16,2] <- "zero"
+means_df[14:15,2] <- "zero"
 
 # Save
 bootstrap_samples  %>%
