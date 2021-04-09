@@ -5,9 +5,11 @@ require(magrittr)
 require(ROCR)
 require(ResourceSelection)
 require(foreach)
+require(tidyr)
 
 source("functions/inverse_logit.R")
 source("functions/nomogram_convert.R")
+source("functions/crosstab.R")
 
 # Load data (2083)
 results <- read_csv("data/icnarc_predictors.csv") %>% 
@@ -36,11 +38,39 @@ age_convert <- data.frame(age_band = unique(results$age),
                           points = c(4.5, 4, 6, 3, 2,
                                      5, 5.5, 7, 6.5,
                                      3.5, 2.5, 1.5,
-                                     7.5, 0, 8))
+                                     7.5, 0, 8),
+                          med_age = c(73, 58, 78, 83, 68,
+                                      53, 38, 48, 90, 63, 
+                                      28, 43, 88, 18, 33))
+results$age_est <- NA
 for(i in 1:nrow(results))
 {
+  results$age_est[i] <- age_convert$med_age[which(age_convert$age_band == results$age[i])] 
   results$age[i] <- age_convert$points[which(age_convert$age_band == results$age[i])] 
 }
+
+
+# Cross tabulate
+table(results$readmission)
+(table(results$readmission) / nrow(results) * 100) %>% round(1)
+
+results %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(age_est),
+            sd = sd(age_est))
+
+crosstab("sex", results)
+crosstab("admission_source", results)
+
+results %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(apache_II),
+            sd = sd(apache_II))
+
+crosstab("los_7", results %>% 
+           mutate(los_7 = length_of_stay >=7 ))
+crosstab("out_of_hours_discharge", results)
+crosstab("acute_renal_failure", results)
 
 
 # Build score
@@ -49,7 +79,7 @@ scores_frost <-  as.numeric(results$age) +
   ifelse(results$admission_source == "Ward", 14.75, 1) +
   nomogram_convert(results$apache_II, apache_score_system_input,
                    apache_score_system_output) +
-  ifelse(results$length_of_stay > 7, 17, 0) +
+  ifelse(results$length_of_stay >= 7, 17, 0) +
   ifelse(results$out_of_hours_discharge, 4, 0) +
   ifelse(results$acute_renal_failure, 10, 0)
 

@@ -6,8 +6,10 @@ require(ROCR)
 require(ResourceSelection)
 require(foreach)
 require(stringr)
+require(tidyr)
 
 source("functions/inverse_logit.R")
+source("functions/crosstab.R")
 
 # Load data
 results <- read_csv("data/icnarc_predictors.csv") %>% 
@@ -60,6 +62,37 @@ results %<>%
   left_join(medical_history)
 results$renal_insufficiency[is.na(results$renal_insufficiency)] <- FALSE
 results$atrial_fibrillation[is.na(results$atrial_fibrillation)] <- FALSE
+
+# Cross tabulate
+results %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(respiratory_rate),
+            sd = sd(respiratory_rate))
+
+results %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(blood_urea_nitrogen),
+            sd = sd(blood_urea_nitrogen))
+
+results %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(glucose),
+            sd = sd(glucose)) %>% 
+  as.data.frame()
+
+results %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(serum_chloride),
+            sd = sd(serum_chloride))%>% 
+  as.data.frame()
+
+results %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(age),
+            sd = sd(age))
+
+crosstab("atrial_fibrillation", results)
+crosstab("renal_insufficiency", results)
 
 # Score data - coefficients
 coefficients_martin <- -9.284491 +

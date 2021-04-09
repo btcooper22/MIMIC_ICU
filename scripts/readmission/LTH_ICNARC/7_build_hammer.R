@@ -5,8 +5,10 @@ require(magrittr)
 require(ROCR)
 require(ResourceSelection)
 require(foreach)
+require(tidyr)
 
 source("functions/inverse_logit.R")
+source("functions/crosstab.R")
 
 # Load data
 results <- read_csv("data/icnarc_predictors.csv") %>% 
@@ -20,6 +22,17 @@ results <- read_csv("data/icnarc_predictors.csv") %>%
          length_of_stay) %>% 
   na.omit()
 
+crosstab("general_surgery", results)
+crosstab("cardiac_surgery", results)
+crosstab("hyperglycaemia", results)
+crosstab("anaemia", results)
+crosstab("high_apache", results %>% 
+           mutate(high_apache = apache_II >= 20))
+crosstab("ambulation", results %>% 
+           mutate(ambulation = posthospital_dependency == FALSE))
+crosstab("los_5", results %>% 
+           mutate(los_5 = length_of_stay >= 5))
+
 # Generate hammer scores
 coefficients_hammer <- log(0.005 / (1 - 0.005)) +
   ifelse(results$sex == "M", 0.43, 0) +
@@ -27,7 +40,7 @@ coefficients_hammer <- log(0.005 / (1 - 0.005)) +
   ifelse(results$cardiac_surgery, -1.01, 0) +
   ifelse(results$hyperglycaemia, 0.36, 0) +
   ifelse(results$anaemia, 1.11, 0) +
-  ifelse(results$apache_II >- 20, 0.44, 0) +
+  ifelse(results$apache_II >= 20, 0.44, 0) +
   ifelse(results$posthospital_dependency == TRUE, 0.7, 0) +
   ifelse(results$length_of_stay >= 5, 0.88, 0) + 0.26
 
