@@ -108,7 +108,7 @@ coefficients_martin <- -9.284491 +
 probs_martin <- inverse_logit(coefficients_martin)
 
 # Assess discrimination
-pred <- prediction(probs_martin, results$readmission)
+pred <- prediction(probs_martin, !results$readmission)
 performance(pred, measure = "auc")@y.values[[1]]
 
 # Split to deciles
