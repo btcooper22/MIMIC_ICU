@@ -98,7 +98,8 @@ discrimination_df <- foreach(i = 1:length(model_list), .combine = "rbind") %do%
                model = model_list[[i]][1]$model,
                dataset = model_list[[i]][2]$data)
   } %>% 
-  mutate(identifier = paste(dataset, model, sep = "-"))
+  mutate(identifier = paste(dataset, model, sep = "-"),
+         dataset = ifelse(dataset == "LTH_ICNARC", "ICNARC", "MIMIC"))
 
 # Plot combined
 discrimination_df %>% 
@@ -174,9 +175,9 @@ dplot_frost <- discrimination_df %>%
                       name = "Frost")
 
 # Write
-dplot_colour <- (dplot_bespoke + dplot_frost) / (dplot_hammer + dplot_martin)
+dplot_colour <- (dplot_frost + dplot_martin) / (dplot_hammer + dplot_bespoke)
 ggsave("figures/Discrimination_colour.png", dplot_colour,
-       height = 15, width = 15)
+       height = 10, width = 15)
 
 # B/W Version
 bw_plot <- discrimination_df %>% 
@@ -211,26 +212,27 @@ calibration_df <- foreach(i = 1:length(model_list), .combine = "rbind") %do%
                model = model_list[[i]][1]$model,
                dataset = model_list[[i]][2]$data)
   } %>% 
-  mutate(identifier = paste(dataset, model, sep = "-"))
+  mutate(identifier = paste(dataset, model, sep = "-"),
+         dataset = ifelse(dataset == "LTH_ICNARC", "ICNARC", "MIMIC"))
 
 # Plot combined
-calibration_df %>% 
-  ggplot(aes(predicted, observed ,
-             colour = model))+
-  geom_abline(slope = 1, intercept = 0,
-              size = 1)+
-  geom_path(size = 1)+
-  geom_pointrange(aes(ymin = observed - error ,
-                      ymax = observed + error,
-                      y = observed,
-                      x = predicted,
-                      colour = model)) +
-  theme_classic(20)+
-  theme(legend.position = "top")+
-  labs(x = "Predicted readmission",
-       y = "Observed readmission")+
-  facet_wrap(~dataset, scales = "free")+
-  scale_colour_brewer(palette = "Set1")
+# calibration_df %>% 
+#   ggplot(aes(predicted, observed ,
+#              colour = model))+
+#   geom_abline(slope = 1, intercept = 0,
+#               size = 1)+
+#   geom_path(size = 1)+
+#   geom_pointrange(aes(ymin = observed - error ,
+#                       ymax = observed + error,
+#                       y = observed,
+#                       x = predicted,
+#                       colour = model)) +
+#   theme_classic(20)+
+#   theme(legend.position = "top")+
+#   labs(x = "Predicted readmission",
+#        y = "Observed readmission")+
+#   facet_wrap(~dataset, scales = "free")+
+#   scale_colour_brewer(palette = "Set1")
 
 # Bespoke
 cplot_bespoke <- calibration_df %>% 
@@ -239,18 +241,21 @@ cplot_bespoke <- calibration_df %>%
              colour = dataset))+
   geom_abline(slope = 1, intercept = 0,
               size = 1)+
-  geom_path(size = 2)+
+  geom_path(size = 1)+
   geom_pointrange(aes(ymin = observed - error ,
                       ymax = observed + error,
                       y = observed,
                       x = predicted,
-                      colour = dataset), size = 1) +
+                      colour = dataset), size = 0.5) +
   theme_classic(20)+
   theme(legend.position = "top")+
   labs(x = "Predicted readmission",
        y = "Observed readmission")+
   scale_colour_manual(values = c("#a6cee3", "#1f78b4"),
-                      name = "Bespoke")
+                      name = "Bespoke")+
+  coord_cartesian(xlim = c(0,16),
+                  ylim = c(0,18))
+
 
 # Hammer
 cplot_hammer <- calibration_df %>% 
@@ -259,18 +264,20 @@ cplot_hammer <- calibration_df %>%
              colour = dataset))+
   geom_abline(slope = 1, intercept = 0,
               size = 1)+
-  geom_path(size = 2)+
+  geom_path(size = 1)+
   geom_pointrange(aes(ymin = observed - error ,
                       ymax = observed + error,
                       y = observed,
                       x = predicted,
-                      colour = dataset), size = 1) +
+                      colour = dataset), size = 0.5) +
   theme_classic(20)+
   theme(legend.position = "top")+
   labs(x = "Predicted readmission",
        y = "Observed readmission")+
   scale_colour_manual(values = c("#b2df8a", "#33a02c"),
-                      name = "Hammer")
+                      name = "Hammer")+
+  coord_cartesian(xlim = c(0,16),
+                  ylim = c(0,18))
 
 # Martin
 cplot_martin <- calibration_df %>% 
@@ -279,18 +286,21 @@ cplot_martin <- calibration_df %>%
              colour = dataset))+
   geom_abline(slope = 1, intercept = 0,
               size = 1)+
-  geom_path(size = 2)+
+  geom_path(size = 1)+
   geom_pointrange(aes(ymin = observed - error ,
                       ymax = observed + error,
                       y = observed,
                       x = predicted,
-                      colour = dataset), size = 1) +
+                      colour = dataset), size = 0.5) +
   theme_classic(20)+
   theme(legend.position = "top")+
   labs(x = "Predicted readmission",
        y = "Observed readmission")+
   scale_colour_manual(values = c("#fb9a99", "#e31a1c"),
-                      name = "Martin")
+                      name = "Martin")+
+  coord_cartesian(xlim = c(0,16),
+                  ylim = c(0,18))
+
 
 # Frost
 cplot_frost <- calibration_df %>% 
@@ -299,20 +309,22 @@ cplot_frost <- calibration_df %>%
              colour = dataset))+
   geom_abline(slope = 1, intercept = 0,
               size = 1)+
-  geom_path(size = 2)+
+  geom_path(size = 1)+
   geom_pointrange(aes(ymin = observed - error ,
                       ymax = observed + error,
                       y = observed,
                       x = predicted,
-                      colour = dataset), size = 1) +
+                      colour = dataset), size = 0.5) +
   theme_classic(20)+
   theme(legend.position = "top")+
   labs(x = "Predicted readmission",
        y = "Observed readmission")+
   scale_colour_manual(values = c("#cab2d6", "#6a3d9a"),
-                      name = "Frost")
+                      name = "Frost")+
+  coord_cartesian(xlim = c(0,16),
+                  ylim = c(0,18))
 
 # Write
-cplot_colour <- (cplot_bespoke + cplot_frost) / (cplot_hammer + cplot_martin)
+cplot_colour <- (cplot_frost + cplot_martin) / (cplot_hammer + cplot_bespoke)
 ggsave("figures/Calibration_colour.png", cplot_colour,
-       height = 15, width = 15)
+       height = 8, width = 15)
