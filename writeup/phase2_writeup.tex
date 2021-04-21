@@ -7,8 +7,6 @@
     \titlespacing{\subsubsection}{0pt}{1ex}{0.5ex}
 \titleformat*{\section}{\Large\scshape}
 \titleformat*{\subsection}{\Large}
-\titleformat{\subsubsection}[runin]
-  {\normalfont\bfseries}{\thesubsection}{1em}{}
   
 %Page size
 	\addtolength{\oddsidemargin}{-.875in}
@@ -79,13 +77,40 @@
 
 \section{Methods}
 
-\subsection{Dataset generation}
+\subsection{Data source and processing}
 
-% Detail randomness method, N and splits
+% Flowchart
 
 \subsection{Imputation methods}
 
 % Overview of each
+% Assumptions - all basically MAR
+
+\subsubsection{\textit{k}-nearest neighbours (KNN)}
+
+\subsubsection{Principal components analysis (PCA)}
+
+\subsubsection{Random Forest (RF)}
+
+\subsubsection{Amelia}
+
+The `Amelia' R package \citep{Honaker2011} is an implementation and extension of the `Expectation Maximisation' (EM) algorithm developed by \cite{Dempster1977}. \textit{Amelia} runs the EM algorithm on multiple bootstrapped samples from the complete cases to estimate the parameters of the multivariate normal distribution that the data is assumed to follow. These parameters are then used to draw imputed values for the missing cases. Unlike the imputation methods described thus far, \textit{Amelia} performs multiple imputation, i.e., it generates multiple imputed datasets using the same process. The authors recommend carrying out analysis on each of these datasets separately, then combining the results.
+
+\subsubsection{Multiple imputation by chained equations (MICE)}
+
+Multiple imputation by chained equations (MICE) uses an iterative process to impute datasets, and is implemented in R package \textit{mice} \citep{Buuren2011}. The algorithm has the following steps:
+\begin{enumerate}
+\item Missing data for each variable are initially imputed as the mean of that variable.
+\item For a dataset of $N$ variables, $N$ models are generated which predict a given variable using all other variables.
+\item These models are used to predict the initially missing values for each variable, and these predictions replace the initial mean imputations.
+\item Steps 2 and 3 are then repeated until convergence criteria are met, commonly that the average of the imputed values does not change
+\end{enumerate}
+
+Like \textit{amelia}, MICE is run as a multiple imputation method, generating $m$ final imputed datasets. Whilst all implementations follow the steps laid out above, the algorithm is flexible as to the type of predictive models used. As implied by the algorithm, MICE assumes a correlation structure among the full data.
+
+\subsubsection{Additional methods}
+
+% Average, zero, longitudinal
 
 \subsection{Hyperparameter profiling}
 
@@ -93,7 +118,7 @@
 
 \subsection{Comparison}
 
-% Discrim, calib, distance, max and multidim
+% Bootstrap resampling
 
 \section{Results}
 

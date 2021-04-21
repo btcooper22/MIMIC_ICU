@@ -1,0 +1,61 @@
+\begin{thebibliography}{7}
+\providecommand{\natexlab}[1]{#1}
+
+\bibitem[{van Buuren \& Groothuis-Oudshoorn(2011)}]{Buuren2011}
+van Buuren, S. \& Groothuis-Oudshoorn, K.
+\newblock 2011.
+\newblock mice: Multivariate imputation by chained equations {inR}.
+\newblock \emph{Journal of Statistical Software}, \textbf{45}(3).
+
+\bibitem[{Elliott \emph{et~al.}(2014)Elliott, Worrall-Carter, \&
+  Page}]{Elliott2014}
+Elliott, M., Worrall-Carter, L., \& Page, K.
+\newblock 2014.
+\newblock Intensive care readmission: A contemporary review of the literature.
+\newblock \emph{Intensive and Critical Care Nursing}, \textbf{30}(3), 121--137.
+
+\bibitem[{Frost \emph{et~al.}(2010)Frost, Tam, Alexandrou, Hunt, Salamonson,
+  Davidson, Parr, \& Hillman}]{Frost2010}
+Frost, S.~A., Tam, V., Alexandrou, E., Hunt, L., Salamonson, Y., Davidson,
+  P.~M., Parr, M. J.~A., \& Hillman, K.~M.
+\newblock 2010.
+\newblock Readmission to intensive care: development of a nomogram for
+  individualising risk.
+\newblock \emph{Critical Care and Resuscitation}, \textbf{12}(2), 83--89.
+
+\bibitem[{Hammer \emph{et~al.}(2020)Hammer, Grabitz, Teja, Wongtangman,
+  Serrano, Neves, Siddiqui, Xu, \& Eikermann}]{Hammer2020}
+Hammer, M., Grabitz, S.~D., Teja, B., Wongtangman, K., Serrano, M., Neves, S.,
+  Siddiqui, S., Xu, X., \& Eikermann, M.
+\newblock 2020.
+\newblock A tool to predict readmission to the intensive care unit in surgical
+  critical care patients—the risc score.
+\newblock \emph{Journal of Intensive Care Medicine}.
+\newblock PMID: 32840427.
+
+\bibitem[{Johnson \emph{et~al.}(2016)Johnson, Pollard, Shen, wei H.~Lehman,
+  Feng, Ghassemi, Moody, Szolovits, Celi, \& Mark}]{Johnson2016}
+Johnson, A.~E., Pollard, T.~J., Shen, L., wei H.~Lehman, L., Feng, M.,
+  Ghassemi, M., Moody, B., Szolovits, P., Celi, L.~A., \& Mark, R.~G.
+\newblock 2016.
+\newblock {MIMIC}-{III}, a freely accessible critical care database.
+\newblock \emph{Scientific Data}, \textbf{3}(1).
+
+\bibitem[{Markazi-Moghaddam \emph{et~al.}(2020)Markazi-Moghaddam, Fathi, \&
+  Ramezankhani}]{MarkaziMoghaddam2020}
+Markazi-Moghaddam, N., Fathi, M., \& Ramezankhani, A.
+\newblock 2020.
+\newblock Risk prediction models for intensive care unit readmission: A
+  systematic review of methodology and applicability.
+\newblock \emph{Australian Critical Care}, \textbf{33}(4), 367--374.
+
+\bibitem[{Martin \emph{et~al.}(2018)Martin, Kilpatrick, Al-Dulaimi, Mone,
+  Tonna, Barton, \& Brooke}]{Martin2018}
+Martin, L.~A., Kilpatrick, J.~A., Al-Dulaimi, R., Mone, M.~C., Tonna, J.~E.,
+  Barton, R.~G., \& Brooke, B.~S.
+\newblock 2018.
+\newblock Predicting icu readmission among surgical icu patients: Development
+  and validation of a clinical nomogram.
+\newblock \emph{Surgery}, \textbf{165}(2), 373--380.
+
+\end{thebibliography}
