@@ -40,7 +40,6 @@ valid_patients <- results %>%
 valid_hospitalisations <- results %>% 
   select(hadm_id) %>%  deframe()
 
-
 # Read and filter stay data-------------------------------------------------
 
 # Merge and filter transfers (40-41)
@@ -78,7 +77,8 @@ stays %<>%
 # Filter to first stay for each admission
 stays_filtered <- stays %>% 
   arrange(intime) %>% 
-  filter(!duplicated(subject_id))
+  filter(!duplicated(subject_id)) %>% 
+  filter(!grepl("organ donor", diagnosis, ignore.case = TRUE))
 
 # Read and filter input data per stay----------------------------------
 
@@ -111,7 +111,7 @@ procedures <- mimic$d_icd_procedures %>%
 
 # Filter procedures (77)
 procedures %<>% 
-  inner_join(stays %>% select(subject_id, hadm_id, icustay_id),
+  inner_join(stays_filtered %>% select(subject_id, hadm_id, icustay_id),
              by = c("subject_id", "hadm_id"))
 
 # Count procedure codes (80)
@@ -130,9 +130,9 @@ procedure_counts <- procedures %>%
 mimic_preproc <- list()
 
 # Insert stay data
-mimic_preproc[[1]] <- unique(stays$subject_id)
+mimic_preproc[[1]] <- unique(stays_filtered$subject_id)
 mimic_preproc[[2]] <- transfers
-mimic_preproc[[3]] <- stays
+mimic_preproc[[3]] <- stays_filtered
 names(mimic_preproc)[1:3] <- c("patients", "transfers", 
                                "stays")
 
