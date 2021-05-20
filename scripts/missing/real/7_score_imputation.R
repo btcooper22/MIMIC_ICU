@@ -107,12 +107,16 @@ names(results_long_scored) <- names(results_long)
 results_30d_scored <- c(results_30d_scored, results_long_scored)
 
 # Multiple
+cl <- makeCluster(6)
+registerDoParallel(cl)
 results_multiple_scored <- foreach(i = 1:length(results_multiple)) %do%
   {
     print(names(results_multiple[i]))
     
     # Middle loop for hyperparameters
-    scored_imputations <- foreach(j = 1:length(results_multiple[[i]])) %do%
+    scored_imputations <- foreach(j = 1:length(results_multiple[[i]]),
+                                  .packages = c("foreach", "mice",
+                                                "Amelia", "dplyr")) %dopar%
     {
       df <- results_multiple[[i]][[j]]
       if(class(df) == "amelia")
@@ -135,7 +139,8 @@ results_multiple_scored <- foreach(i = 1:length(results_multiple)) %do%
           }
       }else
       {
-        print(unname(df$method[1]))
+        print(paste(unname(df$method[1]),
+              unname(df$m), sep = "-"))
         # Determine additional
         if(grepl("inunit", names(results_multiple)[i]))
         {
@@ -159,6 +164,7 @@ results_multiple_scored <- foreach(i = 1:length(results_multiple)) %do%
     scored_imputations
   }
 names(results_multiple_scored) <- names(results_multiple)
+stopCluster(cl)
 
 # Generate complete cases models
 full_model_inunit <- glm(mort_inunit ~ apache_II,
@@ -172,8 +178,8 @@ full_model_30d <- glm(mort_30 ~ apache_II,
 # Set up parallel
 n_cores <- 15
 cl <- makeCluster(ifelse(detectCores() <= n_cores,
-                          detectCores() - 1,
-                          n_cores))
+                         detectCores() - 1,
+                         n_cores))
 registerDoParallel(cl)
 n_boot <- 1000
 
