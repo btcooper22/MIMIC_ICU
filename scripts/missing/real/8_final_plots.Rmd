@@ -1,0 +1,200 @@
+---
+title: "Plots for Missing Paper"
+author: "Ben Cooper"
+date: "21/05/2021"
+output: html_document
+---
+
+```{r setup and packages, include=FALSE}
+require(dplyr)
+require(magrittr)
+require(readr)
+require(tibble)
+require(foreach)
+require(stringr)
+require(doParallel)
+require(tools)
+require(tidyr)
+require(ROCR)
+require(ResourceSelection)
+require(ggplot2)
+require(scales)
+require(car)
+require(RColorBrewer)
+pal <- c(brewer.pal(9, "Set1")[-6], "black")
+require(bayestestR)
+require(cowplot)
+
+source("functions/inverse_logit.R")
+
+calibration <- function(.df)
+{
+  .df %>% 
+    group_by(decile) %>%
+    summarise(N = length(mortality),
+              observed = (sum(mortality) / length(mortality)) * 100,
+              predicted = mean(probs * 100),
+              error = sd(probs * 100))
+}
+
+```
+
+```{r Load full data}
+apache_df <- read_csv("data/apache_real_missing.csv")
+apache_scores_inunit <- apache_df %>% 
+  select(-row_id, -adm_id,
+         -mort_inunit, -age,
+         -chronic, -fractioninspiredoxygen,
+         -apache_II, -missing_abg, -acute_renal_failure)
+apache_additional_inunit <- apache_df %>% 
+  select(row_id, adm_id,
+         mort_inunit, age,
+         chronic, fractioninspiredoxygen,
+         apache_II, missing_abg, acute_renal_failure)
+rm(apache_df)
+
+apache_df <- read_csv("data/apache_discharge_missing.csv")
+apache_scores_30d <- apache_df %>% 
+  select(-row_id, -adm_id,
+         -mort_30, -age,
+         -chronic, -fractioninspiredoxygen,
+         -apache_II, -missing_abg, -acute_renal_failure)
+apache_additional_30d <- apache_df %>% 
+  select(row_id, adm_id,
+         mort_30, age,
+         chronic, fractioninspiredoxygen,
+         apache_II, missing_abg, acute_renal_failure)
+rm(apache_df)
+```
+
+```{r Descriptive results}
+
+```
+
+
+```{r Discrimination and calibration of complete cases}
+# Generate complete cases models
+full_model_inunit <- glm(mort_inunit ~ apache_II,
+                         data = apache_additional_inunit,
+                         family = "binomial")
+
+full_model_30d <- glm(mort_30 ~ apache_II,
+                         data = apache_additional_30d,
+                         family = "binomial")
+
+# Discrimination----
+
+# Generate probabilities
+data.frame(probs = predict(full_model_inunit, 
+                           newdata = full_model_inunit$data),
+           outcome = full_model_inunit$data$mort_inunit) %>% 
+  mutate(probs = inverse_logit(probs)) %>% 
+  na.omit() -> probs_mort_inunit
+
+data.frame(probs = predict(full_model_30d, 
+                           newdata = full_model_30d$data),
+           outcome = full_model_30d$data$mort_30) %>% 
+  mutate(probs = inverse_logit(probs)) %>% 
+  na.omit() -> probs_mort_30
+
+# Build prediction objects
+prediction_mort_inunit <- prediction(probs_mort_inunit$probs,
+                                               probs_mort_inunit$outcome)
+
+prediction_mort_30 <- prediction(probs_mort_30$probs,
+                                               probs_mort_30$outcome)
+
+# Generate AUC
+performance(prediction_mort_inunit, measure = "auc")@y.values[[1]]
+performance(prediction_mort_30, measure = "auc")@y.values[[1]]
+
+# Generate performance objects
+performance_mort_inunit <- performance(prediction_mort_inunit, "tpr", "fpr")
+performance_mort_30 <- performance(prediction_mort_30, "tpr", "fpr")
+
+# Plot
+data.frame(x = performance_mort_inunit@x.values[[1]],
+           y = performance_mort_inunit@y.values[[1]],
+           model = "In-unit mortality") %>% 
+  rbind(
+    data.frame(x = performance_mort_30@x.values[[1]],
+               y = performance_mort_30@y.values[[1]],
+               model = "30-day mortality")
+  ) %>% 
+  ggplot(aes(x, y, colour = model))+
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dotted",
+              size = 1)+
+  geom_path(size = 1, alpha = 0.9)+
+  labs(x = "1 - Specificity",
+       y = "Sensitivity")+
+  theme_classic(20)+
+  scale_color_brewer(palette = "Set1",
+                     name = "")+
+  theme(legend.position = "top") -> A
+
+# Calibration----
+
+# Split data into deciles
+deciles_mort_inunit <- tibble(
+  mortality = probs_mort_inunit$outcome,
+  probs = probs_mort_inunit$probs,
+  decile = ntile(probs_mort_inunit$probs, 10)
+)
+
+deciles_mort_30 <- tibble(
+  mortality = probs_mort_30$outcome,
+  probs = probs_mort_30$probs,
+  decile = ntile(probs_mort_30$probs, 10)
+)
+
+# Calculate calibration
+calib_mort_inunit <- calibration(deciles_mort_inunit)
+calib_mort_30 <- calibration(deciles_mort_30)
+
+# Plot calibration
+rbind(calib_mort_inunit %>% mutate(model = "In-unit mortality"), 
+      calib_mort_30 %>% mutate(model = "30-day mortality")) %>% 
+  ggplot(aes(predicted, observed ,
+             colour = model))+
+    geom_path(size = 1, alpha = 0.9)+
+  geom_pointrange(aes(ymin = observed - error ,
+                      ymax = observed + error,
+                      y = observed,
+                      x = predicted,
+                      colour = model),
+                  alpha = 0.9) +
+    geom_abline(slope = 1, intercept = 0,
+              size = 1, linetype = "dotted")+
+  theme_classic(20)+
+  theme(legend.position = "top")+
+  labs(x = "Predicted readmission",
+       y = "Observed readmission")+
+  scale_colour_brewer(palette = "Set1",
+                      name = "") -> B
+
+# Combine & write----
+plot_grid(A,B, labels = "AUTO",
+          label_size = 32)
+ggsave("drafts/missing/figures/calib_discrim.png",
+       height = 6, width = 12)
+
+
+```
+
+```{r Bars of N missing}
+
+```
+
+```{r Bars of missingess of each variable}
+
+```
+
+```{r Bootstrap results - in-unit}
+
+```
+
+```{r Bootstrap results - 30-day}
+
+```
+
