@@ -15,7 +15,7 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   # elect_admit <- elective_admission
   # prev_diagnoses <- history
   # arf <- acute_renal_failure
-  
+
   # Helper function: Find measurements within 24h of admission (or before, if not availble)
   filter_window <- function(.df, time, type = "chart")
   {
@@ -404,22 +404,42 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   gcs_eye_value <- gcs_eye_measurements %>% 
     filter_window(admission_time)
   
-  gcs_measurements <- gcs_motor_value %>% 
-    select(STORETIME, VALUENUM) %>% 
-    left_join(gcs_verbal_value %>% 
-                select(STORETIME, VALUENUM) %>% 
-                rename(verbal = "VALUENUM"))%>% 
-    left_join(gcs_eye_value %>% 
-                select(STORETIME, VALUENUM) %>% 
-                rename(eye = "VALUENUM")) %>% 
-    mutate(sum_score = VALUENUM + verbal + eye) %>% 
-    select(sum_score) %>% deframe()
-  
-  gcs_measurements %<>% worst_value("min")
-  
-  # Sum and score
-  gcs_value <- gcs_measurements
-  gcs_score <- 15 - gcs_value
+  if(nrow(gcs_motor_value) >0 &
+     nrow(gcs_verbal_value) >0 &
+     nrow(gcs_eye_value) >0)
+  {
+    gcs_measurements <- gcs_motor_measurements %>% 
+      select(STORETIME, VALUENUM) %>% 
+      rename(motor = "VALUENUM") %>% 
+      left_join(gcs_verbal_measurements %>% 
+                  select(STORETIME, VALUENUM) %>% 
+                  rename(verbal = "VALUENUM"))%>% 
+      left_join(gcs_eye_measurements %>% 
+                  select(STORETIME, VALUENUM) %>% 
+                  rename(eye = "VALUENUM")) %>% 
+      mutate(sum_score = motor + verbal + eye) %>% 
+      rename(CHARTTIME = "STORETIME",
+             VALUENUM = "sum_score") %>% 
+      filter_window(admission_time) %>% 
+      filter(VALUENUM != 3) %>% 
+      select(VALUENUM) %>% deframe()
+    
+    gcs_measurements %<>% worst_value("min")
+    
+    if(gcs_measurements == 3 & !is.na(gcs_measurements))
+    {
+      gcs_measurements <- NA
+    }
+    
+    # Sum and score
+    gcs_value <- gcs_measurements
+    gcs_score <- 15 - gcs_value
+  }else
+  {
+    gcs_value <- NA
+    gcs_score <- 0
+  }
+
   
   
   # Calculate age-----------------

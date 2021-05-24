@@ -155,7 +155,7 @@ ptm <- proc.time()
 psnice(value = 19)
 registerDoParallel(ifelse(detectCores() <= 15,
                           detectCores() - 1,
-                          12)
+                          15)
 )
 
 # Run loop
