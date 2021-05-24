@@ -394,24 +394,31 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Find closest motor measurement
   gcs_motor_value <- gcs_motor_measurements %>% 
-    filter_window(admission_time) %>% 
-    select(VALUENUM) %>%  deframe()
-  gcs_motor_value %<>% worst_value("min")
+    filter_window(admission_time) 
   
   # Find closest verbal measurement
   gcs_verbal_value <- gcs_verbal_measurements %>% 
-    filter_window(admission_time) %>% 
-    select(VALUENUM) %>%  deframe()
-  gcs_verbal_value %<>% worst_value("min")
+    filter_window(admission_time)
   
   # Find closest eye measurement
   gcs_eye_value <- gcs_eye_measurements %>% 
-    filter_window(admission_time) %>% 
-    select(VALUENUM) %>%  deframe()
-  gcs_eye_value %<>% worst_value("min")
+    filter_window(admission_time)
+  
+  gcs_measurements <- gcs_motor_value %>% 
+    select(STORETIME, VALUENUM) %>% 
+    left_join(gcs_verbal_value %>% 
+                select(STORETIME, VALUENUM) %>% 
+                rename(verbal = "VALUENUM"))%>% 
+    left_join(gcs_eye_value %>% 
+                select(STORETIME, VALUENUM) %>% 
+                rename(eye = "VALUENUM")) %>% 
+    mutate(sum_score = VALUENUM + verbal + eye) %>% 
+    select(sum_score) %>% deframe()
+  
+  gcs_measurements %<>% worst_value("min")
   
   # Sum and score
-  gcs_value <- gcs_motor_value + gcs_verbal_value + gcs_eye_value
+  gcs_value <- gcs_measurements
   gcs_score <- 15 - gcs_value
   
   
