@@ -144,6 +144,7 @@ mimic_services <- mimic$services %>% collect()
 mimic_admissions <- mimic$admissions %>% collect()
 mimic_diagnoses <- mimic$diagnoses_icd %>% collect()
 mimic_procedures <- mimic$cptevents %>% collect()
+mimic_callouts <- mimic$callout %>% collect()
 
 # Database of high-risk specialities
 highrisk <- mimic_procedures %>% 
@@ -186,6 +187,31 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   
   # Detect after-hours discharge
   after_hours_discharge <-   hour(discharge_time) <= 7 | hour(discharge_time) >= 16 
+  
+  # Identify callouts
+  callout_time <- mimic_callouts %>% 
+    filter(hadm_id == adm) %>% 
+    filter(acknowledge_status == "Acknowledged") 
+  
+  # Take closest if multiple
+  if(nrow(callout_time) > 1)
+  {
+    callout_time <- callout_time[which.min(abs(callout_time$outcometime - discharge_time)),]
+  }
+  callout_time <- callout_time %>% 
+    select(createtime) %>% 
+    deframe()
+  
+  # Measure ready for discharge days
+  if(length(callout_time) > 0)
+  {
+    discharge_days <- floor(difftime(discharge_time, callout_time,
+                                     unit = "days"))
+  }else
+  {
+    discharge_days <- NA
+  }
+
   
   # Extract sex
   sex <- mimic_patients %>% 
@@ -637,7 +663,9 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              bicarbonate = apache_vector$full_values["bicarbonate"],
              # Additional variables
              glasgow_coma_below_15, days_before_ICU, respiratory_support,
-             high_risk_speciality, length_of_stay = ceiling(los)
+             high_risk_speciality, length_of_stay = ceiling(los),
+             discharge_days = ifelse(discharge_days >= 0, discharge_days,
+                                     NA)
              )
   #row.names(output) <- i
   output
