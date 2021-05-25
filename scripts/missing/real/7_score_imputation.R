@@ -608,7 +608,7 @@ bootstrap_samples <- foreach(i = 1:nrow(best_methods_single),
     }
     
     # Inner loop for bootstrap assessment
-    results_boot <- foreach(j = 1:n_boot, .combine = "rbind",
+    results_boot <- foreach(j = 1:nboot, .combine = "rbind",
                                    .packages = c("dplyr", "ROCR",
                                                  "ResourceSelection")) %dopar%
       {
@@ -689,7 +689,7 @@ bootstrap_samples_multiple <- foreach(i = 1:nrow(best_methods_multiple),
       df <- model_list[[best_methods_multiple[i,2] %>% deframe()]]
       
       # Innermost loop for bootstrap assessment
-      results_boot_amelia <- foreach(k = 1:n_boot, .combine = "rbind",
+      results_boot_amelia <- foreach(k = 1:nboot, .combine = "rbind",
                                      .packages = c("dplyr", "ROCR",
                                                    "ResourceSelection",
                                                    "tibble", "foreach")) %dopar%
@@ -767,7 +767,7 @@ bootstrap_samples_multiple <- foreach(i = 1:nrow(best_methods_multiple),
       df <- model_list[[best_methods_multiple[i,2] %>% deframe()]]
       
       # Innermost loop for bootstrap assessment
-      results_boot_mice <- foreach(k = 1:n_boot, .combine = "rbind",
+      results_boot_mice <- foreach(k = 1:nboot, .combine = "rbind",
                                      .packages = c("dplyr", "ROCR",
                                                    "ResourceSelection",
                                                    "tibble", "foreach")) %dopar%
