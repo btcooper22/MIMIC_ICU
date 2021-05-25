@@ -90,6 +90,7 @@ patients_validate <- results %>%
 
 # Rebuild model
 final_model <- glm(readmission ~ apache_II +
+                     general_surgery + 
                      glasgow_coma_below_15 +
                      respiratory_support +
                      anaemia + lactate +

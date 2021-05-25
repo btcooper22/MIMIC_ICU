@@ -38,6 +38,7 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
     
     # Rebuild model
     final_model <- glm(readmission ~ apache_II +
+                         general_surgery + 
                          glasgow_coma_below_15 +
                          respiratory_support +
                          anaemia + lactate +
@@ -94,6 +95,7 @@ patients_validate <- results %>%
 
 # Rebuild model
 final_model <- glm(readmission ~ apache_II +
+                     general_surgery + 
                      glasgow_coma_below_15 +
                      respiratory_support +
                      anaemia + lactate +
@@ -123,6 +125,7 @@ patients_validate <- results %>%
 
 # Rebuild model
 final_model <- glm(readmission ~ apache_II +
+                     general_surgery + 
                      glasgow_coma_below_15 +
                      respiratory_support +
                      anaemia + lactate +

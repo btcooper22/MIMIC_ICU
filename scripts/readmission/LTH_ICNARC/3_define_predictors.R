@@ -463,7 +463,9 @@ results$days_before_ICU <- abs(df$PriorToAdmission_HospitalAdmissionDaysBefore)
 results$surgical_type <- df$PriorToAdmission_Specialty
 results$cardiac_surgery <- results$surgical_type %in% c("172. Cardiac Surgery", 
                              "170. Cardiothoracic Surgery", "320. Cardiology")
-results$general_surgery <- results$surgical_type == "100. General Surgery"
+results$general_surgery <- results$surgical_type %in% 
+  c("100. General Surgery", "102. Transplantation Surgery",
+    "104. Colorectal Surgery", "106. Upper Gastrointestinal Surgery") 
 results$high_risk_speciality <- results$surgical_type %in%
   c("106. Upper Gastrointestinal Surgery", "104. Colorectal Surgery",
     "105. Hepatobiliary & Pancreatic Surgery", "306. Hepatology",
