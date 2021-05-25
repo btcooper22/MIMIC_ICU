@@ -473,7 +473,8 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
       mutate(type = "motor")
     
     gcs_verbal <- charts %>% 
-      filter(ITEMID %in% c(723, 223900)) %>% 
+      filter(ITEMID %in% c(723, 223900)) %>%
+      filter(VALUE != "No Response-ETT") %>% 
       select(CHARTTIME, VALUENUM) %>% 
       mutate(type = "verbal")
     
@@ -497,15 +498,20 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              CHARTTIME < (admit_time + 86400))
     
     # Measure if below 15
-    if(any(gcs_df$motor < 6) |
-       any(gcs_df$verbal < 5) |
-       any(gcs_df$eye < 4))
+    if(nrow(gcs_df) > 0)
     {
-      glasgow_coma_below_15 <- TRUE
+      if(min(na.omit(rowSums(gcs_df[,2:4]))) < 15)
+      {
+        glasgow_coma_below_15 <- TRUE
+      }else
+      {
+        glasgow_coma_below_15 <- FALSE
+      }
     }else
     {
-      glasgow_coma_below_15 <- FALSE
+      glasgow_coma_below_15 <- NA
     }
+
     
     # Determine respiratory support
     respiratory_support_df <- charts %>% 

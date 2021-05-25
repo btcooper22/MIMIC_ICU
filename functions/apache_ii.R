@@ -386,7 +386,8 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   
   # Gather all GCS verbal measurements
   gcs_verbal_measurements <- chart_df %>% 
-    filter(ITEMID %in% c(723, 223900))
+    filter(ITEMID %in% c(723, 223900)) %>% 
+    filter(VALUE != "No Response-ETT")
   
   # Gather all GCS eye measurements
   gcs_eye_measurements <- chart_df %>% 
@@ -425,11 +426,6 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
       select(VALUENUM) %>% deframe()
     
     gcs_measurements %<>% worst_value("min")
-    
-    if(gcs_measurements == 3 & !is.na(gcs_measurements))
-    {
-      gcs_measurements <- NA
-    }
     
     # Sum and score
     gcs_value <- gcs_measurements

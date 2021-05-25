@@ -13,6 +13,8 @@ require(scales)
 require(caret)
 require(glmnet)
 require(mice)
+require(doParallel)
+require(tools)
 
 # Load data
 patients <- read_csv("data/predictors.csv")
@@ -323,8 +325,12 @@ model_options %>%
   filter(prop == 1)
 
 # Loop through datasets
+cl <- makeCluster(12)
+registerDoParallel(cl)
 ptm <- proc.time()
-output <- foreach(i = 1:10000, .combine = "rbind") %do%
+output <- foreach(i = 1:10000, .combine = "rbind",
+                  .packages = c("dplyr", "ROCR",
+                                "ResourceSelection")) %dopar%
   {
     # Seed
     print(i)
@@ -341,7 +347,8 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
     # Rebuild model
     final_model <- glm(readmission ~ age + fluid_balance_5L +
                          acute_renal_failure + atrial_fibrillation +
-                         days_before_ICU + high_risk_speciality,
+                         days_before_ICU + high_risk_speciality +
+                         gcs,
                        data = patients_train,
                        family = "binomial")
 
@@ -363,6 +370,7 @@ output <- foreach(i = 1:10000, .combine = "rbind") %do%
                cal_p = cal$p.value)
   }
 proc.time() - ptm 
+stopCluster(cl)
 
 # Summarise
 output %>% 
@@ -388,10 +396,12 @@ patients_validate <- patients %>%
   filter(subject_id %in% patients_train$subject_id == FALSE)
 
 # Rebuild model
-final_model <- glm(readmission ~ sex + age + 
-                     respiratory_rate + high_risk_speciality,
-                   data = patients_train,
-                   family = "binomial")
+final_model <-  glm(readmission ~ age + fluid_balance_5L +
+                      acute_renal_failure + atrial_fibrillation +
+                      days_before_ICU + high_risk_speciality +
+                      gcs,
+                    data = patients_train,
+                    family = "binomial")
 # Create predictions
 probs <- predict(final_model, newdata = patients_validate) %>% inverse_logit()
 
@@ -411,10 +421,12 @@ patients_validate <- patients %>%
   filter(subject_id %in% patients_train$subject_id == FALSE)
 
 # Rebuild model
-final_model <- glm(readmission ~ sex + age + 
-                     respiratory_rate + high_risk_speciality,
-                   data = patients_train,
-                   family = "binomial")
+final_model <-  glm(readmission ~ age + fluid_balance_5L +
+                      acute_renal_failure + atrial_fibrillation +
+                      days_before_ICU + high_risk_speciality +
+                      gcs,
+                    data = patients_train,
+                    family = "binomial")
 
 # Create predictions
 probs <- predict(final_model, newdata = patients_validate) %>% inverse_logit()
