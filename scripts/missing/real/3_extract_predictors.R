@@ -1,9 +1,11 @@
 # Packages
-require(tidyverse)
+require(readr)
+require(dplyr)
 require(magrittr)
 require(lubridate)
 require(doParallel)
 require(tools)
+require(tibble)
 
 # Load MIMIC database and other functions
 source("functions/mimic_load.R")
@@ -18,35 +20,6 @@ mimic_preproc <- read_rds("data/mimic_preprocessed_missing.RDS")
 # Load outcomes
 outcomes <- read_csv("data/outcomes_mortality.csv")
 
-# Correct "both" datasources where inaccurate-----------
-
-both_cases <- which(mimic_preproc$stays$dbsource == "both")
-new_both <- foreach(i = 1:length(both_cases),.combine = "c") %do%
-  {
-    # Find admission
-    hadm <- mimic_preproc$stays[both_cases[i],3]
-    
-    # Assess if admission in main data
-    if(hadm %in% outcomes$hadm_id)
-    {
-      # Find files
-      inputfile_mv <- paste("data/events/inputeventsmv_", hadm, ".csv", sep = "")
-      inputfile_cv <- paste("data/events/inputeventscv_", hadm, ".csv", sep = "")
-      
-      # Create new dbsource
-      case_when(
-        file.exists(inputfile_mv) & file.exists(inputfile_cv) ~ "both",
-        file.exists(inputfile_mv) ~ "metavision",
-        file.exists(inputfile_cv) ~ "carevue"
-      )
-    }else
-    {
-      # Flag as not in data
-      "irrelevant"
-    }
-  }
-mimic_preproc$stays$dbsource[mimic_preproc$stays$dbsource == "both"] <- new_both
-# test <- mimic_preproc$stays %>% filter(dbsource == "both")
 # Extraction loop----------
 
 ID_acute_renal_failure <- mimic_preproc$diagnoses %>% 
@@ -64,14 +37,13 @@ mimic_diagnoses <- mimic$diagnoses_icd %>% collect()
 # Prepare parallel options
 ptm <- proc.time()
 psnice(value = 19)
-registerDoParallel(ifelse(detectCores() <= 10,
+registerDoParallel(ifelse(detectCores() <= 15,
                           detectCores() - 1,
-                          10)
+                          15)
 )
 
 # EXAMPLES
 # i <- 1
-# i <- which(outcomes$readmission == TRUE)[1]
 # i <- which(outcomes$in_unit_mortality == TRUE)[1]
 # i <- which(outcomes$in_hospital_mortality == TRUE & 
 #              outcomes$in_unit_mortality == FALSE)[1]
@@ -81,13 +53,17 @@ registerDoParallel(ifelse(detectCores() <= 10,
 # Run loop
 predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
         .packages = c("magrittr", "readr", "dplyr",
-                      "tibble", "lubridate", "purrr")) %dopar%
+                      "tibble", "lubridate", "purrr"),
+        .errorhandling = "remove") %dopar%
 {
-  # Identify subject
-  # print(i)
+  # Identify subject and file
   subj <- outcomes$subject_id[i]
   adm <- outcomes$hadm_id[i]
+  filename <- paste("data/missing_full/", adm,
+                    ".csv", sep = "")
   
+  if(!file.exists(filename))
+  {
   # Demographics and stay----
   
   # Extract admission and discharge times
@@ -100,6 +76,8 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
   admit_time <- in_out_times %>% 
     select(intime) %>% 
     deframe() %>% force_tz("UTC")
+  
+  # If outtime is NA?
 
   # Extract age
   age <- mimic_preproc$stays %>% 
@@ -216,7 +194,6 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              chart_missing,
              lab_missing,
              acute_renal_failure,
-             readmission = outcomes$readmission[i],
              mort_inunit = outcomes$in_unit_mortality[i],
              mort_inhosp = outcomes$in_hospital_mortality[i],
              mort_30 = outcomes$mortality_30d[i],
@@ -261,12 +238,24 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              d_arterialoxygen = apache_discharge["arterialoxygen"],
              d_arterialcarbon = apache_discharge["arterialcarbon"])
   #row.names(output) <- i
+  write_csv(output, filename)
+  rm(charts,labs)
+  gc()
+  }
+  
   output
   #data.frame(i, cols = ncol(output))
 }
 row.names(predictors) <- c()
 stopImplicitCluster()
-proc.time() - ptm # 712s (~12 min)
+proc.time() - ptm
+
+#
+predictor_files <- dir("data/missing_full", full.names = TRUE)
+cl <- makeCluster(15)
+predictors <- do.call(rbind.data.frame, parLapply(cl, predictor_files, read_csv))
+stopCluster(cl)
+
 
 # Write and quality control ------------
 
@@ -284,9 +273,6 @@ predictors %<>% filter(chart_missing == FALSE)
 # Count and exclude missing lab data
 sum(predictors$lab_missing)
 predictors %<>% filter(lab_missing == FALSE)
-
-# Count cases of readmission
-table(predictors$readmission, useNA = "ifany")
 
 # Summarise APACHE-II scores
 summary(predictors$apache_II) # 7

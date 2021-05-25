@@ -27,7 +27,7 @@ apache_score <- function(data_in, mort_type = "inunit")
     data_in$pulse >= 180 | data_in$pulse <= 39 ~ 4,
     data_in$pulse >= 140 | data_in$pulse <= 54 ~ 3,
     data_in$pulse >= 110 | data_in$pulse <= 69 ~ 2,
-    is.na(map_values) ~ NaN,
+    is.na(data_in$pulse) ~ NaN,
     is.numeric(data_in$pulse) ~ 0
   )
   

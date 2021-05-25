@@ -1,5 +1,6 @@
 # Load packages
-require(tidyverse)
+require(readr)
+require(dplyr)
 require(magrittr)
 require(lubridate)
 require(doParallel)
@@ -21,9 +22,9 @@ if(!file.exists("data/chart_database_mortality.csv"))
 {
   # Prepare parallel options
   psnice(value = 19)
-  registerDoParallel(ifelse(detectCores() <= 12,
+  registerDoParallel(ifelse(detectCores() <= 15,
                             detectCores() - 1,
-                            12)
+                            15)
   )
 
   chart_database <- foreach(i = 1:length(files), .combine = "rbind",
@@ -44,7 +45,8 @@ if(!file.exists("data/chart_database_mortality.csv"))
       # Add to output
       data.frame(chart_split = files[i], hadm_id = adm_list)
     }
-  write_csv(chart_database, "data/chart_database_mortality.csv")
+  write_csv(chart_database %>% filter(hadm_id != "HADM_ID"),
+            "data/chart_database_mortality.csv")
   stopImplicitCluster()
   gc()
 }else
@@ -63,12 +65,11 @@ chartevents_filenames <- data.frame(filename = paste("data/events/chartevents_",
   mutate(done = file.exists(filename)) %>% 
   filter(done == FALSE)
 
-
 # Prepare parallel options
 psnice(value = 19)
-registerDoParallel(ifelse(detectCores() <= 10,
+registerDoParallel(ifelse(detectCores() <= 12,
                           detectCores() - 1,
-                          10)
+                          12)
 )
 
 # Extract chart events
@@ -85,37 +86,34 @@ foreach(i = chartevents_filenames$ID, .packages = c("readr", "dplyr",
   filename <- paste("data/events/chartevents_", outcomes$hadm_id[i],
                     ".csv", sep = "")
   
-  if(!file.exists(filename))
-  {
-    # Find correct chart split
-    chart_n <- chart_database$chart_split[chart_database$hadm_id==adm]
-    
-    # Load chart split and filter
-    chart_df <- foreach(cn = 1:length(chart_n), .combine = "rbind") %do% 
-      {
-        print(cn)
-        chart_in <- read_csv(paste("C:/Users/benco/charts/", chart_n[cn], sep = ""),
-                 col_types = "ccccccccccccccc", col_names = header)
-        
-        # Subset
-        chart_subset <- chart_in %>% 
-          filter(HADM_ID == adm)
-        
-        # Clear
-        rm(chart_in)
-        gc()
-        
-        # Output
-        chart_subset
-      }
-
-    # Write to file
-    chart_df %>% 
-      write_csv(filename)
-    
-    rm(chart_df)
-    gc()
-  }
+  # Find correct chart split
+  chart_n <- chart_database$chart_split[chart_database$hadm_id==adm]
+  
+  # Load chart split and filter
+  chart_df <- foreach(cn = 1:length(chart_n), .combine = "rbind") %do% 
+    {
+      print(cn)
+      chart_in <- read_csv(paste("C:/Users/benco/charts/", chart_n[cn], sep = ""),
+                           col_types = "ccccccccccccccc", col_names = header)
+      
+      # Subset
+      chart_subset <- chart_in %>% 
+        filter(HADM_ID == adm)
+      
+      # Clear
+      rm(chart_in)
+      gc()
+      
+      # Output
+      chart_subset
+    }
+  
+  # Write to file
+  chart_df %>% 
+    write_csv(filename)
+  
+  rm(chart_df)
+  gc()
 }
 stopImplicitCluster()
 
@@ -159,6 +157,7 @@ foreach(i = labevents_filenames$ID, .packages = c("dplyr","magrittr",
 stopImplicitCluster()
 rm(labevents)
 gc()
+
 
 
 # inputevents_mv-------------

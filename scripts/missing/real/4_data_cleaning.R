@@ -121,15 +121,15 @@ value_screen(predictors, "arterialcarbon",
 
 # Seperate admission and discharge apache scores
 results_admission <- predictors %>% 
-  select(1:30) %>% 
+  select(1:29) %>% 
   mutate(type = "admission")
 
 results_discharge <- predictors %>% 
-  select(c(1:10, 31:50)) %>% 
+  select(c(1:9, 30:49)) %>% 
   mutate(type = "discharge")
 
 # Rename variables
-names(results_admission)[11:30] <- c("temperature", "systolicbp", "diastolicbp",
+names(results_admission)[10:29] <- c("temperature", "systolicbp", "diastolicbp",
                                      "pulse", "respiratory", "arterialpH",
                                      "sodium", "potassium", "creatinine",
                                      "haematocrit", "whitebloodcount",
@@ -138,7 +138,7 @@ names(results_admission)[11:30] <- c("temperature", "systolicbp", "diastolicbp",
                                      "bicarbonate", "fractioninspiredoxygen",
                                      "arterialoxygen", "arterialcarbon")
 
-names(results_discharge)[11:30] <- c("temperature", "systolicbp", "diastolicbp",
+names(results_discharge)[10:29] <- c("temperature", "systolicbp", "diastolicbp",
                                      "pulse", "respiratory", "arterialpH",
                                      "sodium", "potassium", "creatinine",
                                      "haematocrit", "whitebloodcount",

@@ -22,11 +22,6 @@ discharge_results <- results %>%
 
 # Describe data
 admission_results %>% 
-  filter(mort_inhosp == FALSE &
-           mort_inunit == FALSE) %>% 
-  summarise(readmission = mean(readmission) * 100)
-
-admission_results %>% 
   filter(mort_inunit == FALSE) %>% 
   summarise(`30-day mortality` = mean(mort_30) * 100)
 
@@ -38,20 +33,6 @@ admission_results %>%
   summarise(`In-unit mortality` = mean(mort_inunit) * 100)
 
 # Build models----
-
-# Readmission, admission score
-model_admission_readmission <- glm(readmission ~ apache_II,
-                                   data = admission_results,
-                                   subset = mort_inhosp == FALSE &
-                                     mort_inunit == FALSE,
-                                   family = "binomial")
-
-# Readmission, discharge score
-model_discharge_readmission <- glm(readmission ~ apache_II,
-                                   data = discharge_results,
-                                   subset = mort_inhosp == FALSE &
-                                     mort_inunit == FALSE,
-                                   family = "binomial")
 
 # 30-day mortality, admission score
 model_admission_mort30 <- glm(mort_30 ~ apache_II,
@@ -83,18 +64,6 @@ model_admission_mortInUnit <- glm(mort_inunit ~ apache_II,
                                       family = "binomial")
 
 # Generate predictions----
-
-# admission_readmission
-data.frame(probs = predict(model_admission_readmission, 
-                           newdata = model_admission_readmission$data),
-           outcome = model_admission_readmission$data$readmission) %>% 
-  mutate(probs = inverse_logit(probs)) -> probs_admission_readmission
-
-# discharge_readmission
-data.frame(probs = predict(model_discharge_readmission, 
-                           newdata = model_discharge_readmission$data),
-           outcome = model_discharge_readmission$data$readmission) %>% 
-  mutate(probs = inverse_logit(probs)) -> probs_discharge_readmission
 
 # admission_30d
 data.frame(probs = predict(model_admission_mort30, 
@@ -129,12 +98,6 @@ data.frame(probs = predict(model_admission_mortInUnit,
 # Assess discrimination----
 
 # Generate prediction objects
-prediction_admission_readmission <- prediction(probs_admission_readmission$probs,
-                                               probs_admission_readmission$outcome)
-
-prediction_discharge_readmission <- prediction(probs_discharge_readmission$probs,
-                                               probs_discharge_readmission$outcome)
-
 prediction_admission_mort30 <- prediction(probs_admission_mort30$probs,
                                                probs_admission_mort30$outcome)
 
@@ -152,8 +115,6 @@ prediction_admission_mortInUnit <- prediction(probs_admission_mortInUnit$probs,
 
 
 # Generate AUC
-performance(prediction_admission_readmission, measure = "auc")@y.values[[1]]
-performance(prediction_discharge_readmission, measure = "auc")@y.values[[1]]
 performance(prediction_admission_mort30, measure = "auc")@y.values[[1]]
 performance(prediction_discharge_mort30, measure = "auc")@y.values[[1]]
 performance(prediction_admission_mortInHospital, measure = "auc")@y.values[[1]]
@@ -293,7 +254,7 @@ results_out <-
   filter(type == "admission") %>% 
   mutate(fractioninspiredoxygen = ifelse(is.na(fractioninspiredoxygen), 21, 
                 fractioninspiredoxygen)) %>% 
-  select(-subject_id, -type, -readmission, 
+  select(-subject_id, -type,
          -mort_inhosp, -mort_30) %>% 
   relocate(row_id, adm_id, missing_abg, mort_inunit,
            apache_II)
@@ -315,9 +276,16 @@ missing_hist <- results_out %>%
   summarise(n = sum(is.na(value)))
 
 table(missing_hist$n)
+
+# Find those where all data missing
+all_missing <- missing_hist %>% 
+  filter(n == 17) %>% 
+  select(row_id) %>% deframe()
+
   
 # Write
 results_out %>% 
+  filter(row_id %in% all_missing == FALSE) %>% 
   write_csv("data/apache_real_missing.csv")
 
 # Write 30-day mortality dataset----
@@ -329,7 +297,7 @@ results_out <-
          mort_inunit == FALSE) %>% 
   mutate(fractioninspiredoxygen = ifelse(is.na(fractioninspiredoxygen), 21, 
                                          fractioninspiredoxygen)) %>% 
-  select(-subject_id, -type, -readmission, 
+  select(-subject_id, -type,
          -mort_inhosp, -mort_inunit) %>% 
   relocate(row_id, adm_id, missing_abg, mort_30,
            apache_II)
