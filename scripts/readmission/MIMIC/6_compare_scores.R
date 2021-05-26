@@ -274,7 +274,7 @@ probs_frost <- nomogram_convert(scores_frost, points_system_input,
 # Bespoke model----
 
 # Vector of acceptable features
-feature_id <- c(7:13, 15:18, 20, 22:33, 35:40, 44:45, 47:48)
+feature_id <- c(7:13, 15:18, 20, 22:33, 35:40, 44:45, 47:50)
 
 # Impute missing
 results_mice <- read_csv("data/predictors.csv") %>% 
@@ -296,7 +296,8 @@ model_options <- foreach(i = 1:results_mice$m, .combine = "rbind") %do%
              anaemia = as.logical(anaemia),
              ambulation = as.logical(ambulation),
              fluid_balance_5L = as.logical(fluid_balance_5L),
-             glasgow_coma_below_15 = as.logical(glasgow_coma_below_15))
+             glasgow_coma_below_15 = as.logical(glasgow_coma_below_15),
+             discharge_delay = as.logical(discharge_delay))
     
     # Select predictor and outcome vectors
     x <- model.matrix(readmission~., results_imputed)[,-1]

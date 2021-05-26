@@ -665,7 +665,8 @@ predictors <- foreach(i = 1:nrow(outcomes), .combine = "rbind",
              glasgow_coma_below_15, days_before_ICU, respiratory_support,
              high_risk_speciality, length_of_stay = ceiling(los),
              discharge_days = ifelse(discharge_days >= 0, discharge_days,
-                                     NA)
+                                     NA),
+             discharge_delay = discharge_days > 0
              )
   #row.names(output) <- i
   output
