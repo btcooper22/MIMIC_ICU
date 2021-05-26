@@ -485,6 +485,7 @@ results$sedation <- df$Sedation != "5. No sedation or paralysis during scored pe
 
 # Clinically ready for discharge days == 0
 results$clinically_ready_discharge_days <-  df$UnitDischarge_ClinicallyReadyForDischargeDays
+results$discharge_delay <- results$clinically_ready_discharge_days > 1
 
 # Out-of-hours discharge
 discharge_time <- substr(df$UnitDischarge_DischargedDiedAtTime, 1, 2) %>% 

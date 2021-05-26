@@ -50,7 +50,8 @@ model_options <- foreach(i = 1:results_mice$m, .combine = "rbind") %do%
              glasgow_coma_below_15 = as.logical(glasgow_coma_below_15),
              hyperglycaemia = as.logical(hyperglycaemia),
              anaemia = as.logical(anaemia),
-             sedation = as.logical(sedation))
+             sedation = as.logical(sedation),
+             discharge_delay = as.logical(discharge_delay))
     
     # Select predictor and outcome vectors
     x <- model.matrix(readmission~., results_imputed[,feature_id])[,-1]
