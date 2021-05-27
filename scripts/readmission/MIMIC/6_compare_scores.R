@@ -45,6 +45,9 @@ crosstab <- function(varname, .df = patients)
 
 # Filter missing data----------
 
+# Assess NA
+sapply(patients, function(x) sum(is.na(x)))
+
 # Count and exclude missing chart data
 sum(patients$chart_missing)
 patients %<>% filter(chart_missing == FALSE)
@@ -58,9 +61,8 @@ sum(is.na(patients$fluid_balance_5L))
 patients %<>% filter(!is.na(patients$fluid_balance_5L))
 
 # Filter patients missing respiratory rate assessments
-sum(is.na(patients$respiratory_rate) | patients$respiratory_rate > 48)
-patients %<>% filter(!is.na(patients$respiratory_rate),
-                     patients$rr_time == 48)
+sum(is.na(patients$respiratory_rate_initial))
+patients %<>% filter(!is.na(respiratory_rate_initial))
 
 # Filter patients missing functional mobility assessments
 sum(is.na(patients$ambulation))
@@ -70,12 +72,11 @@ patients %<>% filter(!is.na(patients$ambulation))
 sum(is.na(patients$apache_II))
 patients %<>% filter(!is.na(patients$apache_II))
 
-# Filter patients with no blood labs
-sum(is.na(patients$hyperglycemia) | is.na(patients$anaemia))
-patients %<>% filter(!is.na(patients$hyperglycemia) & !is.na(patients$anaemia))
-
-# Assess NA
-sapply(patients, function(x) sum(is.na(x)))
+# Filter patients with no initial or final blood labs
+sum(is.na(patients$hyperglycemia_initial) | is.na(patients$anaemia_initial) |
+      is.na(patients$hyperglycemia_final) | is.na(patients$anaemia_final))
+patients %<>% filter(!is.na(patients$hyperglycemia_initial) & !is.na(patients$anaemia_initial) &
+                       !is.na(patients$hyperglycemia_final) & !is.na(patients$anaemia_final))
 
 # Filter missing physiology on discharge
 patients %<>% 

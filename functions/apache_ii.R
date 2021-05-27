@@ -538,7 +538,8 @@ apacheII_score <- function(labs_df, chart_df, patient_df, admission_time,
   }
   
   # Serum bicarbonate (venous mMol/L, only use if no arterial blood gases)-----------
-  if(is_empty(oxygenation_score) & is_empty(artpH_score))
+  if((is_empty(oxygenation_score) & is_empty(artpH_score)) |
+     (is.na(oxygenation_score) & is.na(artpH_score)))
   {
     # Gather all bicarbonate measurements
     bicarbonate_measurements <- labs_df %>% 
