@@ -791,14 +791,19 @@ predictors <- foreach(i = 1:nrow(outcomes),
              readmission = outcomes$readmission[i],
              # Hammer variables
              sex, general_surgery, cardiac_surgery, high_apache,
-             hyperglycemia, anaemia, los_5, age, ambulation,
+             hyperglycemia_initial = hyperglycemia,
+             anaemia_initial = anaemia, los_5, age, ambulation,
              fluid_balance_5L,
              # Frost variables
              after_hours_discharge, los_7, elective_admission,
-             admission_source, acute_renal_failure, apache_II,
+             admission_source, apache_II,
+             acute_renal_failure_initial = acute_renal_failure_24h,
              # Martin variables
-             serum_glucose, blood_urea_nitrogen, serum_chloride,
-             respiratory_rate, atrial_fibrillation, renal_insufficiency,
+             serum_glucose_initial = serum_glucose, 
+             blood_urea_nitrogen_initial = blood_urea_nitrogen,
+             serum_chloride_initial = serum_chloride,
+             respiratory_rate_initial = admission_resp_rate,
+             atrial_fibrillation, renal_insufficiency,
              # APACHE-II variables
              temperature = apache_vector$full_values["temperature"],
              mean_arterial_pressure = apache_vector$full_values["map"],
@@ -820,10 +825,10 @@ predictors <- foreach(i = 1:nrow(outcomes),
              discharge_days = ifelse(discharge_days >= 0, discharge_days,
                                      NA),
              discharge_delay = discharge_days > 0,
-             acute_renal_failure_24h,
+             acute_renal_failure_total = acute_renal_failure,
              serum_glucose_final, haemoglobin_final,
              blood_urea_nitrogen_final, serum_chloride_final,
-             admission_resp_rate,
+             respiratory_rate_final = respiratory_rate,
              hyperglycemia_final = serum_glucose_final > 180,
              anaemia_final = haemoglobin_final < 9
              )
@@ -833,7 +838,7 @@ predictors <- foreach(i = 1:nrow(outcomes),
 }
 row.names(predictors) <- c()
 stopImplicitCluster()
-proc.time() - ptm # 160 s
+proc.time() - ptm # 320 s
 
 # Write and quality control ------------
 
