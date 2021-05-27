@@ -586,7 +586,7 @@ list(model = "martin_O",
 # Bespoke model----
 
 # Vector of acceptable features
-feature_id <- c(7:13, 15:18, 20, 22:33, 35:40, 44:45, 47:50)
+feature_id <- c(7:13, 15:18, 20, 22, 24:33, 35:40, 44:58)
 
 # Impute missing
 results_mice <- read_csv("data/predictors.csv") %>% 
@@ -604,12 +604,15 @@ model_options <- foreach(i = 1:results_mice$m, .combine = "rbind") %do%
       as_tibble() %>% 
       mutate(readmission = ifelse(readmission == TRUE, 1, 0),
              high_apache  = as.logical(high_apache),
-             hyperglycemia = as.logical(hyperglycemia),
-             anaemia = as.logical(anaemia),
+             hyperglycemia_initial = as.logical(hyperglycemia_initial),
+             anaemia_initial = as.logical(anaemia_initial),
              ambulation = as.logical(ambulation),
              fluid_balance_5L = as.logical(fluid_balance_5L),
              glasgow_coma_below_15 = as.logical(glasgow_coma_below_15),
-             discharge_delay = as.logical(discharge_delay))
+             discharge_delay = as.logical(discharge_delay),
+             hyperglycemia_final = as.logical(hyperglycemia_final),
+             anaemia_final = as.logical(anaemia_final),) %>% 
+      na.omit()
     
     # Select predictor and outcome vectors
     x <- model.matrix(readmission~., results_imputed)[,-1]
@@ -658,10 +661,10 @@ output <- foreach(i = 1:10000, .combine = "rbind",
       filter(row_id %in% patients_train$row_id == FALSE)
     
     # Rebuild model
-    final_model <- glm(readmission ~ age + fluid_balance_5L +
-                         acute_renal_failure + atrial_fibrillation +
-                         days_before_ICU + high_risk_speciality +
-                         gcs,
+    final_model <- glm(readmission ~ acute_renal_failure_total +
+                         age + atrial_fibrillation + days_before_ICU +
+                         fluid_balance_5L + gcs + haemoglobin_final +
+                         high_risk_speciality + serum_chloride_final,
                        data = patients_train,
                        family = "binomial")
     
@@ -709,10 +712,10 @@ patients_validate <- patients %>%
   filter(subject_id %in% patients_train$subject_id == FALSE)
 
 # Rebuild model
-final_model <-  glm(readmission ~ age + fluid_balance_5L +
-                      acute_renal_failure + atrial_fibrillation +
-                      days_before_ICU + high_risk_speciality +
-                      gcs,
+final_model <- glm(readmission ~ acute_renal_failure_total +
+                     age + atrial_fibrillation + days_before_ICU +
+                     fluid_balance_5L + gcs + haemoglobin_final +
+                     high_risk_speciality + serum_chloride_final,
                     data = patients_train,
                     family = "binomial")
 # Create predictions
@@ -734,10 +737,10 @@ patients_validate <- patients %>%
   filter(subject_id %in% patients_train$subject_id == FALSE)
 
 # Rebuild model
-final_model <-  glm(readmission ~ age + fluid_balance_5L +
-                      acute_renal_failure + atrial_fibrillation +
-                      days_before_ICU + high_risk_speciality +
-                      gcs,
+final_model <- glm(readmission ~ acute_renal_failure_total +
+                     age + atrial_fibrillation + days_before_ICU +
+                     fluid_balance_5L + gcs + haemoglobin_final +
+                     high_risk_speciality + serum_chloride_final,
                     data = patients_train,
                     family = "binomial")
 
