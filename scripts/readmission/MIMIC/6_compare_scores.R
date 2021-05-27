@@ -244,27 +244,184 @@ points_system_output <- data.frame(
 probs_frost_A <- nomogram_convert(scores_frost, points_system_input,
                  points_system_output, log = TRUE)
 
+# Hammer: Original----------
+
+# Cross-tabulate
+crosstab("general_surgery")
+crosstab("cardiac_surgery")
+crosstab("hyperglycemia_final")
+crosstab("anaemia_final")
+crosstab("high_apache")
+crosstab("fluid_balance_5L")
+crosstab("ambulation")
+crosstab("los_5")
+
+# Score data - coefficients
+coefficients_hammer <- log(0.005 / (1 - 0.005)) +
+  ifelse(patients$sex == "M", 0.43, 0) +
+  ifelse(patients$general_surgery, 0.64, 0) +
+  ifelse(patients$cardiac_surgery, -1.01, 0) +
+  ifelse(patients$hyperglycemia_final, 0.36, 0) +
+  ifelse(patients$anaemia_final, 1.11, 0) +
+  ifelse(patients$high_apache, 0.44, 0) +
+  ifelse(patients$fluid_balance_5L, 0.52, 0) +
+  ifelse(patients$ambulation == FALSE, 0.7, 0) +
+  ifelse(patients$los_5, 0.88, 0)
+
+# Convert coefficients to probs
+probs_coefficients_hammer <- inverse_logit(coefficients_hammer)
+probs_hammer_O <- probs_coefficients_hammer
+
+# Martin: Original------------
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(respiratory_rate_final),
+            sd = sd(respiratory_rate_final))
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(blood_urea_nitrogen_final),
+            sd = sd(blood_urea_nitrogen_final))
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(serum_glucose_final),
+            sd = sd(serum_glucose_final)) %>% 
+  as.data.frame()
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(serum_chloride_final),
+            sd = sd(serum_chloride_final))%>% 
+  as.data.frame()
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(age),
+            sd = sd(age))
+
+crosstab("atrial_fibrillation")
+crosstab("renal_insufficiency")
+
+# Score data - coefficients
+coefficients_martin <- -9.284491 +
+  (0.04883 * patients$respiratory_rate_final) +
+  (0.011588 * patients$age) +
+  (0.036104 * patients$serum_chloride_final) +
+  (0.004967 * patients$blood_urea_nitrogen_final) +
+  (0.580153 * patients$atrial_fibrillation) +
+  (0.458202 * patients$renal_insufficiency) +
+  (0.003519 * patients$serum_glucose_final)
+
+# Convert to probabilities
+probs_martin_O <- inverse_logit(coefficients_martin)
+
+# Frost: Original---------------
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(age),
+            sd = sd(age))
+
+crosstab("sex")
+crosstab("admission_source")
+
+patients %>% 
+  group_by(readmission) %>% 
+  summarise(mean = mean(apache_II),
+            sd = sd(apache_II))
+
+crosstab("los_7")
+crosstab("after_hours_discharge")
+crosstab("acute_renal_failure_total")
+
+# Create scoring system from nomogram for age
+age_score_system_input <- data.frame(
+  input = seq(15, 90, 5),
+  pix = seq(2, 287, length.out = 16)
+)
+age_score_system_output <- data.frame(
+  output = seq(0, 8, 1),
+  pix = seq(2, 290, length.out = 9)
+)
+
+# Create scoring system from nomogram for APACHE-II
+apache_score_system_input <- data.frame(
+  input = seq(0, 45, 5),
+  pix = seq(12, 733, length.out = 10)
+)
+apache_score_system_output <- data.frame(
+  output = seq(0, 20, 1),
+  pix = seq(12, 733, length.out = 21)
+)
+
+# Score data - points
+scores_frost <- nomogram_convert(patients$age, age_score_system_input,
+                                 age_score_system_output) +
+  ifelse(patients$sex == "M", 2, 0) +
+  ifelse(patients$elective_admission == FALSE, 12.25, 0) +
+  case_when(
+    patients$admission_source == "OT" ~ 0,
+    patients$admission_source == "Emergency" ~ 9.5,
+    patients$admission_source == "OtherHosp" ~ 10.25,
+    patients$admission_source == "Ward" ~ 14.75
+  ) +
+  nomogram_convert(patients$apache_II, apache_score_system_input,
+                   apache_score_system_output) +
+  ifelse(patients$los_7, 17, 0) +
+  ifelse(patients$after_hours_discharge, 4, 0) +
+  ifelse(patients$acute_renal_failure_total, 10, 0)
+
+# Create nomogram system for total points
+points_system_input <- data.frame(
+  input = seq(0, 100, 5),
+  pix = seq(7, 727, length.out = 21)
+)
+points_system_output <- data.frame(
+  output = seq(0.05, 0.5, 0.05),
+  pix = c(212, 330, 403, 460, 506,
+          547, 583, 618, 652, 683)
+)
+
+# Convert using logarithmic transform
+probs_frost_O <- nomogram_convert(scores_frost, points_system_input,
+                                  points_system_output, log = TRUE)
+
 # Discrimination----------
 
 # Create prediction objects
 prediction_hammer_A <- prediction(probs_hammer_A, patients$readmission)
 prediction_martin_A <- prediction(probs_martin_A, patients$readmission)
 prediction_frost_A <- prediction(probs_frost_A, patients$readmission)
+prediction_hammer_O <- prediction(probs_hammer_O, patients$readmission)
+prediction_martin_O <- prediction(probs_martin_O, patients$readmission)
+prediction_frost_O <- prediction(probs_frost_O, patients$readmission)
 
 # Create performance objects
 performance_hammer_A <- performance(prediction_hammer_A, "tpr", "fpr")
 performance_martin_A <- performance(prediction_martin_A, "tpr", "fpr")
 performance_frost_A <- performance(prediction_frost_A, "tpr", "fpr")
+performance_hammer_O <- performance(prediction_hammer_O, "tpr", "fpr")
+performance_martin_O <- performance(prediction_martin_O, "tpr", "fpr")
+performance_frost_O <- performance(prediction_frost_O, "tpr", "fpr")
 
 # Create AUC objects
 auc_hammer_A <- performance(prediction_hammer_A, measure = "auc")
 auc_martin_A <- performance(prediction_martin_A, measure = "auc")
 auc_frost_A <- performance(prediction_frost_A, measure = "auc")
+auc_hammer_O <- performance(prediction_hammer_O, measure = "auc")
+auc_martin_O <- performance(prediction_martin_O, measure = "auc")
+auc_frost_O <- performance(prediction_frost_O, measure = "auc")
+
 
 # Print AUC
 auc_hammer_A@y.values[[1]]
 auc_martin_A@y.values[[1]]
 auc_frost_A@y.values[[1]]
+auc_hammer_O@y.values[[1]]
+auc_martin_O@y.values[[1]]
+auc_frost_O@y.values[[1]]
 
 # Plot AUC
 data.frame(x = performance_hammer_A@x.values[[1]],
@@ -276,7 +433,16 @@ data.frame(x = performance_hammer_A@x.values[[1]],
                model = "Martin_A"),
     data.frame(x = performance_frost_A@x.values[[1]],
                y = performance_frost_A@y.values[[1]],
-               model = "Frost_A")
+               model = "Frost_A"),
+    data.frame(x = performance_hammer_O@x.values[[1]],
+               y = performance_hammer_O@y.values[[1]],
+               model = "Hammer_O"),
+    data.frame(x = performance_martin_O@x.values[[1]],
+               y = performance_martin_O@y.values[[1]],
+               model = "Martin_O"),
+    data.frame(x = performance_frost_O@x.values[[1]],
+               y = performance_frost_O@y.values[[1]],
+               model = "Frost_O")
   ) %>% 
   ggplot(aes(x, y, colour = model))+
   geom_abline(slope = 1, intercept = 0,
@@ -287,7 +453,7 @@ data.frame(x = performance_hammer_A@x.values[[1]],
        y = "Sensitivity")+
   theme_classic(20)+
   theme(legend.position = "top")+
-  scale_color_brewer(palette = "Set1",
+  scale_color_brewer(palette = "Paired",
                      name = "")
 
 # Calibration----------
@@ -301,7 +467,13 @@ deciles_df <- tibble(
   probs_martin_A,
   decile_martin_A = ntile(probs_martin_A, 10),
   probs_frost_A,
-  decile_frost_A = ntile(probs_frost_A, 10)
+  decile_frost_A = ntile(probs_frost_A, 10),
+  probs_hammer_O,
+  decile_hammer_O = ntile(probs_hammer_O, 10),
+  probs_martin_O,
+  decile_martin_O = ntile(probs_martin_O, 10),
+  probs_frost_O,
+  decile_frost_O = ntile(probs_frost_O, 10)
 )
 
 # Calculate calibration
@@ -311,11 +483,20 @@ cal_martin_A <- calibration(deciles_df, "probs_martin_A", "decile_martin_A") %>%
   mutate(model = "martin_A")
 cal_frost_A <- calibration(deciles_df, "probs_frost_A", "decile_frost_A") %>% 
   mutate(model = "frost_A")
+cal_hammer_O <- calibration(deciles_df, "probs_hammer_O", "decile_hammer_O") %>% 
+  mutate(model = "hammer_O")
+cal_martin_O <- calibration(deciles_df, "probs_martin_O", "decile_martin_O") %>% 
+  mutate(model = "martin_O")
+cal_frost_O <- calibration(deciles_df, "probs_frost_O", "decile_frost_O") %>% 
+  mutate(model = "frost_O")
 
 # Plot
 rbind(cal_hammer_A %>% select(-decile_hammer_A), 
       cal_martin_A %>% select(-decile_martin_A),
-      cal_frost_A %>% select(-decile_frost_A)) %>% 
+      cal_frost_A %>% select(-decile_frost_A),
+      cal_hammer_O %>% select(-decile_hammer_O), 
+      cal_martin_O %>% select(-decile_martin_O),
+      cal_frost_O %>% select(-decile_frost_O)) %>% 
   ggplot(aes(predicted, observed ,
              colour = model))+
   geom_abline(slope = 1, intercept = 0,
@@ -330,7 +511,7 @@ rbind(cal_hammer_A %>% select(-decile_hammer_A),
   theme(legend.position = "top")+
   labs(x = "Predicted readmission",
        y = "Observed readmission")+
-  scale_colour_brewer(palette = "Set1",
+  scale_colour_brewer(palette = "Paired",
                       name = "")+
   facet_wrap(~model, scales = "free_x")
 
@@ -342,9 +523,18 @@ hoslem_martin_A <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_martin_A, g = 10)
 hoslem_frost_A <- hoslem.test(patients$readmission == "Readmitted to ICU",
             probs_frost_A, g = 10)
-hoslem_hammer_A
-hoslem_martin_A
-hoslem_frost_A
+hoslem_hammer_O <- hoslem.test(patients$readmission == "Readmitted to ICU",
+                               probs_hammer_O, g = 10)
+hoslem_martin_O <- hoslem.test(patients$readmission == "Readmitted to ICU",
+                               probs_martin_O, g = 10)
+hoslem_frost_O <- hoslem.test(patients$readmission == "Readmitted to ICU",
+                              probs_frost_O, g = 10)
+hoslem_hammer_A$statistic
+hoslem_martin_A$statistic
+hoslem_frost_A$statistic
+hoslem_hammer_O$statistic
+hoslem_martin_O$statistic
+hoslem_frost_O$statistic
 
 # Write final patients file
 write_csv(patients, "data/final_patients.csv")
@@ -371,6 +561,27 @@ list(model = "martin_A",
      calibration = hoslem_martin_A,
      deciles = cal_martin_A) %>% 
   write_rds("scripts/readmission/shared/models/MIMIC_martin_A.RDS")
+
+list(model = "hammer_O",
+     data = "MIMIC",
+     discrimination = prediction_hammer_O,
+     calibration = hoslem_hammer_O,
+     deciles = cal_hammer_O) %>% 
+  write_rds("scripts/readmission/shared/models/MIMIC_hammer_O.RDS")
+
+list(model = "frost_O",
+     data = "MIMIC",
+     discrimination = prediction_frost_O,
+     calibration = hoslem_frost_O,
+     deciles = cal_frost_O) %>% 
+  write_rds("scripts/readmission/shared/models/MIMIC_frost_O.RDS")
+
+list(model = "martin_O",
+     data = "MIMIC",
+     discrimination = prediction_martin_O,
+     calibration = hoslem_martin_O,
+     deciles = cal_martin_O) %>% 
+  write_rds("scripts/readmission/shared/models/MIMIC_martin_O.RDS")
 
 # Bespoke model----
 
