@@ -541,43 +541,43 @@ write_csv(patients, "data/final_patients.csv")
 
 # Combine and write----
 
-list(model = "hammer_A",
-     data = "MIMIC",
+list(model = "hammer",
+     data = "MIMIC_A",
      discrimination = prediction_hammer_A,
      calibration = hoslem_hammer_A,
      deciles = cal_hammer_A) %>% 
   write_rds("scripts/readmission/shared/models/MIMIC_hammer_A.RDS")
 
-list(model = "frost_A",
-     data = "MIMIC",
+list(model = "frost",
+     data = "MIMIC_A",
      discrimination = prediction_frost_A,
      calibration = hoslem_frost_A,
      deciles = cal_frost_A) %>% 
   write_rds("scripts/readmission/shared/models/MIMIC_frost_A.RDS")
 
-list(model = "martin_A",
-     data = "MIMIC",
+list(model = "martin",
+     data = "MIMIC_A",
      discrimination = prediction_martin_A,
      calibration = hoslem_martin_A,
      deciles = cal_martin_A) %>% 
   write_rds("scripts/readmission/shared/models/MIMIC_martin_A.RDS")
 
-list(model = "hammer_O",
-     data = "MIMIC",
+list(model = "hammer",
+     data = "MIMIC_O",
      discrimination = prediction_hammer_O,
      calibration = hoslem_hammer_O,
      deciles = cal_hammer_O) %>% 
   write_rds("scripts/readmission/shared/models/MIMIC_hammer_O.RDS")
 
-list(model = "frost_O",
-     data = "MIMIC",
+list(model = "frost",
+     data = "MIMIC_O",
      discrimination = prediction_frost_O,
      calibration = hoslem_frost_O,
      deciles = cal_frost_O) %>% 
   write_rds("scripts/readmission/shared/models/MIMIC_frost_O.RDS")
 
-list(model = "martin_O",
-     data = "MIMIC",
+list(model = "martin",
+     data = "MIMIC_O",
      discrimination = prediction_martin_O,
      calibration = hoslem_martin_O,
      deciles = cal_martin_O) %>% 
