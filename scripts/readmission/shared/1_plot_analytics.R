@@ -5,7 +5,7 @@ require(foreach)
 require(dplyr)
 require(tidyr)
 require(ggplot2)
-require(patchwork)
+require(cowplot)
 require(forcats)
 
 # Load models
@@ -15,12 +15,18 @@ ICNARC_martin <- read_rds("scripts/readmission/shared/models/LTH_ICNARC_martin.R
 ICNARC_frost <- read_rds("scripts/readmission/shared/models/LTH_ICNARC_frost.RDS")
 
 MIMIC_bespoke <- read_rds("scripts/readmission/shared/models/MIMIC_bespoke.RDS")
-MIMIC_hammer <- read_rds("scripts/readmission/shared/models/MIMIC_hammer.RDS")
-MIMIC_martin <- read_rds("scripts/readmission/shared/models/MIMIC_martin.RDS")
-MIMIC_frost <- read_rds("scripts/readmission/shared/models/MIMIC_frost.RDS")
+MIMIC_hammer_A <- read_rds("scripts/readmission/shared/models/MIMIC_hammer_A.RDS")
+MIMIC_martin_A <- read_rds("scripts/readmission/shared/models/MIMIC_martin_A.RDS")
+MIMIC_frost_A <- read_rds("scripts/readmission/shared/models/MIMIC_frost_A.RDS")
+
+MIMIC_hammer_O <- read_rds("scripts/readmission/shared/models/MIMIC_hammer_O.RDS")
+MIMIC_martin_O <- read_rds("scripts/readmission/shared/models/MIMIC_martin_O.RDS")
+MIMIC_frost_O <- read_rds("scripts/readmission/shared/models/MIMIC_frost_O.RDS")
+
 
 model_list <- list(ICNARC_bespoke, ICNARC_hammer, ICNARC_martin, ICNARC_frost,
-                   MIMIC_bespoke, MIMIC_hammer, MIMIC_martin, MIMIC_frost)
+                   MIMIC_bespoke, MIMIC_hammer_A, MIMIC_martin_A, MIMIC_frost_A,
+                   MIMIC_hammer_O, MIMIC_martin_O, MIMIC_frost_O)
 
 # Table of values----
 performance_df <- foreach(i = 1:length(model_list), .combine = "rbind") %do%
@@ -38,50 +44,13 @@ performance_df <- foreach(i = 1:length(model_list), .combine = "rbind") %do%
     data.frame(model = model_list[[i]][1]$model,
                dataset = model_list[[i]][2]$data,
                AUC, chisq = hoslem$statistic %>% unname(),
-               p = hoslem$p.value > 0.05)
-  }
+               p = hoslem$p.value %>% round(3))
+  } %>% 
+  mutate(dataset = ifelse(dataset == "MIMIC","MIMIC_O",
+                          dataset))
 performance_df %>% 
   pivot_wider(names_from = "dataset",
               values_from = c("AUC", "chisq", "p")) 
-
-# Crude plots-----
-ggplot(performance_df,
-       aes(AUC, chisq))+
-  geom_point(size = 8,
-             aes(fill = paste(model, dataset)),
-             shape = 21)+
-  theme_classic(20)+
-  theme(legend.position = "top")+
-  scale_fill_manual(values = c("#a6cee3", "#1f78b4",
-                               "#b2df8a", "#33a02c",
-                               "#fb9a99", "#e31a1c",
-                               "#cab2d6", "#6a3d9a"),
-                    name = "")+
-  scale_y_reverse()
-
-# Discrimination
-performance_df %>% 
-  mutate(dataset = ifelse(dataset == "LTH_ICNARC", "LTHT", "MIMIC"),
-         AUC = ifelse(AUC < 0.5, 1-AUC, AUC),
-         model = fct_recode(model, `Martin et al. (2018)` = "martin",
-                            `Frost et al. (2010)` = "frost",
-                            `Hammer et al. (2020)` = "hammer",
-                            `Our model` = "bespoke")) %>% 
-  ggplot(aes(model, AUC))+
-  geom_bar(aes(fill = dataset),
-           colour = "black",
-           stat = "identity",
-           position = "dodge",
-           alpha = 0.7)+
-  scale_fill_manual(values = c("#377eb8", "#ff7f00"),
-                    name = "")+
-  theme_classic(20)+
-  theme(legend.position = "top")+
-  labs(x = "", y = "Discrimination")+
-  coord_flip(ylim = c(0.5, 1))
-
-ggsave("figures/case_discrimination.png", height = 6,
-       width = 12)
 
 # Plot discrimination----
 discrimination_df <- foreach(i = 1:length(model_list), .combine = "rbind") %do%
@@ -99,20 +68,8 @@ discrimination_df <- foreach(i = 1:length(model_list), .combine = "rbind") %do%
                dataset = model_list[[i]][2]$data)
   } %>% 
   mutate(identifier = paste(dataset, model, sep = "-"),
-         dataset = ifelse(dataset == "LTH_ICNARC", "ICNARC", "MIMIC"))
+         dataset = ifelse(dataset == "LTH_ICNARC", "ICNARC", dataset))
 
-# Plot combined
-discrimination_df %>% 
-  ggplot(aes(x, y, colour = model))+
-  geom_abline(slope = 1, intercept = 0,
-              linetype = "dotted",
-              size = 1)+
-  geom_path(size = 1)+
-  labs(x = "1 - Specificity",
-       y = "Sensitivity")+
-  theme_classic(20)+
-  theme(legend.position = "top")+
-  facet_wrap(~dataset)
 
 # Bespoke
 dplot_bespoke <- discrimination_df %>% 
@@ -126,7 +83,7 @@ dplot_bespoke <- discrimination_df %>%
        y = "Sensitivity")+
   theme_classic(20)+
   theme(legend.position = "top")+
-  scale_colour_manual(values = c("#a6cee3", "#1f78b4"),
+  scale_colour_manual(values = c("#bdc9e1", "#0570b0"),
                       name = "Bespoke")
 
 # Hammer
@@ -141,7 +98,8 @@ dplot_hammer <- discrimination_df %>%
        y = "Sensitivity")+
   theme_classic(20)+
   theme(legend.position = "top")+
-  scale_colour_manual(values = c("#b2df8a", "#33a02c"),
+  scale_colour_manual(values = c("#c2e699", "#78c679",
+                                 "#238443"),
                       name = "Hammer")
 
 # Martin
@@ -156,7 +114,8 @@ dplot_martin <- discrimination_df %>%
        y = "Sensitivity")+
   theme_classic(20)+
   theme(legend.position = "top")+
-  scale_colour_manual(values = c("#fb9a99", "#e31a1c"),
+  scale_colour_manual(values = c("#fecc5c","#fb9a99",
+                                 "#e31a1c"),
                       name = "Martin")
 
 # Frost
@@ -171,32 +130,16 @@ dplot_frost <- discrimination_df %>%
        y = "Sensitivity")+
   theme_classic(20)+
   theme(legend.position = "top")+
-  scale_colour_manual(values = c("#cab2d6", "#6a3d9a"),
+  scale_colour_manual(values = c("#fbb4b9", "#f768a1",
+                                 "#ae017e"),
                       name = "Frost")
 
 # Write
-dplot_colour <- (dplot_frost + dplot_martin) / (dplot_hammer + dplot_bespoke)
+dplot_colour <- plot_grid(dplot_frost, dplot_martin,
+                          dplot_hammer, dplot_bespoke,
+                          labels = "AUTO", label_size = 32)
 ggsave("figures/Discrimination_colour.png", dplot_colour,
-       height = 10, width = 15)
-
-# B/W Version
-bw_plot <- discrimination_df %>% 
-  ggplot(aes(x, y, colour = identifier))+
-  geom_abline(slope = 1, intercept = 0,
-              linetype = "dotted",
-              size = 1)+
-  geom_path(size = 2)+
-  labs(x = "1 - Specificity",
-       y = "Sensitivity")+
-  theme_classic(20)+
-  theme(legend.position = "top")+
-  scale_colour_manual(values = rep("#f0f0f0",8),
-                      name = "BW")
-
-# Write
-dplot_bw <- (bw_plot + bw_plot) / (bw_plot + bw_plot)
-ggsave("figures/Discrimination_BW.png", dplot_bw,
-       height = 15, width = 15)
+       height = 10, width = 12.5)
 
 # Plot calibration----
 calibration_df <- foreach(i = 1:length(model_list), .combine = "rbind") %do%
@@ -212,27 +155,7 @@ calibration_df <- foreach(i = 1:length(model_list), .combine = "rbind") %do%
                model = model_list[[i]][1]$model,
                dataset = model_list[[i]][2]$data)
   } %>% 
-  mutate(identifier = paste(dataset, model, sep = "-"),
-         dataset = ifelse(dataset == "LTH_ICNARC", "ICNARC", "MIMIC"))
-
-# Plot combined
-# calibration_df %>% 
-#   ggplot(aes(predicted, observed ,
-#              colour = model))+
-#   geom_abline(slope = 1, intercept = 0,
-#               size = 1)+
-#   geom_path(size = 1)+
-#   geom_pointrange(aes(ymin = observed - error ,
-#                       ymax = observed + error,
-#                       y = observed,
-#                       x = predicted,
-#                       colour = model)) +
-#   theme_classic(20)+
-#   theme(legend.position = "top")+
-#   labs(x = "Predicted readmission",
-#        y = "Observed readmission")+
-#   facet_wrap(~dataset, scales = "free")+
-#   scale_colour_brewer(palette = "Set1")
+  mutate(identifier = paste(dataset, model, sep = "-"))
 
 # Bespoke
 cplot_bespoke <- calibration_df %>% 
@@ -241,20 +164,21 @@ cplot_bespoke <- calibration_df %>%
              colour = dataset))+
   geom_abline(slope = 1, intercept = 0,
               size = 1)+
-  geom_path(size = 1)+
+  geom_path(size = 1, alpha = 0.8)+
   geom_pointrange(aes(ymin = observed - error ,
                       ymax = observed + error,
                       y = observed,
                       x = predicted,
-                      colour = dataset), size = 0.5) +
+                      colour = dataset), size = 0.25,
+                  alpha = 0.8) +
   theme_classic(20)+
   theme(legend.position = "top")+
   labs(x = "Predicted readmission",
        y = "Observed readmission")+
-  scale_colour_manual(values = c("#a6cee3", "#1f78b4"),
+  scale_colour_manual(values = c("#bdc9e1", "#0570b0"),
                       name = "Bespoke")+
-  coord_cartesian(xlim = c(0,16),
-                  ylim = c(0,18))
+  coord_cartesian(xlim = c(0,25),
+                  ylim = c(0,30))
 
 
 # Hammer
@@ -264,20 +188,22 @@ cplot_hammer <- calibration_df %>%
              colour = dataset))+
   geom_abline(slope = 1, intercept = 0,
               size = 1)+
-  geom_path(size = 1)+
+  geom_path(size = 1, alpha = 0.8)+
   geom_pointrange(aes(ymin = observed - error ,
                       ymax = observed + error,
                       y = observed,
                       x = predicted,
-                      colour = dataset), size = 0.5) +
+                      colour = dataset), size = 0.25,
+                  alpha = 0.8) +
   theme_classic(20)+
   theme(legend.position = "top")+
   labs(x = "Predicted readmission",
        y = "Observed readmission")+
-  scale_colour_manual(values = c("#b2df8a", "#33a02c"),
+  scale_colour_manual(values = c("#c2e699", "#78c679",
+                                 "#238443"),
                       name = "Hammer")+
-  coord_cartesian(xlim = c(0,16),
-                  ylim = c(0,18))
+  coord_cartesian(xlim = c(0,25),
+                  ylim = c(0,30))
 
 # Martin
 cplot_martin <- calibration_df %>% 
@@ -291,15 +217,17 @@ cplot_martin <- calibration_df %>%
                       ymax = observed + error,
                       y = observed,
                       x = predicted,
-                      colour = dataset), size = 0.5) +
+                      colour = dataset), size = 0.25,
+                  alpha = 0.8) +
   theme_classic(20)+
   theme(legend.position = "top")+
   labs(x = "Predicted readmission",
        y = "Observed readmission")+
-  scale_colour_manual(values = c("#fb9a99", "#e31a1c"),
+  scale_colour_manual(values = c("#fecc5c","#fb9a99",
+                                 "#e31a1c"),
                       name = "Martin")+
-  coord_cartesian(xlim = c(0,16),
-                  ylim = c(0,18))
+  coord_cartesian(xlim = c(0,25),
+                  ylim = c(0,30))
 
 
 # Frost
@@ -314,17 +242,21 @@ cplot_frost <- calibration_df %>%
                       ymax = observed + error,
                       y = observed,
                       x = predicted,
-                      colour = dataset), size = 0.5) +
+                      colour = dataset), size = 0.25,
+                  alpha = 0.8) +
   theme_classic(20)+
   theme(legend.position = "top")+
   labs(x = "Predicted readmission",
        y = "Observed readmission")+
-  scale_colour_manual(values = c("#cab2d6", "#6a3d9a"),
+  scale_colour_manual(values = c("#fbb4b9", "#f768a1",
+                                 "#ae017e"),
                       name = "Frost")+
-  coord_cartesian(xlim = c(0,16),
-                  ylim = c(0,18))
+  coord_cartesian(xlim = c(0,25),
+                  ylim = c(0,30))
 
 # Write
-cplot_colour <- (cplot_frost + cplot_martin) / (cplot_hammer + cplot_bespoke)
+cplot_colour <- plot_grid(cplot_frost, cplot_martin,
+                          cplot_hammer, cplot_bespoke,
+                          labels = "AUTO", label_size = 32)
 ggsave("figures/Calibration_colour.png", cplot_colour,
        height = 8, width = 15)
