@@ -80,11 +80,24 @@ points_system_output <- data.frame(
 probs_frost <- nomogram_convert(scores_frost, points_system_input,
                                 points_system_output, log = TRUE)
 
+# Generate hammer scores----
+coefficients_hammer <- log(0.005 / (1 - 0.005)) +
+  ifelse(results$sex == "M", 0.43, 0) +
+  ifelse(results$general_surgery, 0.64, 0) +
+  ifelse(results$cardiac_surgery, -1.01, 0) +
+  ifelse(results$hyperglycaemia, 0.36, 0) +
+  ifelse(results$anaemia, 1.11, 0) +
+  ifelse(results$apache_II >= 20, 0.44, 0) +
+  ifelse(results$posthospital_dependency == TRUE, 0.7, 0) +
+  ifelse(results$length_of_stay >= 5, 0.88, 0) + 0.26
+
+
 # Bootstrap assessment----
 
 # Prepare data
 results %<>% 
-  mutate(probs_frost = log(probs_frost / (1 - probs_frost)))
+  mutate(probs_frost = log(probs_frost / (1 - probs_frost)),
+         probs_hammer = coefficients_hammer)
 
 # Prepare parallel
 ptm <- proc.time()
@@ -112,17 +125,28 @@ model_results <- foreach(i = 1:nboot, .combine = "rbind",
                             data = patients_train,
                        family = "binomial")
     
+    # Fit hammer+
+    hammer_plus_model <- glm(readmission ~ probs_hammer + clinically_ready_discharge_days,
+                            data = patients_train,
+                            family = "binomial")
+    
     # Predict
     probs_frost_plus <- predict(frost_plus_model, newdata = patients_validate) %>% inverse_logit()
+    probs_hammer_plus <- predict(hammer_plus_model, newdata = patients_validate) %>% inverse_logit()
     
     # Make prediction object
     pred_frost <- prediction(patients_validate$probs_frost %>% inverse_logit(),
                              patients_validate$readmission)
     pred_frost_plus <- prediction(probs_frost_plus, patients_validate$readmission)
+    pred_hammer <- prediction(patients_validate$probs_hammer %>% inverse_logit(),
+                             patients_validate$readmission)
+    pred_hammer_plus <- prediction(probs_hammer_plus, patients_validate$readmission)
     
     # Extract AUC
     AUC_frost <- performance(pred_frost, measure = "auc")@y.values[[1]]
     AUC_frost_plus <- performance(pred_frost_plus, measure = "auc")@y.values[[1]]
+    AUC_hammer <- performance(pred_hammer, measure = "auc")@y.values[[1]]
+    AUC_hammer_plus <- performance(pred_hammer_plus, measure = "auc")@y.values[[1]]
     
     # Calibration
     cal_frost <- hoslem.test(patients_validate$readmission,
@@ -130,12 +154,22 @@ model_results <- foreach(i = 1:nboot, .combine = "rbind",
                              g = 10)
     cal_frost_plus <- hoslem.test(patients_validate$readmission,
                              probs_frost_plus, g = 10)
+    cal_hammer <- hoslem.test(patients_validate$readmission,
+                             patients_validate$probs_hammer %>% inverse_logit(),
+                             g = 10)
+    cal_hammer_plus <- hoslem.test(patients_validate$readmission,
+                                  probs_hammer_plus, g = 10)
+    
     
     # Output
     data.frame(i, AUC_frost,
                AUC_frost_plus,
                cal_frost = cal_frost$statistic,
-               cal_frost_plus = cal_frost_plus$statistic)
+               cal_frost_plus = cal_frost_plus$statistic,
+               AUC_hammer,
+               AUC_hammer_plus,
+               cal_hammer = cal_hammer$statistic,
+               cal_hammer_plus = cal_hammer_plus$statistic)
   }
 
 proc.time() - ptm 
@@ -145,18 +179,26 @@ stopCluster(cl)
 
 # Discrimination
 model_results %>% 
-  mutate(frost_AUC_diff = AUC_frost_plus - AUC_frost) %>% 
-  ggplot(aes(x = frost_AUC_diff))+
+  mutate(frost_AUC_diff = AUC_frost_plus - AUC_frost,
+         hammer_AUC_diff = AUC_hammer_plus - AUC_hammer) %>%
+  select(frost_AUC_diff, hammer_AUC_diff) %>% 
+  pivot_longer(1:2) %>% 
+  ggplot(aes(x = value))+
   geom_density(fill = "#e41a1c", alpha = 0.8)+
   geom_vline(linetype = "dashed",
              xintercept = 0)+
-  theme_classic(20)
+  theme_classic(20)+
+    facet_wrap(~name, scales = "free")
 
 # Calibration
 model_results %>% 
-  mutate(frost_cal_diff = cal_frost_plus - cal_frost) %>% 
-  ggplot(aes(x = frost_cal_diff))+
+  mutate(frost_cal_diff = cal_frost_plus - cal_frost,
+         hammer_cal_diff = cal_hammer_plus - cal_hammer) %>% 
+  select(frost_cal_diff, hammer_cal_diff) %>% 
+  pivot_longer(1:2) %>% 
+  ggplot(aes(x = value))+
   geom_density(fill = "#377eb8", alpha = 0.8)+
   geom_vline(linetype = "dashed",
              xintercept = 0)+
-  theme_classic(20)
+  theme_classic(20)+
+  facet_wrap(~name, scales = "free")
