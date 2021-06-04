@@ -238,11 +238,11 @@ predictors <- foreach(i = 1:nrow(outcomes),
   # Measure ready for discharge days
   if(length(callout_time) > 0)
   {
-    discharge_days <- floor(difftime(discharge_time, callout_time,
-                                     unit = "days"))
+    discharge_hours <- floor(difftime(discharge_time, callout_time,
+                                     unit = "hours"))
   }else
   {
-    discharge_days <- NA
+    discharge_hours <- NA
   }
 
   
@@ -822,9 +822,9 @@ predictors <- foreach(i = 1:nrow(outcomes),
              # Additional variables
              glasgow_coma_below_15, days_before_ICU, respiratory_support,
              high_risk_speciality, length_of_stay = ceiling(los),
-             discharge_days = ifelse(discharge_days >= 0, discharge_days,
+             discharge_hours = ifelse(discharge_hours >= 0, discharge_hours,
                                      NA),
-             discharge_delay = discharge_days > 0,
+             discharge_delay = discharge_hours > 24,
              acute_renal_failure_total = acute_renal_failure,
              serum_glucose_final, haemoglobin_final,
              blood_urea_nitrogen_final, serum_chloride_final,
