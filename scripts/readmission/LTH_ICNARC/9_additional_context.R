@@ -91,19 +91,70 @@ coefficients_hammer <- log(0.005 / (1 - 0.005)) +
   ifelse(results$posthospital_dependency == TRUE, 0.7, 0) +
   ifelse(results$length_of_stay >= 5, 0.88, 0) + 0.26
 
+# Generate Martin scores----
+# Rebuild age
+age_band <- results$age
+results$age <- case_when(
+  age_band == "under 25" ~ 21 %>% as.character(),
+  age_band == "over 90" ~ 90 %>% as.character(),
+  TRUE ~ substr(age_band, 1, 2)
+) %>% as.numeric()
+
+
+# Estimate serum chloride from sodium and potassium
+chloride_coef <- read_rds("models/serum_chloride.RDS")
+
+results$serum_chloride <- chloride_coef[1] + (chloride_coef[2] * results$sodium) + 
+  (chloride_coef[3] * results$potassium) + 
+  (chloride_coef[4] * (results$sodium * results$potassium))
+
+# Convert urea to BUN
+results$blood_urea_nitrogen <- results$urea / 0.357
+
+# Extract medical history
+medical_history <- read_csv("data/icnarc_outcomes.csv") %>% 
+  select(contains("PastMedicalHistory")) %>% 
+  select("PastMedicalHistory_VerySevereCardiovascularDisease",
+         "PastMedicalHistory_ChronicRenalReplacement",
+         "PastMedicalHistory_Condition") %>% 
+  cbind(read_csv("data/icnarc_outcomes.csv") %>% 
+          select(Identifiers_PatientPseudoId) %>% 
+          rename(id = "Identifiers_PatientPseudoId")) %>% 
+  mutate(renal_insufficiency = PastMedicalHistory_ChronicRenalReplacement == TRUE |
+           PastMedicalHistory_Condition == "Chronic renal failure",
+         atrial_fibrillation = PastMedicalHistory_VerySevereCardiovascularDisease == TRUE |
+           PastMedicalHistory_Condition == "Supra-ventricular tachycardia, atrial fibrillation or flutter") %>% 
+  select(id, renal_insufficiency, atrial_fibrillation)
+
+# Attach
+results %<>% 
+  left_join(medical_history)
+results$renal_insufficiency[is.na(results$renal_insufficiency)] <- FALSE
+results$atrial_fibrillation[is.na(results$atrial_fibrillation)] <- FALSE
+
+# Score data - coefficients
+coefficients_martin <- -9.284491 +
+  (0.04883 * results$respiratory_rate) +
+  (0.011588 * results$age) +
+  (0.036104 * results$serum_chloride) +
+  (0.004967 * results$blood_urea_nitrogen) +
+  (0.580153 * results$atrial_fibrillation) +
+  (0.458202 * results$renal_insufficiency) +
+  (0.003519 * results$glucose)
 
 # Bootstrap assessment----
 
 # Prepare data
 results %<>% 
   mutate(probs_frost = log(probs_frost / (1 - probs_frost)),
-         probs_hammer = coefficients_hammer)
+         probs_hammer = coefficients_hammer,
+         probs_martin = coefficients_martin)
 
 # Prepare parallel
 ptm <- proc.time()
 cl <- makeCluster(4)
 registerDoParallel(cl)
-nboot <- 1000
+nboot <- 10000
 
 model_results <- foreach(i = 1:nboot, .combine = "rbind",
                          .packages = c("dplyr", "ROCR",
@@ -130,9 +181,16 @@ model_results <- foreach(i = 1:nboot, .combine = "rbind",
                             data = patients_train,
                             family = "binomial")
     
+    # Fit martin+
+    martin_plus_model <- glm(readmission ~ probs_martin + clinically_ready_discharge_days,
+                             data = patients_train,
+                             family = "binomial")
+    
+    
     # Predict
     probs_frost_plus <- predict(frost_plus_model, newdata = patients_validate) %>% inverse_logit()
     probs_hammer_plus <- predict(hammer_plus_model, newdata = patients_validate) %>% inverse_logit()
+    probs_martin_plus <- predict(martin_plus_model, newdata = patients_validate) %>% inverse_logit()
     
     # Make prediction object
     pred_frost <- prediction(patients_validate$probs_frost %>% inverse_logit(),
@@ -141,12 +199,17 @@ model_results <- foreach(i = 1:nboot, .combine = "rbind",
     pred_hammer <- prediction(patients_validate$probs_hammer %>% inverse_logit(),
                              patients_validate$readmission)
     pred_hammer_plus <- prediction(probs_hammer_plus, patients_validate$readmission)
+    pred_martin <- prediction(patients_validate$probs_martin %>% inverse_logit(),
+                              patients_validate$readmission)
+    pred_martin_plus <- prediction(probs_martin_plus, patients_validate$readmission)
     
     # Extract AUC
     AUC_frost <- performance(pred_frost, measure = "auc")@y.values[[1]]
     AUC_frost_plus <- performance(pred_frost_plus, measure = "auc")@y.values[[1]]
     AUC_hammer <- performance(pred_hammer, measure = "auc")@y.values[[1]]
     AUC_hammer_plus <- performance(pred_hammer_plus, measure = "auc")@y.values[[1]]
+    AUC_martin <- performance(pred_martin, measure = "auc")@y.values[[1]]
+    AUC_martin_plus <- performance(pred_martin_plus, measure = "auc")@y.values[[1]]
     
     # Calibration
     cal_frost <- hoslem.test(patients_validate$readmission,
@@ -159,6 +222,11 @@ model_results <- foreach(i = 1:nboot, .combine = "rbind",
                              g = 10)
     cal_hammer_plus <- hoslem.test(patients_validate$readmission,
                                   probs_hammer_plus, g = 10)
+    cal_martin <- hoslem.test(patients_validate$readmission,
+                              patients_validate$probs_martin %>% inverse_logit(),
+                              g = 10)
+    cal_martin_plus <- hoslem.test(patients_validate$readmission,
+                                   probs_martin_plus, g = 10)
     
     
     # Output
@@ -169,7 +237,11 @@ model_results <- foreach(i = 1:nboot, .combine = "rbind",
                AUC_hammer,
                AUC_hammer_plus,
                cal_hammer = cal_hammer$statistic,
-               cal_hammer_plus = cal_hammer_plus$statistic)
+               cal_hammer_plus = cal_hammer_plus$statistic,
+               AUC_martin,
+               AUC_martin_plus,
+               cal_martin = cal_martin$statistic,
+               cal_martin_plus = cal_martin_plus$statistic)
   }
 
 proc.time() - ptm 
@@ -180,9 +252,10 @@ stopCluster(cl)
 # Discrimination
 model_results %>% 
   mutate(frost_AUC_diff = AUC_frost_plus - AUC_frost,
-         hammer_AUC_diff = AUC_hammer_plus - AUC_hammer) %>%
-  select(frost_AUC_diff, hammer_AUC_diff) %>% 
-  pivot_longer(1:2) %>% 
+         hammer_AUC_diff = AUC_hammer_plus - AUC_hammer,
+         martin_AUC_diff = AUC_martin_plus - AUC_martin) %>%
+  select(frost_AUC_diff, hammer_AUC_diff, martin_AUC_diff) %>% 
+  pivot_longer(1:3) %>% 
   ggplot(aes(x = value))+
   geom_density(fill = "#e41a1c", alpha = 0.8)+
   geom_vline(linetype = "dashed",
@@ -193,12 +266,15 @@ model_results %>%
 # Calibration
 model_results %>% 
   mutate(frost_cal_diff = cal_frost_plus - cal_frost,
-         hammer_cal_diff = cal_hammer_plus - cal_hammer) %>% 
-  select(frost_cal_diff, hammer_cal_diff) %>% 
-  pivot_longer(1:2) %>% 
+         hammer_cal_diff = cal_hammer_plus - cal_hammer,
+         martin_cal_diff = cal_martin_plus - cal_martin) %>% 
+  select(frost_cal_diff, hammer_cal_diff, martin_cal_diff) %>% 
+  pivot_longer(1:3) %>% 
   ggplot(aes(x = value))+
   geom_density(fill = "#377eb8", alpha = 0.8)+
   geom_vline(linetype = "dashed",
              xintercept = 0)+
   theme_classic(20)+
   facet_wrap(~name, scales = "free")
+
+# Summarise
