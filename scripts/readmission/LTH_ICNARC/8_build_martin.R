@@ -71,13 +71,13 @@ results %>%
 
 results %>% 
   group_by(readmission) %>% 
-  summarise(mean = mean(blood_urea_nitrogen),
-            sd = sd(blood_urea_nitrogen))
+  summarise(mean = mean(blood_urea_nitrogen * 0.3571),
+            sd = sd(blood_urea_nitrogen * 0.3571))
 
 results %>% 
   group_by(readmission) %>% 
-  summarise(mean = mean(glucose),
-            sd = sd(glucose)) %>% 
+  summarise(mean = mean(glucose / 18),
+            sd = sd(glucose/ 18)) %>% 
   as.data.frame()
 
 results %>% 
