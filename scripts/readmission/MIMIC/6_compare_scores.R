@@ -57,6 +57,7 @@ sum(is.na(patients$fluid_balance_5L))
 patients %<>% filter(!is.na(patients$fluid_balance_5L))
 
 # Filter patients missing respiratory rate assessments
+patients$respiratory_rate_initial[patients$respiratory_rate_initial > 60] <- NA
 sum(is.na(patients$respiratory_rate_initial))
 patients %<>% filter(!is.na(respiratory_rate_initial))
 
@@ -136,13 +137,13 @@ patients %>%
 
 patients %>% 
   group_by(readmission) %>% 
-  summarise(mean = mean(blood_urea_nitrogen_initial),
-            sd = sd(blood_urea_nitrogen_initial))
+  summarise(mean = mean(blood_urea_nitrogen_initial * 0.3571),
+            sd = sd(blood_urea_nitrogen_initial * 0.3571))
 
 patients %>% 
   group_by(readmission) %>% 
-  summarise(mean = mean(serum_glucose_initial),
-            sd = sd(serum_glucose_initial)) %>% 
+  summarise(mean = mean(serum_glucose_initial/ 18),
+            sd = sd(serum_glucose_initial / 18)) %>% 
   as.data.frame()
 
 patients %>% 
@@ -281,13 +282,13 @@ patients %>%
 
 patients %>% 
   group_by(readmission) %>% 
-  summarise(mean = mean(blood_urea_nitrogen_final),
-            sd = sd(blood_urea_nitrogen_final))
+  summarise(mean = mean(blood_urea_nitrogen_final * 0.3571),
+            sd = sd(blood_urea_nitrogen_final * 0.3571))
 
 patients %>% 
   group_by(readmission) %>% 
-  summarise(mean = mean(serum_glucose_final),
-            sd = sd(serum_glucose_final)) %>% 
+  summarise(mean = mean(serum_glucose_final / 18),
+            sd = sd(serum_glucose_final /18)) %>% 
   as.data.frame()
 
 patients %>% 
@@ -587,6 +588,7 @@ list(model = "martin",
 
 # Vector of acceptable features
 feature_id <- c(7:13, 15:18, 20, 22, 24:33, 35:40, 44:58)
+patients$discharge_delay <- patients$discharge_hours > 9
 
 # Impute missing
 results_mice <- read_csv("data/predictors.csv") %>% 
@@ -595,12 +597,24 @@ results_mice <- read_csv("data/predictors.csv") %>%
   mutate(age = floor(as.numeric(age))) %>% 
   mice(m = 10, maxit = 10)
 
-model_options <- foreach(i = 1:results_mice$m, .combine = "rbind") %do%
+# Prepare parallel options
+ptm <- proc.time()
+psnice(value = 19)
+n_cores <- 15
+cl <- makeCluster(ifelse(detectCores() <= n_cores,
+                         detectCores() - 1,
+                         n_cores))
+registerDoParallel(cl)
+nboot <- 1000
+
+
+# Outer loop for imputation
+model_results <- foreach(m = 1:results_mice$m, .combine = "rbind") %do%
   {
-    print(i)
+    print(m)
     
     # Binarise readmission column
-    results_imputed <- complete(results_mice, i) %>%
+    results_imputed <- complete(results_mice, m) %>%
       as_tibble() %>% 
       mutate(readmission = ifelse(readmission == TRUE, 1, 0),
              high_apache  = as.logical(high_apache),
@@ -611,34 +625,105 @@ model_options <- foreach(i = 1:results_mice$m, .combine = "rbind") %do%
              glasgow_coma_below_15 = as.logical(glasgow_coma_below_15),
              discharge_delay = as.logical(discharge_delay),
              hyperglycemia_final = as.logical(hyperglycemia_final),
-             anaemia_final = as.logical(anaemia_final),) %>% 
+             anaemia_final = as.logical(anaemia_final),
+             row_id = 1:nrow(results_mice$data)) %>% 
       na.omit()
     
-    # Select predictor and outcome vectors
-    x <- model.matrix(readmission~., results_imputed)[,-1]
-    y <- results_imputed$readmission
-    
-    # Determine lambda
-    cv <- cv.glmnet(x, y, alpha = 1, folds = nrow(results_imputed),
-                    family = "binomial", type.measure = "auc")
-    
-    # Fit model
-    initial_model <- glmnet(x, y, alpha = 1, lambda = quantile(cv$lambda, 0.8),
-                            family = "binomial")
-    
-    # Output
-    output <- as.matrix(initial_model$beta) %>% 
-      as.data.frame()
-    output$var <- rownames(output)
-    output$iteration <- i
-    output
+    # Inner loop for bootstrap aggregation
+    boot_results <- foreach(i = 1:nboot, .combine = "rbind",
+                            .packages = c("dplyr", "caret",
+                                          "glmnet", "foreach",
+                                          "ROCR", "magrittr")) %dopar%
+      {
+        set.seed(i)
+        
+        # Split data
+        train_df <- results_imputed %>% 
+          group_by(readmission) %>% 
+          slice_sample(prop = 0.75)
+        
+        valid_df <- results_imputed %>% 
+          filter(row_id %in% train_df$row_id == FALSE)
+        
+        # Trim to acceptable features
+        train_df %<>% 
+          select(-row_id)
+        
+        valid_df %<>% 
+          select(-row_id)
+        
+        # Remove variables with incompatible factor levels
+        train_levels <- apply(train_df, 2, function(x){length(unique(x))})
+        valid_levels <- apply(valid_df, 2, function(x){length(unique(x))})
+        true_levels <- apply(results_imputed %>% 
+                               select(-row_id), 2, function(x){length(unique(x))})
+        var_class <- lapply(results_imputed %>% 
+                              select(-row_id), class)
+        
+        compatible_list <- (train_levels == true_levels & 
+                              valid_levels == true_levels) | 
+          var_class %in% c("numeric", "integer")
+        
+        train_df <- train_df[,compatible_list]
+        valid_df <- valid_df[,compatible_list]
+        
+        # Build model components
+        x <- model.matrix(readmission~., train_df)[,-1]
+        y <- train_df$readmission
+        
+        # Build model range
+        model_profile <-  glmnet(x, y, alpha = 1, nlambda = 100,
+                                 family = "binomial")
+        
+        # Predict from models
+        predictions <- predict(model_profile, newx = model.matrix(readmission~., valid_df)[,-1])
+        
+        pred_matrix <- foreach(j = 1:ncol(predictions), .combine = "rbind") %do%
+          {
+            # Measure AUC
+            pred <- prediction(predictions[,j], valid_df$readmission)
+            AUC <- performance(pred, measure = "auc")@y.values[[1]]
+            
+            # Return AUC and lambda
+            data.frame(j, AUC, lambda = model_profile$lambda[j])
+          }
+        
+        # Rebuild best model
+        best_model <-  glmnet(x, y, alpha = 1, family = "binomial",
+                              lambda = pred_matrix$lambda[which.max(pred_matrix$AUC)])
+        
+        # Output
+        output <- as.matrix(best_model$beta) %>% 
+          as.data.frame()
+        output$var <- rownames(output)
+        output$iteration <- i
+        output$AUC <- max(pred_matrix$AUC)
+        output
+      }
+    boot_results$m <- m
+    boot_results
   }
+stopCluster(cl)
+proc.time() - ptm
+
+# Identify iterations with best performance
+best_results <- model_results %>% 
+  mutate(full_iteration = paste(m, iteration, sep = "_")) %>% 
+  select(full_iteration, AUC) %>% 
+  group_by(full_iteration) %>% 
+  summarise(AUC = median(AUC)) %>% 
+  filter(AUC > quantile(AUC, 0.75)) %>% 
+  left_join(boot_results)
 
 # Identify retained variables
-model_options %>%
+best_results %>%
   group_by(var) %>% 
   summarise(prop = mean(s0 != 0)) %>% 
-  filter(prop == 1)
+  #filter(prop > 0.8) %>% 
+  mutate(prop = round(prop, 2)) %>% 
+  arrange(desc(prop)) %>% 
+  slice_head(n = 10) %>% 
+  as.data.frame()
 
 # Loop through datasets
 cl <- makeCluster(12)
