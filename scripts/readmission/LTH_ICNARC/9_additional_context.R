@@ -8,6 +8,7 @@ require(foreach)
 require(tidyr)
 require(ggplot2)
 require(doParallel)
+require(stringr)
 
 source("functions/inverse_logit.R")
 source("functions/nomogram_convert.R")
@@ -154,7 +155,7 @@ results %<>%
 ptm <- proc.time()
 cl <- makeCluster(4)
 registerDoParallel(cl)
-nboot <- 10000
+nboot <- 100000
 
 model_results <- foreach(i = 1:nboot, .combine = "rbind",
                          .packages = c("dplyr", "ROCR",
@@ -172,17 +173,17 @@ model_results <- foreach(i = 1:nboot, .combine = "rbind",
       filter(id %in% patients_train$id == FALSE)
     
     # Fit frost+
-    frost_plus_model <- glm(readmission ~ probs_frost + clinically_ready_discharge_days,
+    frost_plus_model <- glm(readmission ~ probs_frost + clinically_ready_discharge_days + 0,
                             data = patients_train,
                        family = "binomial")
     
     # Fit hammer+
-    hammer_plus_model <- glm(readmission ~ probs_hammer + clinically_ready_discharge_days,
+    hammer_plus_model <- glm(readmission ~ probs_hammer + clinically_ready_discharge_days + 0,
                             data = patients_train,
                             family = "binomial")
     
     # Fit martin+
-    martin_plus_model <- glm(readmission ~ probs_martin + clinically_ready_discharge_days,
+    martin_plus_model <- glm(readmission ~ probs_martin + clinically_ready_discharge_days + 0,
                              data = patients_train,
                              family = "binomial")
     
@@ -244,10 +245,14 @@ model_results <- foreach(i = 1:nboot, .combine = "rbind",
                cal_martin_plus = cal_martin_plus$statistic)
   }
 
+write_rds(model_results, "data/context_bootstrap.RDS",
+          compress = "gz")
 proc.time() - ptm 
 stopCluster(cl)
 
+
 # Plot----
+model_results <- read_rds("data/context_bootstrap.RDS")
 
 # Discrimination
 model_results %>% 
@@ -278,3 +283,18 @@ model_results %>%
   facet_wrap(~name, scales = "free")
 
 # Summarise
+model_results %>% 
+  pivot_longer(2:13) %>% 
+  mutate(model = str_split(name, "_", simplify = TRUE))
+
+
+  summarise(AUC_frost = median(AUC_frost),
+            AUC_frost_plus = median(AUC_frost_plus),
+            frost_AUC_diff = median(AUC_frost_plus - AUC_frost),
+            AUC_martin = median(AUC_martin),
+            AUC_martin_plus = median(AUC_martin_plus),
+            martin_AUC_diff = median(AUC_martin_plus - AUC_martin),
+            AUC_hammer = median(AUC_hammer),
+            AUC_hammer_plus = median(AUC_hammer_plus),
+            hammer_AUC_diff = median(AUC_hammer_plus - AUC_hammer)) %>% 
+  round(3)
