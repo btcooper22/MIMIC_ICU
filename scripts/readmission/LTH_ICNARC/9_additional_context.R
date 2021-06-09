@@ -245,14 +245,14 @@ model_results <- foreach(i = 1:nboot, .combine = "rbind",
                cal_martin_plus = cal_martin_plus$statistic)
   }
 
-write_rds(model_results, "data/context_bootstrap.RDS",
+write_rds(model_results, "models/context_bootstrap.RDS",
           compress = "gz")
 proc.time() - ptm 
 stopCluster(cl)
 
 
 # Plot----
-model_results <- read_rds("data/context_bootstrap.RDS")
+model_results <- read_rds("models/context_bootstrap.RDS")
 
 # Discrimination
 model_results %>% 
@@ -284,17 +284,29 @@ model_results %>%
 
 # Summarise
 model_results %>% 
-  pivot_longer(2:13) %>% 
-  mutate(model = str_split(name, "_", simplify = TRUE))
-
-
-  summarise(AUC_frost = median(AUC_frost),
-            AUC_frost_plus = median(AUC_frost_plus),
-            frost_AUC_diff = median(AUC_frost_plus - AUC_frost),
-            AUC_martin = median(AUC_martin),
-            AUC_martin_plus = median(AUC_martin_plus),
-            martin_AUC_diff = median(AUC_martin_plus - AUC_martin),
-            AUC_hammer = median(AUC_hammer),
-            AUC_hammer_plus = median(AUC_hammer_plus),
-            hammer_AUC_diff = median(AUC_hammer_plus - AUC_hammer)) %>% 
-  round(3)
+  mutate(cal_frost_diff = cal_frost_plus - cal_frost,
+         cal_hammer_diff = cal_hammer_plus - cal_hammer,
+         cal_martin_diff = cal_martin_plus - cal_martin,
+         AUC_frost_diff = AUC_frost_plus - AUC_frost,
+         AUC_hammer_diff = AUC_hammer_plus - AUC_hammer,
+         AUC_martin_diff = AUC_martin_plus - AUC_martin) %>% 
+  pivot_longer(2:19) %>% 
+  group_by(name) %>% 
+  summarise(median = median(value, na.rm = TRUE),
+            Q1 = quantile(value, 0.25, na.rm = TRUE),
+            Q3 = quantile(value, 0.75, na.rm = TRUE)) %>% 
+  mutate(model = str_split(name, "_", simplify = TRUE)[,2],
+         measure = str_split(name, "_", simplify = TRUE)[,1],
+         type = case_when(
+           grepl("plus", name) ~ "plus",
+           grepl("diff", name) ~ "diff",
+           is.character(name) ~ "standard")
+         ) %>% 
+  mutate(value = paste(signif(median, 3), " [",
+                       signif(Q1, 3), ", ",
+                       signif(Q3, 3), "]", sep = "")) %>% 
+  select(-median, -Q1, -Q3, -name) %>% 
+  pivot_wider(names_from = c("measure", "type"),
+              values_from = "value") %>% 
+  relocate("model", "AUC_standard", "AUC_plus", "AUC_diff",
+           "cal_standard", "cal_plus", "cal_diff")
