@@ -279,7 +279,7 @@ results %<>%
                                 `In-unit mortality` = "inunit"),
          method = fct_recode(method, Amelia = "amelia",
                              Median = "average",
-                             Recent = "recent",
+                             Longitudinal = "recent",
                              `Random Forest` = "RF",
                              `Assume zero` = "zero"))
 
@@ -589,3 +589,47 @@ p2 <- results %>%
 p1 + p2
 ggsave("writeup/presentation_figs/ellipse_5.png",
        width = 33.8, height = 14, units = "cm")
+
+
+# Subsets and combinations----
+
+# Load data
+results_subset <- read_rds("models/boot_results_subset.RDS") 
+
+# Adjust factor levels
+results_subset %<>% 
+  mutate(type = fct_recode(type, Amelia = "amelia",
+                             Longitudinal = "longitudinal",
+                             MICE = "mice"))
+
+# Extract means
+means_df <- results_subset %>% 
+  group_by(type) %>% 
+  summarise(discrimination = mean(discrim),
+            calibration = mean(calib)) %>% 
+  ungroup()
+
+
+# Plot
+results_subset %>% 
+  # filter(mortality == "30-day mortality",
+  #        method == "Assume zero") %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("#e41a1c", "#a65628", 
+                                 "#984ea3"), name = "")+
+  scale_fill_manual(values = c("#e41a1c", "#a65628", 
+                               "#984ea3"), name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = type),
+               size = 2, type = "norm",
+               level = 0.682,
+               alpha = 0.8)+
+  geom_point(data = means_df ,
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = type),
+             size = 4, shape = 21)
