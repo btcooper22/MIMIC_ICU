@@ -496,10 +496,10 @@ A <- results_subset %>%
   ggplot()+
   theme_classic(20)+
   labs(y = "Calibration", x = "Discrimination")+
-  scale_colour_manual(values = c("#e41a1c", "#4daf4a", 
-                                 "#377eb8"), name = "")+
-  scale_fill_manual(values = c("#e41a1c", "#4daf4a", 
-                               "#377eb8"), name = "")+
+  scale_colour_manual(values = c("#e41a1c", "#a65628", 
+                                 "#984ea3"), name = "")+
+  scale_fill_manual(values = c("#e41a1c", "#a65628", 
+                               "#984ea3"), name = "")+
   scale_y_reverse()+
   theme(legend.position = "top")+
   stat_ellipse(aes(x = discrim, y = calib,
@@ -547,9 +547,9 @@ B <- results_hybrid %>%
   theme_classic(20)+
   labs(y = "Calibration", x = "Discrimination")+
   scale_colour_manual(values = c("#e41a1c",
-                                 "#377eb8"), name = "")+
+                                 "#984ea3"), name = "")+
   scale_fill_manual(values = c("#e41a1c", 
-                               "#377eb8"), name = "")+
+                               "#984ea3"), name = "")+
   scale_y_reverse()+
   theme(legend.position = "top")+
   stat_ellipse(aes(x = discrim, y = calib,
@@ -568,6 +568,6 @@ B <- results_hybrid %>%
 # Combine
 A + B
 ggsave("drafts/missing/figures/subset_hybrid.png",
-       height = 7, width = 12, scale = 1.25)
+       height = 5, width = 10, scale = 1.25)
 ```
 
