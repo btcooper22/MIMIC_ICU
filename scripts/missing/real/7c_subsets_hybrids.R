@@ -665,7 +665,7 @@ amelia_list <- foreach(i = 1:20, .combine = "cbind") %do%
 amelia_hybrid <- cbind(recent_df, amelia_list)
 
 # Bootstrap loop
-n_boot <- 100
+n_boot <- 10000
 results_boot_hybrid <- foreach(k = 1:n_boot, .combine = "rbind",
                                .packages = c("dplyr", "ROCR",
                                              "ResourceSelection",
