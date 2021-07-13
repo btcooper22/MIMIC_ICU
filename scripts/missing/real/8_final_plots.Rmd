@@ -25,6 +25,8 @@ pal <- c(brewer.pal(8, "Set1")[-6], "black")
 require(bayestestR)
 require(cowplot)
 require(xtable)
+require(forcats)
+require(patchwork)
 
 source("functions/inverse_logit.R")
 
@@ -205,8 +207,8 @@ rbind(calib_mort_inunit %>% mutate(model = "In-unit mortality"),
               size = 1, linetype = "dotted")+
   theme_classic(20)+
   theme(legend.position = "top")+
-  labs(x = "Predicted readmission",
-       y = "Observed readmission")+
+  labs(x = "Predicted mortality",
+       y = "Observed mortality")+
   scale_colour_brewer(palette = "Set1",
                       name = "") -> B
 
@@ -286,7 +288,17 @@ miss_table <- colMeans(missing_inunit) %>%
       mutate(model = "30-day mortality")) 
 names(miss_table)[1] <- "Freq"
 miss_table$varname <- rep(names(missing_30d), 2)
+
+miss_table %>% 
+  mutate(Freq = signif(Freq * 100, 3)) %>% 
+  pivot_wider(names_from = "model",
+              values_from = "Freq") %>% 
+  relocate(varname, `30-day mortality`) %>% 
+  xtable() %>% 
+  print(include.rownames=FALSE)
+
   
+# Plot
 miss_table %>% 
 ggplot(aes(x = varname, y = Freq * 100))+
   geom_bar(aes(fill = model),
@@ -304,13 +316,28 @@ ggplot(aes(x = varname, y = Freq * 100))+
   facet_wrap(~model, scales = "free")
 
 # Number of variables missing
-table(rowSums(missing_inunit)) %>% 
+missN <- table(rowSums(missing_inunit)) %>% 
   as.data.frame() %>% 
   mutate(model = "In-unit mortality") %>% 
   rbind(table(rowSums(missing_30d)) %>% 
           as.data.frame() %>% 
           mutate(model = "30-day mortality")) %>%
-  filter(Var1 != 0) %>% 
+  filter(Var1 != 0)
+
+nvar_table <- missN %>% 
+  pivot_wider(names_from = "model",
+              values_from = "Freq") %>% 
+  mutate(`In-unit mortality` = signif((`In-unit mortality` / nrow(apache_additional_inunit)) * 100, 3),
+         `30-day mortality` = signif((`30-day mortality` / nrow(apache_additional_30d)) * 100, 3)) %>% 
+  relocate(Var1, `30-day mortality`) %>% 
+  xtable() 
+
+digits(nvar_table) <- c(0,0,3,3)
+nvar_table %>% 
+  print(include.rownames=FALSE)
+
+# Plot
+missN %>% 
   ggplot(aes(x = Var1, y = Freq))+
   geom_bar(aes(fill = model),
            stat = "identity",
@@ -443,3 +470,104 @@ tibble(HDI_inunit[,1:3], CI_low = HDI_inunit$HDI$CI_low,
   print(include.rownames=FALSE)
 
 ```
+
+```{r Subsets and hybrids}
+# Load data
+results_subset <- read_rds("models/boot_results_subset.RDS") 
+
+# Adjust factor levels
+results_subset %<>% 
+  mutate(type = fct_recode(type, Amelia = "amelia",
+                             Longitudinal = "longitudinal",
+                             MICE = "mice"))
+
+# Extract means
+means_df <- results_subset %>% 
+  group_by(type) %>% 
+  summarise(discrimination = mean(discrim),
+            calibration = mean(calib)) %>% 
+  ungroup()
+
+
+# Plot
+A <- results_subset %>% 
+  # filter(mortality == "30-day mortality",
+  #        method == "Assume zero") %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("#e41a1c", "#4daf4a", 
+                                 "#377eb8"), name = "")+
+  scale_fill_manual(values = c("#e41a1c", "#4daf4a", 
+                               "#377eb8"), name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = type),
+               size = 2, type = "norm",
+               level = 0.682,
+               alpha = 0.8)+
+  geom_point(data = means_df ,
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = type),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.7, 0.9),
+                  ylim = c(22, 0))
+  
+
+# Load data
+results_hybrid <- read_rds("models/boot_results_hybrid.RDS") %>% 
+  as_tibble()
+
+# Adjust factor levels
+results_hybrid %<>% 
+  pivot_longer(2:5) %>% 
+  mutate(measure = str_split(name, "_", 2, TRUE)[,1],
+         type = str_split(name, "_", 2, TRUE)[,2]) %>% 
+  select(-name) %>% 
+  pivot_wider(names_from = measure,
+              values_from = value) %>% 
+  mutate(type = fct_recode(type, Amelia = "amelia",
+                           MICE = "mice"))
+
+# Extract means
+means_df <- results_hybrid %>% 
+  group_by(type) %>% 
+  summarise(discrimination = mean(discrim),
+            calibration = mean(calib)) %>% 
+  ungroup()
+
+
+# Plot
+B <- results_hybrid %>% 
+  # filter(mortality == "30-day mortality",
+  #        method == "Assume zero") %>% 
+  ggplot()+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_colour_manual(values = c("#e41a1c",
+                                 "#377eb8"), name = "")+
+  scale_fill_manual(values = c("#e41a1c", 
+                               "#377eb8"), name = "")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(aes(x = discrim, y = calib,
+                   colour = type),
+               size = 2, type = "norm",
+               level = 0.682,
+               alpha = 0.8)+
+  geom_point(data = means_df ,
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = type),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.7, 0.9),
+                  ylim = c(22, 0))
+
+# Combine
+A + B
+ggsave("drafts/missing/figures/subset_hybrid.png",
+       height = 7, width = 12, scale = 1.25)
+```
+
