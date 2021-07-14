@@ -27,6 +27,7 @@ require(cowplot)
 require(xtable)
 require(forcats)
 require(patchwork)
+require(janitor)
 
 source("functions/inverse_logit.R")
 
@@ -76,18 +77,12 @@ length(unique(apache_additional_inunit$adm_id))
 length(unique(apache_additional_30d$adm_id))
 
 # Deaths in each dataset
-sum(apache_additional_inunit$mort_inunit)
-mean(apache_additional_inunit$mort_inunit) * 100
-
-sum(apache_additional_30d$mort_30)
-mean(apache_additional_30d$mort_30) * 100
+tabyl(apache_additional_inunit$mort_inunit)
+tabyl(apache_additional_30d$mort_30)
 
 # Missingness in each dataset
-sum(is.na(apache_additional_inunit$apache_II))
-mean(is.na(apache_additional_inunit$apache_II)) * 100
-
-sum(is.na(apache_additional_30d$apache_II))
-mean(is.na(apache_additional_30d$apache_II)) * 100
+tabyl(is.na(apache_additional_inunit$apache_II))
+tabyl(is.na(apache_additional_30d$apache_II))
 
 # Median APACHE-II
 apache_additional_inunit %>% 
@@ -103,7 +98,6 @@ apache_additional_30d %>%
             UQ = quantile(apache_II, 0.75))
 
 ```
-
 
 ```{r Discrimination and calibration of complete cases}
 # Generate complete cases models
