@@ -39,13 +39,15 @@ new_missing_abg <- is.na(results[["arterialpH"]]) &
 apache_additional_long <- apache_additional_30d %>% 
   mutate(missing_abg = new_missing_abg)
 
-scores <- apache_score(cbind(results, apache_additional_long) %>%
-                         filter(is.na(apache_II)))
+scores <- apache_score(cbind(results, apache_additional_long))
 
-# Find those still missing recent data and filter
-still_missing <- is.na(scores$apache_scores)
+# Highlight complete cases
+complete_cases <- !is.na(apache_additional_long$apache_II)
+
+# Highlight still missing recent data and filter
+still_missing <- is.na(scores$apache_scores) & !complete_cases
 recent_out <- scores %>% 
-  filter(!still_missing)
+  filter(!still_missing & !complete_cases)
 
 # Perform MICE imputation
 MICE_results <- apache_scores_30d %>% 
@@ -65,11 +67,13 @@ write_rds(recent_out, "data/impute_discharge/subset_recent.RDS")
 
 write_rds(list(results = MICE_results,
                additional = apache_additional_long %>% 
+                 mutate(complete_cases) %>% 
                  filter(!still_missing)), 
           "data/impute_discharge/subset_mice.RDS",
           compress = "gz")
 
 write_rds(list(results = amelia_results,
                additional = apache_additional_long %>% 
+                 mutate(complete_cases) %>% 
                  filter(!still_missing)), "data/impute_discharge/subset_amelia.RDS",
           compress = "gz")
