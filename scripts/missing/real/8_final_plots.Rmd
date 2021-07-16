@@ -482,7 +482,7 @@ results_subset %<>%
                            Longitudinal = "long"))
 
 # Extract means
-means_df <- results_subset %>% 
+means_df_subset <- results_subset %>% 
   group_by(type) %>% 
   summarise(discrimination = mean(discrim),
             calibration = mean(calib)) %>% 
@@ -507,13 +507,13 @@ A <- results_subset %>%
                size = 2, type = "norm",
                level = 0.682,
                alpha = 0.8)+
-  geom_point(data = means_df ,
+  geom_point(data = means_df_subset ,
              aes(x = discrimination,
                  y = calibration,
                  fill = type),
              size = 4, shape = 21)+
-  coord_cartesian(xlim = c(0.7, 0.9),
-                  ylim = c(30, 0))
+  coord_cartesian(xlim = c(0.73, 0.9),
+                  ylim = c(70, 5))
   
 
 # Load data
@@ -532,7 +532,7 @@ results_hybrid %<>%
                            MICE = "mice"))
 
 # Extract means
-means_df <- results_hybrid %>% 
+means_df_hybrid <- results_hybrid %>% 
   group_by(type) %>% 
   summarise(discrimination = mean(discrim),
             calibration = mean(calib)) %>% 
@@ -557,17 +557,56 @@ B <- results_hybrid %>%
                size = 2, type = "norm",
                level = 0.682,
                alpha = 0.8)+
-  geom_point(data = means_df ,
+  geom_point(data = means_df_hybrid ,
              aes(x = discrimination,
                  y = calibration,
                  fill = type),
              size = 4, shape = 21)+
-  coord_cartesian(xlim = c(0.7, 0.9),
-                  ylim = c(30, 0))
-
+  coord_cartesian(xlim = c(0.73, 0.9),
+                  ylim = c(70, 5))
 # Combine
 A + B
-# ggsave("drafts/missing/figures/subset_hybrid.png",
-#        height = 5, width = 10, scale = 1.25)
+ggsave("drafts/missing/figures/subset_hybrid.png",
+       height = 5, width = 10, scale = 1.25)
+
+# Grayscale
+boot_samples_30d %>% 
+  ggplot(aes(x = discrim, y = calib,
+                   colour = method))+
+  theme_classic(20)+
+  labs(y = "Calibration", x = "Discrimination")+
+  scale_y_reverse()+
+  theme(legend.position = "top")+
+  stat_ellipse(size = 2, type = "norm",
+               level = 0.682,
+               alpha = 0.8,)+
+  geom_point(data = means_df,
+             aes(x = discrimination,
+                 y = calibration,
+                 fill = method),
+             size = 4, shape = 21)+
+  coord_cartesian(xlim = c(0.73, 0.9),
+                  ylim = c(70, 5))
+ggsave("drafts/missing/figures/subset_hybrid_grayscale.png",
+       height = 5, width = 5, scale = 1.25)
+
+# In-text HDIs
+results_subset %>% 
+  mutate(discrim = round(discrim, 3),
+         calib = round(calib, 2)) %>% 
+  pivot_longer(3:4) %>% 
+  group_by(type, name) %>%
+  summarise(median = median(value),
+    HDI = hdi(value, 0.95)) %>% 
+  ungroup() 
+
+results_hybrid %>% 
+  mutate(discrim = round(discrim, 3),
+         calib = round(calib, 2)) %>% 
+  pivot_longer(3:4) %>% 
+  group_by(type, name) %>%
+  summarise(median = median(value),
+    HDI = hdi(value, 0.95)) %>% 
+  ungroup() 
 ```
 

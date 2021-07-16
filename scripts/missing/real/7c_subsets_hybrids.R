@@ -80,7 +80,7 @@ cl <- makeCluster(ifelse(detectCores() <= n_cores,
 registerDoParallel(cl)
 
 # Compare recent and mice/amelia in subset----
-n_boot <- 100
+n_boot <- 10000
 
 # Load recent data
 scores_df <- read_rds("data/impute_discharge/subset_recent.RDS")
@@ -102,6 +102,7 @@ results_boot_subset <- foreach(k = 1:n_boot, .combine = "rbind",
     # Determine validation split
     set.seed(k)
     validation_id <- scores_df %>% 
+      filter(!complete_cases) %>% 
       rownames_to_column("row_id") %>% 
       slice_sample(prop = 0.1) %>% 
       ungroup() %>% 
@@ -114,10 +115,11 @@ results_boot_subset <- foreach(k = 1:n_boot, .combine = "rbind",
       {
         # Select validation sample
         mice_complete <- complete(mice_subset$results, m)
-        valid_df <- mice_complete[is.na(mice_subset$additional$apache_II),][validation_id,]
+        valid_df <- mice_complete[!mice_subset$additional$complete_cases,][validation_id,]
         
         # Score
-        valid_df <- apache_score(cbind(valid_df, mice_subset$additional[validation_id,]))
+        valid_df <- apache_score(cbind(valid_df, mice_subset$additional[!mice_subset$additional$complete_cases,]
+                                       [validation_id,]))
         names(valid_df)[1] <- "apache_II"
         
         # Predict
@@ -148,10 +150,11 @@ results_boot_subset <- foreach(k = 1:n_boot, .combine = "rbind",
       {
         # Select validation sample
         amelia_complete <- amelia_subset$results$imputations[[m]]
-        valid_df <- amelia_complete[is.na(amelia_subset$additional$apache_II),][validation_id,]
+        valid_df <- amelia_complete[!amelia_subset$additional$complete_cases,][validation_id,]
         
         # Score
-        valid_df <- apache_score(cbind(valid_df, amelia_subset$additional[validation_id,]))
+        valid_df <- apache_score(cbind(valid_df, amelia_subset$additional[!amelia_subset$additional$complete_cases,]
+                                       [validation_id,]))
         names(valid_df)[1] <- "apache_II"
         
         # Predict
@@ -178,7 +181,7 @@ results_boot_subset <- foreach(k = 1:n_boot, .combine = "rbind",
       }
     
     # Isolate longitudinal scores
-    valid_df <- scores_df[validation_id,]
+    valid_df <- scores_df[!scores_df$complete_cases,][validation_id,]
     
     # Predict
     probs_df <- 
@@ -241,7 +244,6 @@ results_boot_hybrid <- foreach(k = 1:n_boot, .combine = "rbind",
     # Determine validation split
     set.seed(k)
     validation_id <- recent_df %>% 
-      filter(is.na(old_score)) %>% 
       slice_sample(prop = 0.1) %>% 
       ungroup() %>% 
       select(row_id) %>% 
