@@ -636,7 +636,7 @@ results_long_subset_full %>%
 
 # Hybrid of best mice/amelia and best recent----
 
-# Extract best recent
+# Load best longitudinal
 recent_df <- results_long_scored[["recent_worsttotal"]]
 names(recent_df)[1] <- "apache_II"
 
@@ -646,30 +646,19 @@ recent_df %<>%
          old_score = apache_additional_30d$apache_II) %>% 
   rownames_to_column("row_id")
 
-# Create mice list
-mice_list <- foreach(i = 1:10, .combine = "cbind") %do%
-  {
-      results_multiple_scored[["mice_30d"]][["MICE_quadratic-10"]][[i]][,1]
-  }
+# Load mice hybrid
+mice_hybrid <- read_rds("data/impute_discharge/hybrid_mice.RDS")
 
-# Create mice hybrid
-mice_hybrid <- cbind(recent_df, mice_list)
-
-# Create amelia list
-amelia_list <- foreach(i = 1:20, .combine = "cbind") %do%
-  {
-    results_multiple_scored[["amelia_30d"]][["amelia_20"]][[i]][,1]
-  }
-
-# Create amelia hybrid
-amelia_hybrid <- cbind(recent_df, amelia_list)
+# Load amelia hybrid
+amelia_hybrid <- read_rds("data/impute_discharge/hybrid_amelia.RDS")
 
 # Bootstrap loop
 n_boot <- 10000
 results_boot_hybrid <- foreach(k = 1:n_boot, .combine = "rbind",
                                .packages = c("dplyr", "ROCR",
                                              "ResourceSelection",
-                                             "tibble", "foreach")) %dopar%
+                                             "tibble", "foreach",
+                                             "mice", "Amelia")) %dopar%
   {
     # Determine validation split
     set.seed(k)
@@ -684,16 +673,18 @@ results_boot_hybrid <- foreach(k = 1:n_boot, .combine = "rbind",
     mice_m <- foreach(m = 1:10, .combine = "rbind") %do%
       {
         # Select validation sample
-        valid_df <- mice_hybrid[validation_id,]
+        mice_complete <- complete(mice_hybrid, m)
+        valid_df <- mice_complete[validation_id,]
         
-        # Replace still missing values with imputed
-        valid_df[is.na(valid_df$apache_II),2] <- valid_df[is.na(valid_df$apache_II), m + 5]
+        # Score
+        valid_df <- apache_score(cbind(valid_df, apache_additional_30d[validation_id,]))
+        names(valid_df)[1] <- "apache_II"
         
         # Predict
         probs_df <- 
           data.frame(probs = predict(full_model_30d, 
                                      newdata = valid_df),
-                     outcome = valid_df[,3]) %>% 
+                     outcome = valid_df[,2]) %>% 
           mutate(probs = inverse_logit(probs)) %>% 
           na.omit()
         
@@ -716,16 +707,18 @@ results_boot_hybrid <- foreach(k = 1:n_boot, .combine = "rbind",
     amelia_m <- foreach(m = 1:20, .combine = "rbind") %do%
       {
         # Select validation sample
-        valid_df <- amelia_hybrid[validation_id,]
+        amelia_complete <- amelia_hybrid$imputations[[m]]
+        valid_df <- amelia_complete[validation_id,]
         
-        # Replace still missing values with imputed
-        valid_df[is.na(valid_df$apache_II),2] <- valid_df[is.na(valid_df$apache_II), m + 5]
+        # Score
+        valid_df <- apache_score(cbind(valid_df, apache_additional_30d[validation_id,]))
+        names(valid_df)[1] <- "apache_II"
         
         # Predict
         probs_df <- 
           data.frame(probs = predict(full_model_30d, 
                                      newdata = valid_df),
-                     outcome = valid_df[,3]) %>% 
+                     outcome = valid_df[,2]) %>% 
           mutate(probs = inverse_logit(probs)) %>% 
           na.omit()
         
