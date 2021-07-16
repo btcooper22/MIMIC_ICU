@@ -471,9 +471,15 @@ results_subset <- read_rds("models/boot_results_subset.RDS")
 
 # Adjust factor levels
 results_subset %<>% 
+  pivot_longer(2:7) %>% 
+  mutate(measure = str_split(name, "_", 2, TRUE)[,1],
+         type = str_split(name, "_", 2, TRUE)[,2]) %>% 
+  select(-name) %>% 
+  pivot_wider(names_from = measure,
+              values_from = value) %>% 
   mutate(type = fct_recode(type, Amelia = "amelia",
-                             Longitudinal = "longitudinal",
-                             MICE = "mice"))
+                           MICE = "mice",
+                           Longitudinal = "long"))
 
 # Extract means
 means_df <- results_subset %>% 
@@ -507,7 +513,7 @@ A <- results_subset %>%
                  fill = type),
              size = 4, shape = 21)+
   coord_cartesian(xlim = c(0.7, 0.9),
-                  ylim = c(22, 0))
+                  ylim = c(30, 0))
   
 
 # Load data
@@ -557,11 +563,11 @@ B <- results_hybrid %>%
                  fill = type),
              size = 4, shape = 21)+
   coord_cartesian(xlim = c(0.7, 0.9),
-                  ylim = c(22, 0))
+                  ylim = c(30, 0))
 
 # Combine
 A + B
-ggsave("drafts/missing/figures/subset_hybrid.png",
-       height = 5, width = 10, scale = 1.25)
+# ggsave("drafts/missing/figures/subset_hybrid.png",
+#        height = 5, width = 10, scale = 1.25)
 ```
 
