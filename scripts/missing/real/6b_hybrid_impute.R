@@ -23,7 +23,7 @@ MICE_results <- results %>%
 # Perform Amelia imputation
 amelia_results <- results %>% 
   amelia(parallel = "no",
-         m = 20) # 5
+         m = 20) # 20
 
 # Write results
 write_rds(MICE_results, "data/impute_discharge/hybrid_mice.RDS",
