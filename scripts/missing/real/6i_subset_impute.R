@@ -46,8 +46,9 @@ complete_cases <- !is.na(apache_additional_long$apache_II)
 
 # Highlight still missing recent data and filter
 still_missing <- is.na(scores$apache_scores) & !complete_cases
-recent_out <- scores %>% 
-  filter(!still_missing & !complete_cases)
+recent_out <- scores %>%
+  mutate(complete_cases) %>% 
+  filter(!still_missing)
 
 # Perform MICE imputation
 MICE_results <- apache_scores_30d %>% 
