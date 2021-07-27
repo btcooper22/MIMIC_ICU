@@ -8,6 +8,8 @@ require(tools)
 require(ggplot2)
 require(tidyr)
 require(lmerTest)
+require(Metrics)
+require(equatiomatic)
 
 # Read data
 df <- read_csv("data/apache_data_full.csv") %>% 
@@ -123,3 +125,58 @@ predict(chloride_model_lmer, newdata = data.frame(sodium = 143,
                                                   id = 165660))
 write_rds(chloride_coef, "models/serum_chloride.RDS")
 
+extract_eq(chloride_model)
+
+# Cross-validate-----
+# Create splits
+splits_df <- data.frame(patient_id = unique(results$id),
+                        split = floor(seq(0,10,length.out = length(unique(results$id)))) + 1)
+splits_df$split[splits_df$split == 11] <- 10
+
+# Set up parallel
+cl <- makeCluster(10)
+registerDoParallel(cl)
+
+# Loop
+xval <- foreach(i = 1:10, .combine = "rbind",
+        .packages = c("dplyr", "magrittr", "lme4", "Metrics")) %dopar%
+  {
+    # Isolate validation patients
+    validation_patients <- splits_df %>% 
+      filter(split == i)
+    
+    # Isolate training patients
+    training_patients <- splits_df %>% 
+      filter(split != i)
+    
+    # Extract training values
+    training_df <- results %>% 
+      filter(id %in% training_patients$patient_id)
+    
+    # Extract validation values
+    validation_df <- results %>% 
+      filter(id %in% validation_patients$patient_id)
+    
+    # Train model
+    chloride_model_train <- lmer(chloride ~ sodium * potassium + (1|id),
+                                data = training_df)
+
+    # Extract coefficients
+    chloride_coef <- coef(chloride_model_lmer)$id %>% colMeans()
+    
+    # Predict from validation set
+    validation_df %<>% 
+      mutate(chloride_estimate = chloride_coef[1] + (chloride_coef[2] * sodium) + 
+               (chloride_coef[3] * potassium) + (chloride_coef[4] * (sodium * potassium))) %>% 
+      na.omit()
+    
+    # Calculate RMSE
+    RMSE <- rmse(validation_df$chloride,validation_df$chloride_estimate)
+    
+    # Output
+    data.frame(i, RMSE)
+  }
+stopCluster(cl)
+
+mean(xval$RMSE)
+sd(xval$RMSE)

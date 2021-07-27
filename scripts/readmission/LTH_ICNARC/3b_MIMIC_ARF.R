@@ -8,6 +8,8 @@ require(tools)
 require(ggplot2)
 require(caret)
 require(e1071)
+require(ROCR)
+require(equatiomatic)
 
 # Read data
 df <- read_csv("data/apache_data_full.csv") %>% 
@@ -157,3 +159,51 @@ predict(renal_model, newdata = data.frame(cre_val = 2.8,
                                           ur_val = 35))
 write_rds(r_coef, "models/acute_renal_failure.RDS")
 
+# Cross-validate-----
+# Create splits
+splits_df <- data.frame(results,
+                        split = floor(seq(0,10,length.out = nrow(results))) + 1)
+splits_df$split[splits_df$split == 11] <- 10
+
+# Set up parallel
+cl <- makeCluster(10)
+registerDoParallel(cl)
+
+# Loop
+xval <- foreach(i = 1:10, .combine = "rbind",
+                .packages = c("dplyr", "magrittr", "ROCR")) %dopar%
+  {
+    # Extract training values
+    training_df <- splits_df %>% 
+      filter(split != i)
+    
+    # Extract validation values
+    validation_df <- splits_df %>% 
+      filter(split == i)
+    
+    # Train model
+    renal_model <- glm(acute_renal_failure ~ cre_val * ur_val,
+                       data = training_df, family = "binomial")
+    
+    # Extract coefficients
+    renal_coef <- coef(renal_model)
+    
+    # Predict from validation set
+    validation_df %<>% 
+      mutate(renal_estimate = renal_coef[1] + (renal_coef[2] * cre_val) + 
+               (renal_coef[3] * ur_val) + (renal_coef[4] * (cre_val * ur_val)),
+             renal_pred = renal_estimate > -0.601) %>% 
+      na.omit()
+    
+    # Calculate AUC
+    pred <- prediction(validation_df$renal_estimate, validation_df$acute_renal_failure)
+    perf <- performance(pred, "tpr", "fpr")
+    AUC <- performance(pred, measure = "auc")@y.values[[1]]
+    
+    # Output
+    data.frame(i, AUC)
+  }
+stopCluster(cl)
+
+mean(xval$AUC)
+sd(xval$AUC)
