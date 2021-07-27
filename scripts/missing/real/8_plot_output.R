@@ -8,6 +8,8 @@ require(ResourceSelection)
 require(patchwork)
 require(forcats)
 require(RColorBrewer)
+require(tidyr)
+require(stringr)
 
 # Functions
 source("functions/inverse_logit.R")
@@ -279,7 +281,7 @@ results %<>%
                                 `In-unit mortality` = "inunit"),
          method = fct_recode(method, Amelia = "amelia",
                              Median = "average",
-                             Recent = "recent",
+                             Longitudinal = "recent",
                              `Random Forest` = "RF",
                              `Assume zero` = "zero"))
 
@@ -589,3 +591,6 @@ p2 <- results %>%
 p1 + p2
 ggsave("writeup/presentation_figs/ellipse_5.png",
        width = 33.8, height = 14, units = "cm")
+
+
+
