@@ -9,6 +9,7 @@ require(tidyr)
 require(ggplot2)
 require(doParallel)
 require(stringr)
+require(xtable)
 
 source("functions/inverse_logit.R")
 source("functions/nomogram_convert.R")
@@ -309,4 +310,6 @@ model_results %>%
   pivot_wider(names_from = c("measure", "type"),
               values_from = "value") %>% 
   relocate("model", "AUC_standard", "AUC_plus", "AUC_diff",
-           "cal_standard", "cal_plus", "cal_diff")
+           "cal_standard", "cal_plus", "cal_diff") %>% 
+  t() %>% 
+  xtable()
